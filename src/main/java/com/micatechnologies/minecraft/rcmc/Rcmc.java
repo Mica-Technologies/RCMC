@@ -1,12 +1,17 @@
 package com.micatechnologies.minecraft.rcmc;
 
+import com.micatechnologies.minecraft.rcmc.entity.EntityCoasterCar;
+import com.micatechnologies.minecraft.rcmc.world.RcmcWorldState;
 import net.minecraft.block.Block;
 import net.minecraft.item.Item;
+import net.minecraft.util.ResourceLocation;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.RegistryEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.Mod.EventHandler;
 import net.minecraftforge.fml.common.SidedProxy;
+import net.minecraftforge.fml.common.registry.EntityEntry;
+import net.minecraftforge.fml.common.registry.EntityEntryBuilder;
 import net.minecraftforge.fml.common.event.FMLInitializationEvent;
 import net.minecraftforge.fml.common.event.FMLPostInitializationEvent;
 import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
@@ -53,13 +58,35 @@ public class Rcmc {
     @Mod.Instance(RcmcConstants.MOD_NAMESPACE)
     public static Rcmc instance;
 
+    /** Entity network ids, allocated in registration order. Must be stable across versions. */
+    private static int entityId = 0;
+
     @EventHandler
     public void preInit(FMLPreInitializationEvent event) {
         RcmcConfig.init(event.getSuggestedConfigurationFile());
         MinecraftForge.EVENT_BUS.register(this);
+        MinecraftForge.EVENT_BUS.register(new RcmcWorldState.Hooks());
+        com.micatechnologies.minecraft.rcmc.net.RcmcNetwork.init();
         RcmcTab.initTabElements();
         proxy.preInit(event);
         LOGGER.info("I am {} at version {}", RcmcConstants.MOD_NAME, RcmcConstants.MOD_VERSION);
+    }
+
+    @SubscribeEvent
+    public void registerEntities(RegistryEvent.Register<EntityEntry> event) {
+        event.getRegistry().register(
+            EntityEntryBuilder.create()
+                .entity(EntityCoasterCar.class)
+                .id(new ResourceLocation(RcmcConstants.MOD_NAMESPACE, "coaster_car"), entityId++)
+                .name("coaster_car")
+                // Tracking range and frequency are both far above vanilla's minecart defaults
+                // (80 blocks / every 3 ticks). A coaster is visible from across a park, and its
+                // cars are reconstructed each tick from synced train state rather than from
+                // position packets — so the tracker's job here is presence, not motion.
+                // sendsVelocityUpdates is false: this entity's motion fields are derived, and
+                // vanilla velocity packets would only add traffic nothing consumes.
+                .tracker(160, 1, false)
+                .build());
     }
 
     @SubscribeEvent
@@ -84,6 +111,6 @@ public class Rcmc {
 
     @EventHandler
     public void serverStarting(FMLServerStartingEvent event) {
-        // Server commands (/rcmc ...) are registered here once the command subsystem lands.
+        event.registerServerCommand(new com.micatechnologies.minecraft.rcmc.command.CommandRcmc());
     }
 }

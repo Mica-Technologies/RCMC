@@ -1,0 +1,197 @@
+package com.micatechnologies.minecraft.rcmc.command;
+
+import com.micatechnologies.minecraft.rcmc.debug.DemoCoaster;
+import com.micatechnologies.minecraft.rcmc.net.PacketTrackSync;
+import com.micatechnologies.minecraft.rcmc.net.PacketTrainSync;
+import com.micatechnologies.minecraft.rcmc.net.RcmcNetwork;
+import com.micatechnologies.minecraft.rcmc.entity.EntityCoasterCar;
+import com.micatechnologies.minecraft.rcmc.physics.PhysicsIntegrator;
+import com.micatechnologies.minecraft.rcmc.RcmcConfig;
+import com.micatechnologies.minecraft.rcmc.physics.Train;
+import com.micatechnologies.minecraft.rcmc.physics.TrainSpec;
+import com.micatechnologies.minecraft.rcmc.track.TrackRef;
+import com.micatechnologies.minecraft.rcmc.track.TrackSection;
+import com.micatechnologies.minecraft.rcmc.track.math.TrackFrame;
+import com.micatechnologies.minecraft.rcmc.track.math.Vec3;
+import com.micatechnologies.minecraft.rcmc.world.RcmcWorldState;
+import java.util.ArrayList;
+import java.util.List;
+import net.minecraft.command.CommandBase;
+import net.minecraft.command.CommandException;
+import net.minecraft.command.ICommandSender;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.text.TextComponentString;
+import net.minecraft.util.text.TextFormatting;
+import net.minecraft.world.World;
+
+/**
+ * {@code /rcmc} — operator and debug commands.
+ *
+ * <p>Currently serves the high-speed motion spike: {@code /rcmc demo} builds a complete circuit
+ * and puts a train on it, so the smoothness question can be answered by looking at a real client
+ * before a track editor exists. These subcommands are development scaffolding and will be replaced
+ * by the builder tool and ride-controller GUI.</p>
+ */
+public class CommandRcmc extends CommandBase {
+
+    @Override
+    public String getName() {
+        return "rcmc";
+    }
+
+    @Override
+    public String getUsage(ICommandSender sender) {
+        return "/rcmc <demo|train|clear|info>";
+    }
+
+    @Override
+    public int getRequiredPermissionLevel() {
+        return 2;
+    }
+
+    @Override
+    public List<String> getTabCompletions(MinecraftServer server, ICommandSender sender,
+                                          String[] args, BlockPos targetPos) {
+        if (args.length == 1) {
+            return getListOfStringsMatchingLastWord(args, "demo", "train", "clear", "info");
+        }
+        return new ArrayList<>();
+    }
+
+    @Override
+    public void execute(MinecraftServer server, ICommandSender sender, String[] args) throws CommandException {
+        if (args.length == 0) {
+            throw new CommandException(getUsage(sender));
+        }
+        World world = sender.getEntityWorld();
+        RcmcWorldState state = RcmcWorldState.of(world);
+        if (state == null) {
+            throw new CommandException("No RCMC state for this world");
+        }
+
+        switch (args[0].toLowerCase(java.util.Locale.ROOT)) {
+            case "demo":
+                buildDemo(sender, world, state, args);
+                break;
+            case "train":
+                spawnTrain(sender, world, state, args);
+                break;
+            case "clear":
+                clear(sender, world, state);
+                break;
+            case "info":
+                info(sender, state);
+                break;
+            default:
+                throw new CommandException(getUsage(sender));
+        }
+    }
+
+    private void buildDemo(ICommandSender sender, World world, RcmcWorldState state, String[] args)
+        throws CommandException {
+        EntityPlayer player = getCommandSenderAsPlayer(sender);
+        double radius = args.length > 1 ? parseDouble(args[1], 10.0D, 400.0D) : 60.0D;
+        double drop = args.length > 2 ? parseDouble(args[2], 4.0D, 200.0D) : 28.0D;
+
+        int id = state.network().allocateSectionId();
+        TrackSection section = DemoCoaster.build(id,
+            new Vec3(player.posX, player.posY, player.posZ), radius, drop);
+        state.network().addSection(section);
+        state.markTrackDirty(world);
+        broadcastTrack(world, state);
+
+        reply(sender, TextFormatting.GREEN, "Built demo circuit #" + id + " — "
+            + String.format("%.1f", section.totalLength()) + " blocks, "
+            + section.nodes().size() + " nodes, roll residual "
+            + String.format("%.2f", Math.toDegrees(section.rollResidual())) + " deg (corrected).");
+        reply(sender, TextFormatting.GRAY, "Now run /rcmc train " + id + " to put a train on it.");
+    }
+
+    private void spawnTrain(ICommandSender sender, World world, RcmcWorldState state, String[] args)
+        throws CommandException {
+        if (state.network().isEmpty()) {
+            throw new CommandException("No track yet — run /rcmc demo first");
+        }
+        int sectionId = args.length > 1 ? parseInt(args[1]) : state.network().sections().iterator().next().id();
+        TrackSection section = state.network().section(sectionId);
+        if (section == null) {
+            throw new CommandException("No section with id " + sectionId);
+        }
+        int carCount = args.length > 2 ? parseInt(args[2], 1, 12) : 5;
+        double speed = args.length > 3 ? parseDouble(args[3], 0.0D, 60.0D) : 12.0D;
+
+        TrainSpec spec = new TrainSpec(carCount, 3.0D, 0.5D, 4);
+        PhysicsIntegrator integrator = new PhysicsIntegrator(
+            RcmcConfig.gravity, RcmcConfig.rollingResistance, RcmcConfig.airDrag, RcmcConfig.maxSpeed);
+        Train train = new Train(spec, integrator, new TrackRef(sectionId, 0.0D), speed);
+
+        int trainId = state.trains().allocateTrainId();
+        state.trains().add(trainId, train);
+
+        for (int i = 0; i < carCount; i++) {
+            EntityCoasterCar car = new EntityCoasterCar(world, trainId, i);
+            TrackFrame frame = train.frameOfCar(state.network(), i);
+            car.setPosition(frame.position.x, frame.position.y, frame.position.z);
+            world.spawnEntity(car);
+        }
+
+        // Push the new train immediately rather than waiting for the periodic correction — until
+        // a client has the train, its car entities have nothing to derive a position from.
+        RcmcNetwork.sendToAllIn(new PacketTrainSync(trainId, train), world.provider.getDimension());
+
+        reply(sender, TextFormatting.GREEN, "Spawned train #" + trainId + " — " + carCount
+            + " cars on section " + sectionId + " at " + speed + " blocks/s.");
+    }
+
+    /**
+     * Re-sends the whole track to everyone in the dimension.
+     *
+     * <p>Necessary after any edit: clients derive car positions from the geometry, so a client
+     * holding stale track would place cars along the old curve while the server used the new one.
+     * Wholesale resend is fine at this scale and will be replaced by deltas with the editor.</p>
+     */
+    private static void broadcastTrack(World world, RcmcWorldState state) {
+        RcmcNetwork.sendToAllIn(new PacketTrackSync(state.network()), world.provider.getDimension());
+    }
+
+    private void clear(ICommandSender sender, World world, RcmcWorldState state) {
+        int trains = state.trains().count();
+        int sections = state.network().sectionCount();
+
+        for (EntityCoasterCar car : new ArrayList<>(
+            world.getEntities(EntityCoasterCar.class, entity -> true))) {
+            car.setDead();
+        }
+        state.trains().clear();
+        state.network().clear();
+        state.markTrackDirty(world);
+        broadcastTrack(world, state);
+
+        reply(sender, TextFormatting.YELLOW,
+            "Cleared " + sections + " section(s) and " + trains + " train(s).");
+    }
+
+    private void info(ICommandSender sender, RcmcWorldState state) {
+        reply(sender, TextFormatting.AQUA, "Sections: " + state.network().sectionCount()
+            + "  Trains: " + state.trains().count());
+        for (TrackSection section : state.network().sections()) {
+            reply(sender, TextFormatting.GRAY, "  #" + section.id() + " "
+                + (section.isClosed() ? "circuit" : "open") + ", "
+                + String.format("%.1f", section.totalLength()) + " blocks, "
+                + section.nodes().size() + " nodes");
+        }
+        for (java.util.Map.Entry<Integer, Train> entry : state.trains().asMap().entrySet()) {
+            Train train = entry.getValue();
+            reply(sender, TextFormatting.GRAY, "  train #" + entry.getKey() + " "
+                + train.spec().carCount() + " cars, v="
+                + String.format("%.2f", train.velocity()) + " blocks/s, "
+                + train.status() + " @ " + train.reference());
+        }
+    }
+
+    private static void reply(ICommandSender sender, TextFormatting colour, String message) {
+        sender.sendMessage(new TextComponentString(colour + message));
+    }
+}

@@ -1,5 +1,8 @@
 package com.micatechnologies.minecraft.rcmc;
 
+import com.micatechnologies.minecraft.rcmc.client.render.RenderCoasterCar;
+import com.micatechnologies.minecraft.rcmc.entity.EntityCoasterCar;
+import net.minecraftforge.fml.client.registry.RenderingRegistry;
 import net.minecraftforge.fml.common.event.FMLInitializationEvent;
 import net.minecraftforge.fml.common.event.FMLPostInitializationEvent;
 import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
@@ -16,6 +19,7 @@ public class RcmcClientProxy extends RcmcCommonProxy {
     @Override
     public void preInit(FMLPreInitializationEvent event) {
         super.preInit(event);
+        RenderingRegistry.registerEntityRenderingHandler(EntityCoasterCar.class, RenderCoasterCar::new);
     }
 
     @Override

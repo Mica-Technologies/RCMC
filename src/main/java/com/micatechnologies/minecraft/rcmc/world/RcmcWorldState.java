@@ -1,0 +1,170 @@
+package com.micatechnologies.minecraft.rcmc.world;
+
+import com.micatechnologies.minecraft.rcmc.Rcmc;
+import com.micatechnologies.minecraft.rcmc.RcmcConfig;
+import com.micatechnologies.minecraft.rcmc.RcmcConstants;
+import com.micatechnologies.minecraft.rcmc.net.PacketTrackSync;
+import com.micatechnologies.minecraft.rcmc.net.PacketTrainSync;
+import com.micatechnologies.minecraft.rcmc.net.RcmcNetwork;
+import com.micatechnologies.minecraft.rcmc.physics.TrainManager;
+import com.micatechnologies.minecraft.rcmc.track.TrackNetwork;
+import com.micatechnologies.minecraft.rcmc.track.storage.RcmcTrackData;
+import java.util.Map;
+import java.util.WeakHashMap;
+import net.minecraft.world.World;
+import net.minecraftforge.event.world.WorldEvent;
+import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
+import net.minecraftforge.fml.common.gameevent.TickEvent;
+
+/**
+ * Per-world RCMC state: the track network and the trains running on it.
+ *
+ * <p>Exists on both sides, with different provenance. On the server the network is loaded from
+ * {@link RcmcTrackData} and is authoritative. On the client it starts empty and is filled by sync
+ * packets — which is why {@link #of} never falls back to reading saved data on a remote world: a
+ * client's {@code getPerWorldStorage()} is never populated from disk, so doing so would silently
+ * hand back an empty network that looks legitimate.</p>
+ *
+ * <p>Trains are held in memory on both sides and simulated identically. The server corrects the
+ * client periodically; between corrections the client predicts, which is only sound because
+ * {@code physics} is deterministic and free of Minecraft types.</p>
+ */
+public final class RcmcWorldState {
+
+    /**
+     * Keyed weakly so an unloaded world's state can be collected even if the explicit unload
+     * hook is missed — a dimension leak here would pin the whole world object.
+     */
+    private static final Map<World, RcmcWorldState> STATES = new WeakHashMap<>();
+
+    private final TrackNetwork network;
+    private final TrainManager trains = new TrainManager();
+    private final boolean remote;
+
+    private RcmcWorldState(TrackNetwork network, boolean remote) {
+        this.network = network;
+        this.remote = remote;
+    }
+
+    /**
+     * State for {@code world}, creating it on first use.
+     *
+     * <p>Returns {@code null} only if {@code world} is null. Safe to call from a render or tick
+     * path; the lookup is a hash map hit after the first call.</p>
+     */
+    public static RcmcWorldState of(World world) {
+        if (world == null) {
+            return null;
+        }
+        RcmcWorldState existing = STATES.get(world);
+        if (existing != null) {
+            return existing;
+        }
+        RcmcWorldState created = world.isRemote
+            ? new RcmcWorldState(new TrackNetwork(), true)
+            : new RcmcWorldState(RcmcTrackData.get(world).network(), false);
+        STATES.put(world, created);
+        return created;
+    }
+
+    public TrackNetwork network() {
+        return network;
+    }
+
+    public TrainManager trains() {
+        return trains;
+    }
+
+    /** True on a client world, where the network is a synced mirror rather than the truth. */
+    public boolean isRemote() {
+        return remote;
+    }
+
+    /**
+     * Marks the track network as changed so it is written on the next world save.
+     *
+     * <p>Server-side only, and required after <em>every</em> edit: {@code WorldSavedData} has no
+     * change detection, so an unmarked edit is silently lost on restart.</p>
+     */
+    public void markTrackDirty(World world) {
+        if (!world.isRemote) {
+            RcmcTrackData.get(world).markNetworkDirty();
+        }
+    }
+
+    /** Forge event hooks. Registered once from {@code Rcmc.preInit}. */
+    public static final class Hooks {
+
+        /**
+         * Ticks between train-state corrections sent to clients.
+         *
+         * <p>Four per second. The client is running the same integrator, so this is a correction
+         * rate, not an update rate — the gap between corrections is covered by prediction rather
+         * than by interpolation, which is the whole reason it can be this sparse at speeds where
+         * vanilla tracking cannot cope.</p>
+         */
+        private static final int SYNC_INTERVAL_TICKS = 5;
+
+        private int tickCounter;
+
+        @SubscribeEvent
+        public void onWorldUnload(WorldEvent.Unload event) {
+            STATES.remove(event.getWorld());
+        }
+
+        /** New arrivals need the track before any train state can mean anything. */
+        @SubscribeEvent
+        public void onPlayerJoin(net.minecraftforge.fml.common.gameevent.PlayerEvent.PlayerLoggedInEvent event) {
+            if (!(event.player instanceof net.minecraft.entity.player.EntityPlayerMP)) {
+                return;
+            }
+            net.minecraft.entity.player.EntityPlayerMP player =
+                (net.minecraft.entity.player.EntityPlayerMP) event.player;
+            RcmcWorldState state = of(player.world);
+            if (state == null) {
+                return;
+            }
+            RcmcNetwork.sendTo(new PacketTrackSync(state.network), player);
+            for (Map.Entry<Integer, com.micatechnologies.minecraft.rcmc.physics.Train> entry
+                : state.trains.asMap().entrySet()) {
+                RcmcNetwork.sendTo(new PacketTrainSync(entry.getKey(), entry.getValue()), player);
+            }
+        }
+
+        /**
+         * Advances every train once per tick, at {@code END} so ride elements and block logic that
+         * run during the tick have already set up this tick's conditions.
+         */
+        @SubscribeEvent
+        public void onWorldTick(TickEvent.WorldTickEvent event) {
+            if (event.phase != TickEvent.Phase.END) {
+                return;
+            }
+            RcmcWorldState state = STATES.get(event.world);
+            if (state == null || state.trains.isEmpty()) {
+                return;
+            }
+            try {
+                state.trains.tick(state.network, null,
+                    RcmcConfig.physicsSubSteps, RcmcConstants.SECONDS_PER_TICK);
+            }
+            catch (RuntimeException e) {
+                // A geometry or traversal fault must not take the world tick down with it. Log
+                // loudly and keep the server alive; the offending train will be visibly stuck,
+                // which is a far better failure mode than a crash loop on world load.
+                Rcmc.LOGGER.error("Train simulation failed this tick; trains may be stuck", e);
+            }
+
+            // Both sides simulate; the server periodically corrects.
+            if (!event.world.isRemote && ++tickCounter >= SYNC_INTERVAL_TICKS) {
+                tickCounter = 0;
+                int dimension = event.world.provider.getDimension();
+                for (Map.Entry<Integer, com.micatechnologies.minecraft.rcmc.physics.Train> entry
+                    : state.trains.asMap().entrySet()) {
+                    RcmcNetwork.sendToAllIn(new PacketTrainSync(entry.getKey(), entry.getValue()),
+                        dimension);
+                }
+            }
+        }
+    }
+}

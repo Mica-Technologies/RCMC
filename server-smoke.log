@@ -1,0 +1,210 @@
+
+> Configure project :
+[DEPRECATION NOTICE] Support for running Gradle using Java versions older than 21 with the RetroFuturaGradle plugin is scheduled to be removed, please upgrade your local and CI workflow Java version to 21 or newer. This does NOT mean that mod code has to use newer Java, the Gradle process itself will require Java 21 but the compiler and mod code can keep on using Java 8.
+
+> Task :extractDependencyATs UP-TO-DATE
+> Task :generateForgeSrgMappings SKIPPED
+> Task :downloadVanillaJars SKIPPED
+> Task :mergeVanillaSidedJars SKIPPED
+> Task :deobfuscateMergedJarToSrg SKIPPED
+> Task :downloadFernflower SKIPPED
+> Task :decompileSrgJar SKIPPED
+> Task :cleanupDecompSrgJar SKIPPED
+> Task :patchDecompiledJar SKIPPED
+> Task :applySourceAccessTransformers SKIPPED
+> Task :remapDecompiledJar SKIPPED
+> Task :decompressDecompiledSources UP-TO-DATE
+> Task :compilePatchedMcJava UP-TO-DATE
+> Task :processPatchedMcResources UP-TO-DATE
+> Task :patchedMcClasses UP-TO-DATE
+> Task :compileApiJava NO-SOURCE
+> Task :processApiResources NO-SOURCE
+> Task :apiClasses UP-TO-DATE
+> Task :injectTags UP-TO-DATE
+> Task :compileInjectedTagsJava UP-TO-DATE
+> Task :extractNatives2 UP-TO-DATE
+> Task :createMcLauncherFiles UP-TO-DATE
+> Task :compileMcLauncherJava UP-TO-DATE
+> Task :processInjectedTagsResources NO-SOURCE
+> Task :injectedTagsClasses UP-TO-DATE
+> Task :processMcLauncherResources NO-SOURCE
+> Task :mcLauncherClasses UP-TO-DATE
+> Task :compileJava UP-TO-DATE
+> Task :generateAssets
+> Task :processResources UP-TO-DATE
+> Task :classes UP-TO-DATE
+> Task :jar UP-TO-DATE
+> Task :packageMcLauncher UP-TO-DATE
+> Task :packagePatchedMc UP-TO-DATE
+
+> Task :runServer
+Do you want to start the server in online-mode? Type 'y' to do so
+[09:39:12] [main/INFO] [GradleStart]: Extra: [nogui]
+[09:39:12] [main/INFO] [GradleStart]: Found and added coremod: com.micatechnologies.minecraft.rcmc.mixin.RcmcCoreMod
+[09:39:12] [main/INFO] [GradleStart]: Found and added coremod: zone.rong.mixinbooter.MixinBooterPlugin
+[09:39:12] [main/INFO] [GradleStart]: Found and added cascading tweaker: org.spongepowered.asm.launch.MixinTweaker
+[09:39:12] [main/INFO] [GradleStart]: Running with arguments: [--tweakClass, net.minecraftforge.fml.common.launcher.FMLServerTweaker, nogui, --tweakClass, org.spongepowered.asm.launch.MixinTweaker, --tweakClass, net.minecraftforge.gradle.tweakers.CoremodTweaker]
+[09:39:12] [main/INFO] [LaunchWrapper]: Loading tweak class name net.minecraftforge.fml.common.launcher.FMLServerTweaker
+[09:39:12] [main/INFO] [LaunchWrapper]: Using primary tweak class name net.minecraftforge.fml.common.launcher.FMLServerTweaker
+[09:39:12] [main/INFO] [LaunchWrapper]: Loading tweak class name org.spongepowered.asm.launch.MixinTweaker
+[09:39:12] [main/INFO] [mixin]: SpongePowered MIXIN Subsystem Version=0.8.7 Source=file:/C:/Users/ahawk/.gradle/caches/modules-2/files-2.1/zone.rong/mixinbooter/10.6/1e66c1799f30239386e5f2ed8b25ab2d9063cdb3/mixinbooter-10.6.jar Service=LaunchWrapper Env=SERVER
+/**********************************************************************************************************************************************************************************************************/
+/*                                                                                          SpongePowered MIXIN                                                                                           */
+/**********************************************************************************************************************************************************************************************************/
+/*                                         Code source : file:/C:/Users/ahawk/.gradle/caches/modules-2/files-2.1/zone.rong/mixinbooter/10.6/1e66c1799f30239386e5f2ed8b25ab2d9063cdb3/mixinbooter-10.6.jar */
+/*                                    Internal Version : 0.8.7                                                                                                                                            */
+/*                                        Java Version : 1.8 (supports compatibility 6-8)                                                                                                                 */
+/*                         Default Compatibility Level : JAVA_6                                                                                                                                           */
+/*                   Max Effective Compatibility Level : JAVA_8                                                                                                                                           */
+/*                                Detected ASM Version : ASM 5.2 (ASM5)                                                                                                                                   */
+/*                          Detected ASM Supports Java : Up to Java 1.8 (class file version 52.0)                                                                                                         */
+/**********************************************************************************************************************************************************************************************************/
+/*                                        Service Name : LaunchWrapper                                                                                                                                    */
+/*                                 Mixin Service Class : org.spongepowered.asm.service.mojang.MixinServiceLaunchWrapper                                                                                   */
+/*                       Global Property Service Class : org.spongepowered.asm.service.mojang.Blackboard                                                                                                  */
+/*                                 Logger Adapter Type : Log4j2 (via LaunchWrapper)                                                                                                                       */
+/**********************************************************************************************************************************************************************************************************/
+/*                                         mixin.debug : <false>                                                                                                                                          */
+/*                                  mixin.debug.export : - <true>                                                                                                                                         */
+/*                           mixin.debug.export.filter : - - <null>                                                                                                                                       */
+/*                        mixin.debug.export.decompile : - - <true>                                                                                                                                       */
+/*                  mixin.debug.export.decompile.async : - - - <true>                                                                                                                                     */
+/* mixin.debug.export.decompile.mergeGenericSignatures : - - - <true>                                                                                                                                     */
+/*                                  mixin.debug.verify : - <false>                                                                                                                                        */
+/*                                 mixin.debug.verbose : - <false>                                                                                                                                        */
+/*                         mixin.debug.countInjections : - <false>                                                                                                                                        */
+/*                                  mixin.debug.strict : - <false>                                                                                                                                        */
+/*                           mixin.debug.strict.unique : - - <false>                                                                                                                                      */
+/*                          mixin.debug.strict.targets : - - <false>                                                                                                                                      */
+/*                                mixin.debug.profiler : - <false>                                                                                                                                        */
+/*                           mixin.dumpTargetOnFailure : <false>                                                                                                                                          */
+/*                                        mixin.checks : <false>                                                                                                                                          */
+/*                             mixin.checks.interfaces : - <true>                                                                                                                                         */
+/*                      mixin.checks.interfaces.strict : - - <true>                                                                                                                                       */
+/*                             mixin.ignoreConstraints : <false>                                                                                                                                          */
+/*                                       mixin.hotSwap : <true>                                                                                                                                           */
+/*                                       mixin.env.obf : - <false>                                                                                                                                        */
+/*                             mixin.env.disableRefMap : - <false>                                                                                                                                        */
+/*                               mixin.env.remapRefMap : - <true>                                                                                                                                         */
+/*                       mixin.env.refMapRemappingFile : - <>                                                                                                                                             */
+/*                        mixin.env.refMapRemappingEnv : - <searge>                                                                                                                                       */
+/*                      mixin.env.allowPermissiveMatch : - <false>                                                                                                                                        */
+/*                            mixin.env.ignoreRequired : - <false>                                                                                                                                        */
+/*                               mixin.env.compatLevel : - <false>                                                                                                                                        */
+/*                          mixin.env.shiftByViolation : - <warn>                                                                                                                                         */
+/*                      mixin.initialiserInjectionMode : <default>                                                                                                                                        */
+/*               mixin.tunable.classReaderExpandFrames : - <false>                                                                                                                                        */
+/**********************************************************************************************************************************************************************************************************/
+/*                                    UNSAFE_INJECTION : available=<true> enabled=<true>                                                                                                                  */
+/*                       INJECTORS_IN_INTERFACE_MIXINS : available=<true> enabled=<false>                                                                                                                 */
+/**********************************************************************************************************************************************************************************************************/
+/*                                       Detected Side : SERVER                                                                                                                                           */
+/**********************************************************************************************************************************************************************************************************/
+[09:39:12] [main/INFO] [mixin]: Attempting to load Hot-Swap agent
+[09:39:12] [main/INFO] [mixin]: Attempting to load Fernflower decompiler (Threaded mode)
+[09:39:12] [main/INFO] [mixin]: Fernflower could not be loaded, exported classes will not be decompiled. NoClassDefFoundError: org/jetbrains/java/decompiler/main/extern/IResultSaver
+[09:39:12] [main/INFO] [LaunchWrapper]: Loading tweak class name net.minecraftforge.gradle.tweakers.CoremodTweaker
+[09:39:12] [main/INFO] [LaunchWrapper]: Calling tweak class net.minecraftforge.fml.common.launcher.FMLServerTweaker
+[09:39:13] [main/INFO] [FML]: Forge Mod Loader version 14.23.5.2847 for Minecraft 1.12.2 loading
+[09:39:13] [main/INFO] [FML]: Java is OpenJDK 64-Bit Server VM, version 1.8.0_482, running on Windows 11:amd64:10.0, installed at C:\Users\ahawk\.jdks\azul-1.8.0_482\jre
+[31;1m[09:39:13] [main/ERROR] [FML]: Apache Maven library folder was not in the format expected. Using default libraries directory.
+[39;0m[31;1m[09:39:13] [main/ERROR] [FML]: Full: C:\Users\ahawk\.gradle\caches\modules-2\files-2.1\org.apache.maven\maven-artifact\3.5.3\7dc72b6d6d8a6dced3d294ed54c2cc3515ade9f4\maven-artifact-3.5.3.jar
+[39;0m[31;1m[09:39:13] [main/ERROR] [FML]: Trimmed: c:/users/ahawk/.gradle/caches/modules-2/files-2.1/org.apache.maven/maven-artifact/3.5.3/
+[39;0m[09:39:13] [main/INFO] [FML]: Managed to load a deobfuscated Minecraft name- we are in a deobfuscated environment. Skipping runtime deobfuscation
+[09:39:13] [main/INFO] [FML]: Ignoring missing certificate for coremod FMLCorePlugin (net.minecraftforge.fml.relauncher.FMLCorePlugin), we are in deobf and it's a forge core plugin
+[09:39:13] [main/INFO] [FML]: Ignoring missing certificate for coremod FMLForgePlugin (net.minecraftforge.classloading.FMLForgePlugin), we are in deobf and it's a forge core plugin
+[09:39:13] [main/INFO] [FML]: Found a command line coremod : com.micatechnologies.minecraft.rcmc.mixin.RcmcCoreMod
+[09:39:13] [main/INFO] [FML]: Ignoring missing certificate for coremod RCMC Mixin Loader (com.micatechnologies.minecraft.rcmc.mixin.RcmcCoreMod), as this is probably a dev workspace
+[09:39:13] [main/INFO] [FML]: Found a command line coremod : zone.rong.mixinbooter.MixinBooterPlugin
+[33;1m[09:39:13] [main/WARN] [FML]: The coremod zone.rong.mixinbooter.MixinBooterPlugin does not have a MCVersion annotation, it may cause issues with this version of Minecraft
+[39;0m[09:39:13] [main/INFO] [FML]: Ignoring missing certificate for coremod MixinBooter (zone.rong.mixinbooter.MixinBooterPlugin), as this is probably a dev workspace
+[09:39:13] [main/INFO] [MixinBooter]: Initializing Mixins...
+[09:39:13] [main/INFO] [mixin]: Compatibility level set to JAVA_8
+[09:39:13] [main/INFO] [MixinBooter]: Initializing MixinExtras...
+[09:39:13] [main/INFO] [MixinBooter]: Gathering present mods...
+[09:39:13] [main/INFO] [MixinBooter]: Finished gathering 4 coremods...
+[09:39:13] [main/INFO] [FML]: Searching E:\gitRepos\RCMC\run\.\mods for mods
+[09:39:13] [main/INFO] [LaunchWrapper]: Calling tweak class org.spongepowered.asm.launch.MixinTweaker
+[09:39:13] [main/INFO] [mixin]: Initialised Mixin FML Remapper Adapter with net.minecraftforge.fml.common.asm.transformers.deobf.FMLDeobfuscatingRemapper@2b491fee
+[09:39:13] [main/INFO] [mixin]: Initialised Legacy FML Dev Remapper
+[09:39:13] [main/INFO] [LaunchWrapper]: Calling tweak class net.minecraftforge.gradle.tweakers.CoremodTweaker
+[09:39:13] [main/INFO] [GradleStart]: Injecting location in coremod net.minecraftforge.fml.relauncher.FMLCorePlugin
+[09:39:13] [main/INFO] [GradleStart]: Injecting location in coremod net.minecraftforge.classloading.FMLForgePlugin
+[09:39:13] [main/INFO] [GradleStart]: Injecting location in coremod com.micatechnologies.minecraft.rcmc.mixin.RcmcCoreMod
+[09:39:13] [main/INFO] [GradleStart]: Injecting location in coremod zone.rong.mixinbooter.MixinBooterPlugin
+[09:39:13] [main/INFO] [LaunchWrapper]: Loading tweak class name net.minecraftforge.fml.common.launcher.FMLInjectionAndSortingTweaker
+[09:39:13] [main/INFO] [LaunchWrapper]: Loading tweak class name net.minecraftforge.fml.common.launcher.FMLDeobfTweaker
+[09:39:13] [main/INFO] [LaunchWrapper]: Loading tweak class name org.spongepowered.asm.mixin.EnvironmentStateTweaker
+[09:39:13] [main/INFO] [LaunchWrapper]: Loading tweak class name net.minecraftforge.gradle.tweakers.AccessTransformerTweaker
+[09:39:13] [main/INFO] [LaunchWrapper]: Calling tweak class net.minecraftforge.fml.common.launcher.FMLInjectionAndSortingTweaker
+[09:39:13] [main/INFO] [LaunchWrapper]: Calling tweak class net.minecraftforge.fml.common.launcher.FMLInjectionAndSortingTweaker
+[09:39:13] [main/INFO] [LaunchWrapper]: Calling tweak class net.minecraftforge.fml.relauncher.CoreModManager$FMLPluginWrapper
+[09:39:13] [main/INFO] [LaunchWrapper]: Calling tweak class net.minecraftforge.fml.relauncher.CoreModManager$FMLPluginWrapper
+[31;1m[09:39:13] [main/ERROR] [FML]: FML appears to be missing any signature data. This is not a good thing
+[39;0m[09:39:13] [main/INFO] [LaunchWrapper]: Calling tweak class net.minecraftforge.fml.relauncher.CoreModManager$FMLPluginWrapper
+[09:39:13] [main/INFO] [LaunchWrapper]: Calling tweak class org.spongepowered.asm.mixin.EnvironmentStateTweaker
+[09:39:13] [main/INFO] [LaunchWrapper]: Calling tweak class net.minecraftforge.fml.common.launcher.FMLDeobfTweaker
+[09:39:13] [main/INFO] [LaunchWrapper]: Calling tweak class net.minecraftforge.fml.relauncher.CoreModManager$FMLPluginWrapper
+[09:39:13] [main/INFO] [LaunchWrapper]: Calling tweak class net.minecraftforge.gradle.tweakers.AccessTransformerTweaker
+[09:39:13] [main/INFO] [GradleStart]: Remapping AccessTransformer rules...
+[09:39:13] [main/INFO] [LaunchWrapper]: Loading tweak class name net.minecraftforge.fml.common.launcher.TerminalTweaker
+[09:39:13] [main/INFO] [LaunchWrapper]: Calling tweak class net.minecraftforge.fml.common.launcher.TerminalTweaker
+[09:39:13] [main/INFO] [MixinExtras|Service]: Initializing MixinExtras via com.llamalad7.mixinextras.service.MixinExtrasServiceImpl(version=0.5.0-rc.1).
+[09:39:13] [main/INFO] [LaunchWrapper]: Launching wrapped minecraft {net.minecraft.server.MinecraftServer}
+[09:39:14] [Server thread/INFO] [minecraft/DedicatedServer]: Starting minecraft server version 1.12.2
+[09:39:14] [Server thread/INFO] [FML]: MinecraftForge v14.23.5.2847 Initialized
+[09:39:14] [Server thread/INFO] [FML]: Starts to replace vanilla recipe ingredients with ore ingredients.
+[?1h=[?2004h> [09:39:14] [Server thread/INFO] [FML]: Invalid recipe found with multiple oredict ingredients in the same ingredient...
+[09:39:14] [Server thread/INFO] [FML]: Replaced 1227 ore ingredients
+[09:39:14] [Server thread/INFO] [MixinBooter]: Initializing MixinBooter's Mod Container.
+[09:39:15] [Server thread/INFO] [FML]: Searching E:\gitRepos\RCMC\run\.\mods for mods
+[09:39:15] [Server thread/INFO] [FML]: Forge Mod Loader has identified 8 mods to load
+[33;1m[09:39:15] [Server thread/WARN] [FML]: Missing English translation for FML: assets/fml/lang/en_us.lang
+[39;0m[09:39:15] [Server thread/INFO] [FML]: Attempting connection with missing mods [minecraft, mcp, mixinbooter, FML, forge, rcmc, jei, theoneprobe] at CLIENT
+[09:39:15] [Server thread/INFO] [FML]: Attempting connection with missing mods [minecraft, mcp, mixinbooter, FML, forge, rcmc, jei, theoneprobe] at SERVER
+[09:39:15] [Server thread/INFO] [FML]: Processing ObjectHolder annotations
+[09:39:15] [Server thread/INFO] [FML]: Found 1168 ObjectHolder annotations
+[09:39:15] [Server thread/INFO] [FML]: Identifying ItemStackHolder annotations
+[09:39:15] [Server thread/INFO] [FML]: Found 0 ItemStackHolder annotations
+[09:39:15] [Server thread/INFO] [FML]: Configured a dormant chunk cache size of 0
+[09:39:15] [Forge Version Check/INFO] [forge.VersionCheck]: [forge] Starting version check at http://files.minecraftforge.net/maven/net/minecraftforge/forge/promotions_slim.json
+[09:39:15] [Server thread/INFO] [rcmc]: I am RollercoasterMinecraft at version 2026.07.20-pre.1308.UTC+0000+8cf136c-3-gfa64667.dirty
+[09:39:16] [Server thread/INFO] [FML]: Applying holder lookups
+[09:39:16] [Server thread/INFO] [FML]: Holder lookups applied
+[09:39:16] [Server thread/INFO] [FML]: Applying holder lookups
+[09:39:16] [Server thread/INFO] [FML]: Holder lookups applied
+[09:39:16] [Server thread/INFO] [FML]: Applying holder lookups
+[09:39:16] [Server thread/INFO] [FML]: Holder lookups applied
+[09:39:16] [Server thread/INFO] [FML]: Applying holder lookups
+[09:39:16] [Server thread/INFO] [FML]: Holder lookups applied
+[09:39:16] [Server thread/INFO] [FML]: Injecting itemstacks
+[09:39:16] [Server thread/INFO] [FML]: Itemstack injection complete
+[09:39:16] [Server thread/INFO] [minecraft/DedicatedServer]: Loading properties
+[09:39:16] [Server thread/INFO] [minecraft/DedicatedServer]: Default game type: SURVIVAL
+[09:39:16] [Server thread/INFO] [minecraft/DedicatedServer]: Generating keypair
+[09:39:16] [Server thread/INFO] [minecraft/DedicatedServer]: Starting Minecraft server on *:25565
+[09:39:16] [Server thread/INFO] [minecraft/NetworkSystem]: Using default channel type
+[09:39:16] [Forge Version Check/INFO] [forge.VersionCheck]: [forge] Found status: OUTDATED Target: 14.23.5.2859
+[33;1m[09:39:16] [Server thread/WARN] [minecraft/DedicatedServer]: **** SERVER IS RUNNING IN OFFLINE/INSECURE MODE!
+[39;0m[33;1m[09:39:16] [Server thread/WARN] [minecraft/DedicatedServer]: The server will make no attempt to authenticate usernames. Beware.
+[39;0m[33;1m[09:39:16] [Server thread/WARN] [minecraft/DedicatedServer]: While this makes the game possible to play without internet access, it also opens up the ability for hackers to connect with any username they choose.
+[39;0m[33;1m[09:39:16] [Server thread/WARN] [minecraft/DedicatedServer]: To change this, set "online-mode" to "true" in the server.properties file.
+[39;0m[09:39:16] [Server thread/INFO] [FML]: Applying holder lookups
+[09:39:16] [Server thread/INFO] [FML]: Holder lookups applied
+[09:39:16] [Server thread/INFO] [FML]: Injecting itemstacks
+[09:39:16] [Server thread/INFO] [FML]: Itemstack injection complete
+[09:39:16] [Server thread/INFO] [FML]: Forge Mod Loader has successfully loaded 8 mods
+[09:39:16] [Server thread/INFO] [minecraft/DedicatedServer]: Preparing level "world"
+[09:39:16] [Server thread/INFO] [FML]: Loading dimension 0 (world) (net.minecraft.server.dedicated.DedicatedServer@6f3416fc)
+[09:39:17] [Server thread/INFO] [minecraft/AdvancementList]: Loaded 488 advancements
+[09:39:17] [Server thread/INFO] [FML]: Loading dimension -1 (world) (net.minecraft.server.dedicated.DedicatedServer@6f3416fc)
+[09:39:17] [Server thread/INFO] [FML]: Loading dimension 1 (world) (net.minecraft.server.dedicated.DedicatedServer@6f3416fc)
+[09:39:17] [Server thread/INFO] [minecraft/MinecraftServer]: Preparing start region for level 0
+[09:39:18] [Server thread/INFO] [minecraft/MinecraftServer]: Preparing spawn area: 15%
+[09:39:19] [Server thread/INFO] [minecraft/MinecraftServer]: Preparing spawn area: 35%
+[09:39:20] [Server thread/INFO] [minecraft/MinecraftServer]: Preparing spawn area: 52%
+[09:39:21] [Server thread/INFO] [minecraft/MinecraftServer]: Preparing spawn area: 72%
+[09:39:22] [Server thread/INFO] [minecraft/MinecraftServer]: Preparing spawn area: 95%
+[09:39:22] [Server thread/INFO] [minecraft/DedicatedServer]: Done (5.660s)! For help, type "help" or "?"
+[09:39:22] [Server thread/INFO] [FML]: Unloading dimension -1
+[09:39:22] [Server thread/INFO] [FML]: Unloading dimension 1
