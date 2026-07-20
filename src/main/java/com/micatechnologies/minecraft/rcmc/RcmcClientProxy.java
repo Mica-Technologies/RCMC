@@ -33,6 +33,10 @@ public class RcmcClientProxy extends RcmcCommonProxy {
         // Draws the track itself — see TrackRenderer's javadoc for why this is a
         // RenderWorldLastEvent listener rather than a TileEntitySpecialRenderer.
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new TrackRenderer());
+        // Ghost preview of what a click would build — see TrackPreviewRenderer for why a spline
+        // needs previewing at all.
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(
+            new com.micatechnologies.minecraft.rcmc.client.build.TrackPreviewRenderer());
         // RideHud and GForceEffects both read from one shared RideMonitor rather than each
         // deriving rider state independently — see RideMonitor's javadoc.
         RideMonitor rideMonitor = new RideMonitor();

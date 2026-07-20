@@ -3,6 +3,7 @@ package com.micatechnologies.minecraft.rcmc.item;
 import com.micatechnologies.minecraft.rcmc.RcmcConstants;
 import com.micatechnologies.minecraft.rcmc.RcmcTab;
 import com.micatechnologies.minecraft.rcmc.builder.TrackBuildSession;
+import com.micatechnologies.minecraft.rcmc.net.PacketBuildSessionSync;
 import com.micatechnologies.minecraft.rcmc.net.PacketTrackSync;
 import com.micatechnologies.minecraft.rcmc.net.RcmcNetwork;
 import com.micatechnologies.minecraft.rcmc.track.TrackNode;
@@ -72,6 +73,8 @@ public class ItemTrackTool extends Item {
         Vec3 position = new Vec3(pos.getX() + 0.5D, pos.getY() + 1.0D, pos.getZ() + 0.5D);
         session.add(new TrackNode(position, session.bankDegrees(), null));
 
+        pushSession(player, session);
+
         if (player.isSneaking()) {
             commit(player, world, session);
         }
@@ -105,6 +108,7 @@ public class ItemTrackTool extends Item {
                 say(player, TextFormatting.YELLOW,
                     "Removed the last node; " + session.size() + " remaining.");
             }
+            pushSession(player, session);
         }
         else {
             commit(player, world, session);
@@ -145,6 +149,7 @@ public class ItemTrackTool extends Item {
         state.markTrackDirty(world);
         RcmcNetwork.sendToAllIn(new PacketTrackSync(state.network()), world.provider.getDimension());
         session.reset();
+        pushSession(player, session);
 
         say(player, TextFormatting.GREEN, "Built section #" + id + " — "
             + String.format("%.1f", section.totalLength()) + " blocks, "
@@ -153,6 +158,19 @@ public class ItemTrackTool extends Item {
 
         report(player, section);
         say(player, TextFormatting.DARK_GRAY, "Run /rcmc train " + id + " to put a train on it.");
+    }
+
+    /**
+     * Mirrors the session to its owner so the ghost preview has something to draw.
+     *
+     * <p>To that one player only, and only on change. A half-built curve is that builder's scratch
+     * work — nobody else has any use for it, and it changes when they click, not every tick.</p>
+     */
+    private static void pushSession(EntityPlayer player, TrackBuildSession session) {
+        if (player instanceof net.minecraft.entity.player.EntityPlayerMP) {
+            RcmcNetwork.sendTo(new PacketBuildSessionSync(session),
+                (net.minecraft.entity.player.EntityPlayerMP) player);
+        }
     }
 
     /** Surfaces validator findings without blocking the build. */

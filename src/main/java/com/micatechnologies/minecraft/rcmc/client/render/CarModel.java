@@ -21,34 +21,48 @@ import net.minecraft.client.renderer.BufferBuilder;
  */
 final class CarModel {
 
-    // --- Chassis: the structural underframe that rides the rails. -----------------------------
-    private static final float CHASSIS_HALF_WIDTH = 0.34F;
-    private static final float CHASSIS_BOTTOM = -0.28F;
-    private static final float CHASSIS_TOP = -0.10F;
+    /**
+     * Top of the running rails, in the same local units. Everything structural sits at or above
+     * this: the rails occupy -0.05..+0.05 about the centreline and the tie webbing runs from -0.05
+     * down to the spine, so any part of the car dipping below it clips straight through the track.
+     * The first version of this model put the floor at -0.04 and the rails came up through it.
+     */
+    private static final float RAIL_TOP = 0.05F;
+
+    // --- Chassis: the structural underframe, riding just clear of the railheads. ---------------
+    private static final float CHASSIS_HALF_WIDTH = 0.40F;
+    private static final float CHASSIS_BOTTOM = RAIL_TOP + 0.01F;
+    private static final float CHASSIS_TOP = RAIL_TOP + 0.10F;
 
     // --- Body tub: the part riders sit inside. ------------------------------------------------
     private static final float BODY_HALF_WIDTH = 0.62F;
-    private static final float BODY_FLOOR = -0.10F;
-    private static final float BODY_TOP = 0.42F;
+    private static final float BODY_FLOOR = CHASSIS_TOP;
+    private static final float BODY_FLOOR_TOP = BODY_FLOOR + 0.09F;
+    private static final float BODY_TOP = BODY_FLOOR + 0.62F;
     private static final float BODY_WALL = 0.09F;
 
     /** The nose tapers in, so the leading end reads as the front from any angle. */
     private static final float NOSE_TAPER = 0.22F;
 
     // --- Seats. --------------------------------------------------------------------------------
-    private static final float SEAT_BACK_HEIGHT = 0.46F;
+    private static final float SEAT_BACK_HEIGHT = 0.42F;
     private static final float SEAT_BACK_THICKNESS = 0.10F;
-    private static final float SEAT_BASE_HEIGHT = 0.06F;
+    private static final float SEAT_BASE_HEIGHT = 0.07F;
 
-    // --- Bogies: the wheel assemblies, deliberately visible below the chassis. -----------------
-    private static final float BOGIE_HALF_WIDTH = 0.66F;
-    private static final float BOGIE_HALF_LENGTH = 0.16F;
-    private static final float BOGIE_TOP = -0.24F;
-    private static final float BOGIE_BOTTOM = -0.40F;
+    /**
+     * Bogies are drawn as a pair of side plates OUTSIDE the rail gauge rather than as one box
+     * across the car. A single box wide enough to look like a wheel assembly would enclose both
+     * rails and clip them; sitting outboard reads as wheels gripping the rail from the side.
+     */
+    private static final float BOGIE_INNER = 0.62F;
+    private static final float BOGIE_OUTER = 0.76F;
+    private static final float BOGIE_HALF_LENGTH = 0.18F;
+    private static final float BOGIE_TOP = RAIL_TOP + 0.06F;
+    private static final float BOGIE_BOTTOM = RAIL_TOP - 0.10F;
 
     private static final float COUPLING_HALF_WIDTH = 0.07F;
-    private static final float COUPLING_TOP = -0.12F;
-    private static final float COUPLING_BOTTOM = -0.22F;
+    private static final float COUPLING_TOP = CHASSIS_TOP - 0.02F;
+    private static final float COUPLING_BOTTOM = CHASSIS_BOTTOM + 0.02F;
 
     private static final float[] CHASSIS_COLOR = {0.22F, 0.22F, 0.24F};
     private static final float[] BODY_COLOR = {0.72F, 0.16F, 0.14F};
@@ -96,8 +110,10 @@ final class CarModel {
 
     /** Floor, two side walls, and a tapered nose and tail. Open on top so riders are visible. */
     private static void emitBody(BufferBuilder buffer, float halfLength) {
+        // A properly thick floor slab, not a sheet — the rails run just beneath it and a thin one
+        // let them show through.
         box(buffer, -BODY_HALF_WIDTH, BODY_FLOOR, -halfLength,
-            BODY_HALF_WIDTH, BODY_FLOOR + 0.06F, halfLength, CHASSIS_COLOR);
+            BODY_HALF_WIDTH, BODY_FLOOR_TOP, halfLength, CHASSIS_COLOR);
 
         // Side walls, inset at the nose so the front narrows.
         box(buffer, BODY_HALF_WIDTH - BODY_WALL, BODY_FLOOR, -halfLength,
@@ -125,19 +141,21 @@ final class CarModel {
             float centre = firstCentre - i * rowPitch;
             float inner = BODY_HALF_WIDTH - BODY_WALL;
 
-            box(buffer, -inner, BODY_FLOOR + 0.06F, centre - rowPitch * 0.30F,
-                inner, BODY_FLOOR + 0.06F + SEAT_BASE_HEIGHT, centre + rowPitch * 0.30F, SEAT_COLOR);
+            box(buffer, -inner, BODY_FLOOR_TOP, centre - rowPitch * 0.30F,
+                inner, BODY_FLOOR_TOP + SEAT_BASE_HEIGHT, centre + rowPitch * 0.30F, SEAT_COLOR);
 
             // Back sits at the rear of its own row, so a rider occupies the space in front of it.
             float backAt = centre - rowPitch * 0.30F;
-            box(buffer, -inner, BODY_FLOOR + 0.06F, backAt - SEAT_BACK_THICKNESS,
-                inner, BODY_FLOOR + 0.06F + SEAT_BACK_HEIGHT, backAt, SEAT_COLOR);
+            box(buffer, -inner, BODY_FLOOR_TOP, backAt - SEAT_BACK_THICKNESS,
+                inner, BODY_FLOOR_TOP + SEAT_BACK_HEIGHT, backAt, SEAT_COLOR);
         }
     }
 
     private static void emitBogie(BufferBuilder buffer, float atZ) {
-        box(buffer, -BOGIE_HALF_WIDTH, BOGIE_BOTTOM, atZ - BOGIE_HALF_LENGTH,
-            BOGIE_HALF_WIDTH, BOGIE_TOP, atZ + BOGIE_HALF_LENGTH, BOGIE_COLOR);
+        box(buffer, BOGIE_INNER, BOGIE_BOTTOM, atZ - BOGIE_HALF_LENGTH,
+            BOGIE_OUTER, BOGIE_TOP, atZ + BOGIE_HALF_LENGTH, BOGIE_COLOR);
+        box(buffer, -BOGIE_OUTER, BOGIE_BOTTOM, atZ - BOGIE_HALF_LENGTH,
+            -BOGIE_INNER, BOGIE_TOP, atZ + BOGIE_HALF_LENGTH, BOGIE_COLOR);
     }
 
     /**

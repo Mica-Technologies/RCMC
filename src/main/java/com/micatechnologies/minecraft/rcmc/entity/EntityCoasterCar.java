@@ -168,14 +168,14 @@ public class EntityCoasterCar extends Entity {
     /**
      * Where a rider sits, relative to the track centreline.
      *
-     * <p>Matches the seat bases in {@code CarModel}: the body floor sits just below the centreline
-     * and the seat cushion just above it, so a rider's feet land in the tub rather than hovering
-     * over it. The old 0.4 predated the car having any interior at all and left riders floating
-     * clear of the bodywork once it existed.</p>
+     * <p>Matches the seat cushions in {@code CarModel}. The whole car body sits ABOVE the
+     * railheads — anything below them clips through the track — so the cushion is well clear of
+     * the centreline and a rider has to be raised to meet it. Change this whenever the model's
+     * floor height changes; the two are one measurement expressed in two places.</p>
      */
     @Override
     public double getMountedYOffset() {
-        return 0.06D;
+        return 0.31D;
     }
 
     @Override

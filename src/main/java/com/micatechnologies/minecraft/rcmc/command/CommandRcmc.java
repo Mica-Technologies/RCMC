@@ -138,6 +138,13 @@ public class CommandRcmc extends CommandBase {
             "Run /rcmc train " + id + " 5 0 to park a train in the station — it will dispatch itself.");
     }
 
+    private static void pushSession(EntityPlayer player, TrackBuildSession session) {
+        if (player instanceof net.minecraft.entity.player.EntityPlayerMP) {
+            RcmcNetwork.sendTo(new com.micatechnologies.minecraft.rcmc.net.PacketBuildSessionSync(session),
+                (net.minecraft.entity.player.EntityPlayerMP) player);
+        }
+    }
+
     private static String fmt(double blocks) {
         return String.format("%.0f", blocks);
     }
@@ -199,6 +206,8 @@ public class CommandRcmc extends CommandBase {
         EntityPlayer player = getCommandSenderAsPlayer(sender);
         TrackBuildSession session = TrackBuildSession.of(player.getUniqueID());
         String sub = args.length > 1 ? args[1].toLowerCase(java.util.Locale.ROOT) : "status";
+        // Bank and circuit mode both change what the ghost preview should show, so every path
+        // below re-mirrors the session rather than only the ones that add nodes.
 
         switch (sub) {
             case "bank": {
@@ -207,6 +216,7 @@ public class CommandRcmc extends CommandBase {
                 }
                 double degrees = parseDouble(args[2], -180.0D, 180.0D);
                 session.setBankDegrees(degrees);
+                pushSession(player, session);
                 reply(sender, TextFormatting.GREEN, "Nodes placed from now on will be banked "
                     + String.format("%.0f", session.bankDegrees()) + "°.");
                 break;
@@ -214,6 +224,7 @@ public class CommandRcmc extends CommandBase {
             case "circuit": {
                 boolean closing = args.length < 3 || Boolean.parseBoolean(args[2]);
                 session.setClosing(closing);
+                pushSession(player, session);
                 reply(sender, TextFormatting.GREEN, closing
                     ? "Next section will close into a circuit (needs at least 3 nodes)."
                     : "Next section will be an open run.");
@@ -222,12 +233,14 @@ public class CommandRcmc extends CommandBase {
             case "cancel": {
                 int discarded = session.size();
                 session.reset();
+                pushSession(player, session);
                 reply(sender, TextFormatting.YELLOW,
                     "Discarded " + discarded + " pending node(s) and reset bank/circuit mode.");
                 break;
             }
             case "status":
             default: {
+                pushSession(player, session);
                 reply(sender, TextFormatting.AQUA, "Pending nodes: " + session.size()
                     + "  Bank: " + String.format("%.0f", session.bankDegrees()) + "°"
                     + "  Mode: " + (session.isClosing() ? "circuit" : "open"));
