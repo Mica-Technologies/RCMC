@@ -84,6 +84,14 @@ public final class TrainManager {
             if (!train.isRunning()) {
                 continue;
             }
+            if (!network.hasSection(train.reference().sectionId())) {
+                // Track the train sits on is not present. On a client this is a normal transient
+                // while track and train state converge; on a server it means the section was
+                // removed out from under a train. Either way, skipping is the only sane action —
+                // advancing would throw, and an exception per train per tick is worse than a
+                // stationary train.
+                continue;
+            }
             double accel = 0.0D;
             if (external != null) {
                 accel = external.forTrain(entry.getKey(), train);

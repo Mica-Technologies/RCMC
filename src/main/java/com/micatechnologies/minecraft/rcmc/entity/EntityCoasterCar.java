@@ -103,6 +103,19 @@ public class EntityCoasterCar extends Entity {
             return;
         }
 
+        if (!network.hasSection(train.reference().sectionId())) {
+            // The train references track this side does not have. On the client that is a normal
+            // transient: track and train state arrive in separate packets and are applied
+            // independently, so a track update can land a tick before or after the train one — and
+            // clearing the network leaves trains pointing at sections that no longer exist until
+            // their removal packet arrives.
+            //
+            // Holding position is the only safe response. Letting this reach TrackNetwork.advance
+            // throws IllegalArgumentException out of the entity tick, which Minecraft turns into a
+            // hard crash — that is exactly what /rcmc clear used to do.
+            return;
+        }
+
         int index = carIndex();
         if (index >= train.spec().carCount()) {
             setDead();

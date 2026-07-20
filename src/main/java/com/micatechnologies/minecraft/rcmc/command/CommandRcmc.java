@@ -3,6 +3,7 @@ package com.micatechnologies.minecraft.rcmc.command;
 import com.micatechnologies.minecraft.rcmc.builder.TrackBuildSession;
 import com.micatechnologies.minecraft.rcmc.debug.DemoCoaster;
 import com.micatechnologies.minecraft.rcmc.net.PacketTrackSync;
+import com.micatechnologies.minecraft.rcmc.net.PacketTrainRemove;
 import com.micatechnologies.minecraft.rcmc.net.PacketTrainSync;
 import com.micatechnologies.minecraft.rcmc.net.RcmcNetwork;
 import com.micatechnologies.minecraft.rcmc.entity.EntityCoasterCar;
@@ -223,6 +224,10 @@ public class CommandRcmc extends CommandBase {
         state.trains().clear();
         state.network().clear();
         state.markTrackDirty(world);
+        // Order matters only in that BOTH must be sent. Clients hold their own copies of the
+        // track and the trains; dropping only the track leaves every client with a train pointing
+        // at a section that no longer exists, which is what used to crash the client tick.
+        RcmcNetwork.sendToAllIn(PacketTrainRemove.all(), world.provider.getDimension());
         broadcastTrack(world, state);
 
         reply(sender, TextFormatting.YELLOW,

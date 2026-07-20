@@ -148,6 +148,19 @@ public final class TrackNetwork {
         return sections.get(sectionId);
     }
 
+    /**
+     * Whether a section exists, without throwing.
+     *
+     * <p>Callers on the client need this: the client's network and its trains arrive in separate
+     * packets and are updated independently, so there are legitimately ticks where a train
+     * references track the client has not received yet, or track that has just been removed under
+     * it. That is a normal transient, not an error, and it must not reach {@link #advance} — which
+     * correctly throws for an unknown section, since on the server that genuinely is a bug.</p>
+     */
+    public boolean hasSection(int sectionId) {
+        return sections.containsKey(sectionId);
+    }
+
     public Collection<TrackSection> sections() {
         return Collections.unmodifiableCollection(sections.values());
     }
