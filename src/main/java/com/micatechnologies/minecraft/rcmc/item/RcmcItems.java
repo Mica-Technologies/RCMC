@@ -12,6 +12,7 @@ import com.micatechnologies.minecraft.rcmc.RcmcRegistry;
 public final class RcmcItems {
 
     public static ItemTrackTool trackTool;
+    public static ItemTrackEditor trackEditor;
 
     private RcmcItems() {
         throw new AssertionError("No instances.");
@@ -19,5 +20,6 @@ public final class RcmcItems {
 
     public static void init() {
         trackTool = RcmcRegistry.addItem(new ItemTrackTool());
+        trackEditor = RcmcRegistry.addItem(new ItemTrackEditor());
     }
 }

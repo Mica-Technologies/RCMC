@@ -23,6 +23,8 @@ import net.minecraft.util.text.TextFormatting;
 public class PacketBuildAdjust implements IMessage {
 
     public enum Action {
+        /** Cycle the segment type of an existing span, via the editor wand. */
+        CYCLE_SELECTED_TYPE,
         CYCLE_TYPE,
         ADJUST_HEIGHT,
         ADJUST_BANK,
@@ -76,6 +78,10 @@ public class PacketBuildAdjust implements IMessage {
             // contents a client controls, and a huge value should not walk a setting to its limit
             // in a single message.
             switch (message.action) {
+                case CYCLE_SELECTED_TYPE:
+                    com.micatechnologies.minecraft.rcmc.item.ItemTrackEditor
+                        .cycleSelectedType(player, player.world);
+                    return;
                 case CYCLE_TYPE:
                     player.sendStatusMessage(new TextComponentString(
                         TextFormatting.AQUA + "Segment: " + session.cycleType().label()), true);

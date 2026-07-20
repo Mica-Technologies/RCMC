@@ -64,7 +64,15 @@ public final class BuildToolInput {
         // every tick the key is held.
         boolean cycle = CYCLE_SEGMENT.isPressed();
         boolean reset = RESET_ADJUSTMENTS.isPressed();
-        if (!holdingTool(Minecraft.getMinecraft().player)) {
+        EntityPlayer player = Minecraft.getMinecraft().player;
+        // G means "change the segment type" for both tools; which one is held decides whether that
+        // is the type of the NEXT node placed or of the span already selected.
+        if (cycle && holdingEditor(player)) {
+            RcmcNetwork.sendToServer(
+                new PacketBuildAdjust(PacketBuildAdjust.Action.CYCLE_SELECTED_TYPE, 0.0D));
+            return;
+        }
+        if (!holdingTool(player)) {
             return;
         }
         if (cycle) {
@@ -118,6 +126,12 @@ public final class BuildToolInput {
      */
     private static boolean sneakKeyHeld(Minecraft mc) {
         return mc.gameSettings != null && mc.gameSettings.keyBindSneak.isKeyDown();
+    }
+
+    private static boolean holdingEditor(EntityPlayer player) {
+        return player != null && RcmcItems.trackEditor != null
+            && (player.getHeldItemMainhand().getItem() == RcmcItems.trackEditor
+                || player.getHeldItemOffhand().getItem() == RcmcItems.trackEditor);
     }
 
     private static boolean holdingTool(EntityPlayer player) {
