@@ -79,6 +79,40 @@ public final class CatmullRomSpline {
         return new CatmullRomSpline(padded);
     }
 
+    /**
+     * Builds a spline that passes through every supplied point and <em>closes back on itself</em>,
+     * for a circuit.
+     *
+     * <p>Where {@link #withPhantomEndpoints} synthesises fake endpoints, this wraps: the control
+     * list becomes {@code [last, p0..pn-1, p0, p1]}. Every node therefore has real neighbours on
+     * both sides, so the closing join is tangent-continuous by construction rather than by
+     * after-the-fact correction — there is no seam to fix in position or direction.</p>
+     *
+     * <p>The result has exactly {@code n} segments for {@code n} points (one per node-to-node
+     * span, <em>including</em> the closing span), so node {@code i} sits at {@code u = i / n} and
+     * {@code u = 1} maps back onto node 0.</p>
+     *
+     * <p>Note this fixes position and tangent continuity only. Frame <em>roll</em> still needs the
+     * parallel-transport residual distributed around the loop — see
+     * {@code TrackSection}, which is the layer that knows a circuit is closed.</p>
+     *
+     * @param loopPoints at least 3 distinct points, in order around the circuit. Do <em>not</em>
+     *                   repeat the first point at the end; the wrap is implicit.
+     */
+    public static CatmullRomSpline closed(List<Vec3> loopPoints) {
+        if (loopPoints == null || loopPoints.size() < 3) {
+            throw new IllegalArgumentException(
+                "A closed loop needs at least 3 points, got " + (loopPoints == null ? 0 : loopPoints.size()));
+        }
+        int n = loopPoints.size();
+        List<Vec3> wrapped = new ArrayList<>(n + 3);
+        wrapped.add(loopPoints.get(n - 1));
+        wrapped.addAll(loopPoints);
+        wrapped.add(loopPoints.get(0));
+        wrapped.add(loopPoints.get(1));
+        return new CatmullRomSpline(wrapped);
+    }
+
     /** Number of traversable segments. */
     public int segmentCount() {
         return points.size() - 3;

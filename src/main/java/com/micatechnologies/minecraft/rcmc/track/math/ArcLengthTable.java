@@ -109,6 +109,34 @@ public final class ArcLengthTable {
         return params[lo] + (params[hi] - params[lo]) * frac;
     }
 
+    /**
+     * Distance in blocks at spline parameter {@code u} — the inverse of
+     * {@link #paramAtDistance(double)}.
+     *
+     * <p>Needed to place authored per-node data (bank angle, ride elements) on the distance axis
+     * the simulation actually runs on: a node lives at a known {@code u}, but everything
+     * downstream addresses track by {@code s}.</p>
+     *
+     * <p>{@code u} is clamped to {@code [0, 1]}.</p>
+     */
+    public double distanceAtParam(double u) {
+        if (u <= 0.0D) {
+            return 0.0D;
+        }
+        if (u >= 1.0D) {
+            return totalLength();
+        }
+
+        // params[] is uniform by construction, so the bracketing index is direct — no search.
+        double exact = u * (params.length - 1);
+        int lo = (int) exact;
+        if (lo >= params.length - 1) {
+            return totalLength();
+        }
+        double frac = exact - lo;
+        return lengths[lo] + (lengths[lo + 1] - lengths[lo]) * frac;
+    }
+
     /** Position at distance {@code s} blocks along the curve. */
     public Vec3 positionAtDistance(double s) {
         return spline.positionAt(paramAtDistance(s));
