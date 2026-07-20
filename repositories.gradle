@@ -1,0 +1,15 @@
+// Add any additional repositories for your dependencies here.
+//
+// The GTCEu buildscript already wires CurseMaven, Modrinth, BlameJared and the other
+// well-known 1.12.2 repositories (see `includeWellKnownRepositories` in
+// buildscript.properties), so most mod dependencies need nothing here.
+
+repositories {
+    // Intentionally empty for now.
+    //
+    // When RCMC grows a soft dependency on a sibling Mica Technologies mod, follow the
+    // pattern SUM uses for CSM: an Ivy repo pointed at the GitHub Releases download URL,
+    // with the version pinned in gradle.properties. GitHub releases ship no Maven
+    // metadata, so such a repo needs `metadataSources { artifact() }` and a
+    // `content { includeGroup '...' }` block to keep unrelated resolution off GitHub.
+}

@@ -1,0 +1,18 @@
+[
+  {
+    "modid": "${modid}",
+    "name": "${modname}",
+    "description": "Spline-based rollercoaster track and physics-simulated, rideable coaster trains for Minecraft 1.12.2.",
+    "version": "${version}",
+    "mcversion": "${mcversion}",
+    "credits": "Mica Technologies",
+    "logoFile": "",
+    "url": "https://github.com/Mica-Technologies/RCMC",
+    "updateUrl": "",
+    "authorList": ["Mica Technologies"],
+    "dependencies": [],
+    "dependants": [],
+    "requiredMods": [],
+    "useDependencyInformation": "true"
+  }
+]
