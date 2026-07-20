@@ -140,6 +140,62 @@ public final class CatmullRomSpline {
         return tangentInSegment(segment, localT(u, segment)).normalize();
     }
 
+    /**
+     * The raw (un-normalised) derivative {@code dr/du} at global parameter {@code u}.
+     *
+     * <p>{@link #tangentAt} normalises, which is what callers almost always want but throws away
+     * the magnitude — and the magnitude is exactly what curvature needs. Exposed separately rather
+     * than making {@code tangentAt} return an unnormalised vector, because a caller silently
+     * receiving a non-unit "tangent" is a much nastier bug than an extra method.</p>
+     */
+    public Vec3 derivativeAt(double u) {
+        int segment = segmentFor(u);
+        // Scale from the per-segment local parameter to the global one: t = u*segmentCount - i,
+        // so dt/du = segmentCount and dr/du = (dr/dt)*segmentCount. Returning the local derivative
+        // here is a trap — curvature differences this against the GLOBAL parameter, and mixing the
+        // two silently inflates the result by exactly segmentCount, which looks like a plausible
+        // number rather than an obvious error.
+        return tangentInSegment(segment, localT(u, segment)).scale(segmentCount());
+    }
+
+    /**
+     * Curvature {@code kappa} at global parameter {@code u}, in inverse blocks. The radius of the
+     * circle that best fits the curve there is {@code 1/kappa}.
+     *
+     * <p>Uses the standard {@code |r' x r''| / |r'|^3}. The first derivative is analytic (from the
+     * same Barry–Goldman recurrence as the tangent); the second is a central difference <em>of
+     * that analytic first derivative</em>, which is a deliberate middle path. Differentiating the
+     * recurrence twice by hand is possible but the algebra is long and a mistake in it would be
+     * silent — plausible values, wrong by a factor. Differencing positions twice, at the other
+     * extreme, squares the cancellation error and is visibly noisy. Differencing an exact first
+     * derivative once costs one extra evaluation and is accurate to well under a percent, which is
+     * verified against a circle's known {@code 1/R} in the tests.</p>
+     *
+     * <p>Needed by the G-force model (vertical and lateral load both scale with {@code v²·kappa})
+     * and by track validation, which previously estimated it locally for want of this method.</p>
+     */
+    public double curvatureAt(double u) {
+        // Step chosen well above the point where cancellation in the difference dominates, and
+        // well below the scale on which curvature varies along a segment.
+        double h = 1.0e-4D;
+        double lo = Math.max(0.0D, u - h);
+        double hi = Math.min(1.0D, u + h);
+        if (hi - lo < 1.0e-12D) {
+            return 0.0D;
+        }
+
+        Vec3 first = derivativeAt(u);
+        Vec3 second = derivativeAt(hi).subtract(derivativeAt(lo)).scale(1.0D / (hi - lo));
+
+        double speed = first.length();
+        if (speed < 1.0e-9D) {
+            // A stationary point in the parameterisation has no defined curvature; zero keeps it
+            // out of the physics rather than propagating an infinity into a rider's G reading.
+            return 0.0D;
+        }
+        return first.cross(second).length() / (speed * speed * speed);
+    }
+
     private int segmentFor(double u) {
         double clamped = Math.max(0.0D, Math.min(1.0D, u));
         int segment = (int) (clamped * segmentCount());
