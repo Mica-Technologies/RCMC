@@ -45,10 +45,18 @@ public final class RcmcNetwork {
             nextId++, Side.CLIENT);
         CHANNEL.registerMessage(PacketBuildSessionSync.Handler.class, PacketBuildSessionSync.class,
             nextId++, Side.CLIENT);
+        CHANNEL.registerMessage(PacketBuildAdjust.Handler.class, PacketBuildAdjust.class,
+            nextId++, Side.SERVER);
     }
 
     public static void sendTo(Object message, EntityPlayerMP player) {
         CHANNEL.sendTo((net.minecraftforge.fml.common.network.simpleimpl.IMessage) message, player);
+    }
+
+    /** Client to server. The build tool's adjustments are the only traffic in this direction. */
+    public static void sendToServer(Object message) {
+        CHANNEL.sendToServer(
+            (net.minecraftforge.fml.common.network.simpleimpl.IMessage) message);
     }
 
     public static void sendToAllIn(Object message, int dimension) {

@@ -30,6 +30,8 @@ public class PacketBuildSessionSync implements IMessage {
     private List<TrackNode> nodes = new ArrayList<>();
     private double bankDegrees;
     private boolean closing;
+    private double heightOffset;
+    private int segmentType;
 
     /** Required by the network system's reflective instantiation. */
     public PacketBuildSessionSync() {
@@ -39,6 +41,8 @@ public class PacketBuildSessionSync implements IMessage {
         this.nodes = new ArrayList<>(session.pending());
         this.bankDegrees = session.bankDegrees();
         this.closing = session.isClosing();
+        this.heightOffset = session.heightOffset();
+        this.segmentType = session.currentType().ordinal();
     }
 
     @Override
@@ -53,6 +57,8 @@ public class PacketBuildSessionSync implements IMessage {
         }
         bankDegrees = buf.readDouble();
         closing = buf.readBoolean();
+        heightOffset = buf.readDouble();
+        segmentType = buf.readInt();
     }
 
     @Override
@@ -66,6 +72,8 @@ public class PacketBuildSessionSync implements IMessage {
         }
         buf.writeDouble(bankDegrees);
         buf.writeBoolean(closing);
+        buf.writeDouble(heightOffset);
+        buf.writeInt(segmentType);
     }
 
     public static class Handler implements IMessageHandler<PacketBuildSessionSync, IMessage> {
@@ -74,7 +82,8 @@ public class PacketBuildSessionSync implements IMessage {
         @SideOnly(Side.CLIENT)
         public IMessage onMessage(PacketBuildSessionSync message, MessageContext ctx) {
             net.minecraft.client.Minecraft.getMinecraft().addScheduledTask(
-                () -> ClientBuildSession.update(message.nodes, message.bankDegrees, message.closing));
+                () -> ClientBuildSession.update(message.nodes, message.bankDegrees,
+                    message.closing, message.heightOffset, message.segmentType));
             return null;
         }
     }

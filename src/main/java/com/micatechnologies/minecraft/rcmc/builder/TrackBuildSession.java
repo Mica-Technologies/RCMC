@@ -23,9 +23,53 @@ public final class TrackBuildSession {
 
     private static final Map<UUID, TrackBuildSession> SESSIONS = new HashMap<>();
 
+    /**
+     * Segment types a builder can lay down, in the order the tool cycles through them.
+     *
+     * <p>Recorded per node rather than per section: a real coaster changes character along its
+     * length — station, then chain, then plain track — and forcing one type per section would make
+     * a builder cut the layout into pieces to express that, which is exactly the busywork the tool
+     * exists to remove.</p>
+     */
+    public enum SegmentType {
+        PLAIN("Plain track"),
+        LIFT("Chain lift"),
+        BRAKE("Brake run"),
+        STATION("Station");
+
+        private final String label;
+
+        SegmentType(String label) {
+            this.label = label;
+        }
+
+        public String label() {
+            return label;
+        }
+
+        public SegmentType next() {
+            SegmentType[] all = values();
+            return all[(ordinal() + 1) % all.length];
+        }
+    }
+
     private final List<TrackNode> pending = new ArrayList<>();
+
+    /** Segment type in force from each pending node onward; parallel to {@link #pending}. */
+    private final List<SegmentType> pendingTypes = new ArrayList<>();
+
     private double bankDegrees;
     private boolean closing;
+    private SegmentType currentType = SegmentType.PLAIN;
+
+    /**
+     * Vertical offset applied to the next placed node, in blocks.
+     *
+     * <p>Track rarely wants to sit exactly one block above whatever the cursor happens to be on —
+     * a lift crest or an airtime hill is defined by being well clear of the ground. Without this
+     * the only way to place elevated track is to build a scaffold to stand the cursor on first.</p>
+     */
+    private double heightOffset;
 
     public static TrackBuildSession of(UUID playerId) {
         return SESSIONS.computeIfAbsent(playerId, id -> new TrackBuildSession());
@@ -49,17 +93,55 @@ public final class TrackBuildSession {
 
     public void add(TrackNode node) {
         pending.add(node);
+        pendingTypes.add(currentType);
+    }
+
+    public List<SegmentType> pendingTypes() {
+        return pendingTypes;
+    }
+
+    public SegmentType currentType() {
+        return currentType;
+    }
+
+    /** Advances to the next segment type and returns it, for the tool to report. */
+    public SegmentType cycleType() {
+        currentType = currentType.next();
+        return currentType;
+    }
+
+    public double heightOffset() {
+        return heightOffset;
+    }
+
+    /**
+     * Adjusts the height offset, clamped to a range that keeps a node reachable.
+     *
+     * <p>The ceiling is generous — lift hills are tall — but not unbounded: an offset large enough
+     * to put a node outside the world would fail at commit time with a confusing error rather than
+     * at the moment the builder scrolled past the limit.</p>
+     */
+    public void adjustHeightOffset(double delta) {
+        heightOffset = Math.max(-32.0D, Math.min(64.0D, heightOffset + delta));
     }
 
     /** Removes and returns the most recently placed node, or {@code null} if there is none. */
     public TrackNode undo() {
-        return pending.isEmpty() ? null : pending.remove(pending.size() - 1);
+        if (pending.isEmpty()) {
+            return null;
+        }
+        pendingTypes.remove(pendingTypes.size() - 1);
+        return pending.remove(pending.size() - 1);
     }
 
     public void reset() {
         pending.clear();
+        pendingTypes.clear();
         bankDegrees = 0.0D;
         closing = false;
+        heightOffset = 0.0D;
+        // currentType deliberately survives a reset: a builder laying several lift sections in a
+        // row should not have to re-select it after every commit.
     }
 
     /** Bank applied to subsequently placed nodes, in degrees. */

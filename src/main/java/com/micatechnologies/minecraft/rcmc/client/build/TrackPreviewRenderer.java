@@ -59,13 +59,18 @@ public final class TrackPreviewRenderer {
             return;
         }
 
+        List<TrackNode> nodes = new ArrayList<>(ClientBuildSession.nodes());
         Vec3 candidate = candidateNode(mc);
-        if (candidate == null) {
+        boolean hasCandidate = candidate != null;
+        if (hasCandidate) {
+            nodes.add(new TrackNode(candidate, ClientBuildSession.bankDegrees(), null));
+        }
+        if (nodes.isEmpty()) {
             return;
         }
-
-        List<TrackNode> nodes = new ArrayList<>(ClientBuildSession.nodes());
-        nodes.add(new TrackNode(candidate, ClientBuildSession.bankDegrees(), null));
+        // Previously the whole preview vanished the moment the cursor left a block — looking at the
+        // sky, or across a gap, erased the work in progress. Nodes already placed are committed
+        // intent and should stay on screen; only the provisional one depends on where you look.
 
         boolean closing = ClientBuildSession.isClosing();
         // Below the minimum a section needs there is no curve to preview yet. The node marker
@@ -102,7 +107,7 @@ public final class TrackPreviewRenderer {
         if (preview != null) {
             drawPreview(preview, camX, camY, camZ);
         }
-        drawNodeMarkers(nodes, camX, camY, camZ);
+        drawNodeMarkers(nodes, hasCandidate, camX, camY, camZ);
 
         GlStateManager.enableDepth();
         GlStateManager.enableCull();
@@ -142,13 +147,14 @@ public final class TrackPreviewRenderer {
     }
 
     /** Small cubes at each node, with the one under the cursor picked out. */
-    private static void drawNodeMarkers(List<TrackNode> nodes, double camX, double camY, double camZ) {
+    private static void drawNodeMarkers(List<TrackNode> nodes, boolean hasCandidate,
+                                        double camX, double camY, double camZ) {
         Tessellator tessellator = Tessellator.getInstance();
         BufferBuilder buffer = tessellator.getBuffer();
         buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_COLOR);
 
         for (int i = 0; i < nodes.size(); i++) {
-            boolean cursor = i == nodes.size() - 1;
+            boolean cursor = hasCandidate && i == nodes.size() - 1;
             float[] color = cursor ? new float[] {1.0F, 1.0F, 1.0F} : VALID_COLOR;
             double half = cursor ? 0.16D : 0.11D;
             Vec3 p = nodes.get(i).position();
@@ -200,7 +206,9 @@ public final class TrackPreviewRenderer {
             return null;
         }
         BlockPos pos = hit.getBlockPos();
-        return new Vec3(pos.getX() + 0.5D, pos.getY() + 1.0D, pos.getZ() + 0.5D);
+        return new Vec3(pos.getX() + 0.5D,
+            pos.getY() + 1.0D + ClientBuildSession.heightOffset(),
+            pos.getZ() + 0.5D);
     }
 
     private static boolean isHoldingTrackTool(EntityPlayer player) {

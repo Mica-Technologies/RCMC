@@ -24,19 +24,34 @@ public final class ClientBuildSession {
     private static List<TrackNode> nodes = Collections.emptyList();
     private static double bankDegrees;
     private static boolean closing;
+    private static double heightOffset;
+    private static int segmentType;
 
     private ClientBuildSession() {
         throw new AssertionError("No instances.");
     }
 
-    public static void update(List<TrackNode> newNodes, double newBankDegrees, boolean newClosing) {
+    public static void update(List<TrackNode> newNodes, double newBankDegrees, boolean newClosing,
+                              double newHeightOffset, int newSegmentType) {
         nodes = newNodes == null ? Collections.<TrackNode>emptyList() : new ArrayList<>(newNodes);
         bankDegrees = newBankDegrees;
         closing = newClosing;
+        heightOffset = newHeightOffset;
+        segmentType = newSegmentType;
     }
 
     public static void clear() {
-        update(null, 0.0D, false);
+        update(null, 0.0D, false, 0.0D, 0);
+    }
+
+    /** Vertical offset the server will apply to the next placed node. */
+    public static double heightOffset() {
+        return heightOffset;
+    }
+
+    /** Ordinal of {@code TrackBuildSession.SegmentType}; kept as an int to avoid a server import. */
+    public static int segmentType() {
+        return segmentType;
     }
 
     public static List<TrackNode> nodes() {

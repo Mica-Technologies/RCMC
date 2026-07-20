@@ -70,7 +70,8 @@ public class ItemTrackTool extends Item {
 
         // Centre the node on the block and lift it clear of the surface, so track laid along the
         // ground sits on top of it rather than inside it.
-        Vec3 position = new Vec3(pos.getX() + 0.5D, pos.getY() + 1.0D, pos.getZ() + 0.5D);
+        Vec3 position = new Vec3(pos.getX() + 0.5D,
+            pos.getY() + 1.0D + session.heightOffset(), pos.getZ() + 0.5D);
         session.add(new TrackNode(position, session.bankDegrees(), null));
 
         pushSession(player, session);
@@ -146,6 +147,7 @@ public class ItemTrackTool extends Item {
         }
 
         state.network().addSection(section);
+        addTypedElements(state, section, session);
         state.markTrackDirty(world);
         RcmcNetwork.sendToAllIn(new PacketTrackSync(state.network()), world.provider.getDimension());
         session.reset();
@@ -158,6 +160,55 @@ public class ItemTrackTool extends Item {
 
         report(player, section);
         say(player, TextFormatting.DARK_GRAY, "Run /rcmc train " + id + " to put a train on it.");
+    }
+
+    /**
+     * Turns runs of same-typed nodes into real ride elements.
+     *
+     * <p>A builder marking three nodes as "chain lift" means one lift spanning them, not three
+     * lifts — so contiguous runs are merged. Runs of {@code PLAIN} produce nothing, which is what
+     * makes plain track the default rather than a thing you have to select.</p>
+     *
+     * <p>Parameters are deliberately conservative defaults; tuning a specific lift's speed or a
+     * brake's target belongs in the ride-controller GUI, not in a placement gesture.</p>
+     */
+    private static void addTypedElements(RcmcWorldState state, TrackSection section,
+                                         TrackBuildSession session) {
+        java.util.List<TrackBuildSession.SegmentType> types = session.pendingTypes();
+        double tick = com.micatechnologies.minecraft.rcmc.RcmcConstants.SECONDS_PER_TICK;
+        int id = section.id();
+
+        int i = 0;
+        while (i < types.size()) {
+            TrackBuildSession.SegmentType type = types.get(i);
+            int runEnd = i;
+            while (runEnd + 1 < types.size() && types.get(runEnd + 1) == type) {
+                runEnd++;
+            }
+            if (type != TrackBuildSession.SegmentType.PLAIN && runEnd > i) {
+                double from = section.nodeDistance(i);
+                double to = section.nodeDistance(runEnd);
+                switch (type) {
+                    case LIFT:
+                        state.elements().add(new com.micatechnologies.minecraft.rcmc.physics.element
+                            .ChainLift(id, from, to, 5.0D, 12.0D, tick));
+                        break;
+                    case BRAKE:
+                        state.elements().add(new com.micatechnologies.minecraft.rcmc.physics.element
+                            .BrakeRun(id, from, to, 6.0D, 6.0D,
+                            com.micatechnologies.minecraft.rcmc.physics.element.BrakeRun.Mode.TRIM,
+                            tick));
+                        break;
+                    case STATION:
+                        state.elements().add(new com.micatechnologies.minecraft.rcmc.physics.element
+                            .StationPlatform(id, from, to, to - 2.0D, 6.0D, 60, 4.0D, 6.0D, tick));
+                        break;
+                    default:
+                        break;
+                }
+            }
+            i = runEnd + 1;
+        }
     }
 
     /**
@@ -207,6 +258,8 @@ public class ItemTrackTool extends Item {
         tooltip.add(TextFormatting.GRAY + "Sneak + right-click a block: place and finish");
         tooltip.add(TextFormatting.GRAY + "Right-click air: finish the section");
         tooltip.add(TextFormatting.GRAY + "Sneak + right-click air: undo the last node");
+        tooltip.add(TextFormatting.GRAY + "G: cycle segment type (plain/lift/brake/station)");
+        tooltip.add(TextFormatting.GRAY + "Sneak + scroll: raise or lower placement height");
         tooltip.add(TextFormatting.DARK_GRAY + "Bank and circuit mode: /rcmc build");
     }
 }

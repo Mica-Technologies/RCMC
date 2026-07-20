@@ -37,6 +37,9 @@ public class RcmcClientProxy extends RcmcCommonProxy {
         // needs previewing at all.
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(
             new com.micatechnologies.minecraft.rcmc.client.build.TrackPreviewRenderer());
+        com.micatechnologies.minecraft.rcmc.client.build.BuildToolInput.register();
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(
+            new com.micatechnologies.minecraft.rcmc.client.build.BuildToolInput());
         // RideHud and GForceEffects both read from one shared RideMonitor rather than each
         // deriving rider state independently — see RideMonitor's javadoc.
         RideMonitor rideMonitor = new RideMonitor();
