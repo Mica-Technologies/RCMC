@@ -91,6 +91,12 @@ public final class TrackRenderer {
      * "track render distance" setting exists to override it.
      */
     private static final double MAX_RENDER_DISTANCE = 256.0D;
+    /**
+     * Arc-length spacing between support columns, in blocks. Roughly matches the bent spacing on
+     * real steel coasters; close enough to look structural, far enough apart not to become a wall.
+     */
+    private static final double SUPPORT_SPACING = 9.0D;
+
     private static final double MAX_RENDER_DISTANCE_SQ = MAX_RENDER_DISTANCE * MAX_RENDER_DISTANCE;
 
     private final Map<Integer, CachedSection> cache = new HashMap<>();
@@ -170,10 +176,39 @@ public final class TrackRenderer {
         if (existing != null && existing.section == section) {
             return existing;
         }
-        CachedSection built = bake(section,
-            TrackMeshBuilder.build(section, RcmcWorldState.of(world).elementSpans()), world);
+        CachedSection built = bake(section, TrackMeshBuilder.build(section,
+            RcmcWorldState.of(world).elementSpans(), supportPoints(section, world)), world);
         cache.put(section.id(), built);
         return built;
+    }
+
+    /**
+     * Where to drop support columns under {@code section}, and how far down each one reaches.
+     *
+     * <p>Sampled at a fixed arc-length interval so spacing stays even through curves, and probed
+     * against the world's surface height. Ground height is looked up here rather than inside
+     * {@code TrackMeshBuilder} because that class deliberately cannot see the world — keeping it
+     * blind is what makes the geometry unit-testable without a game instance.</p>
+     *
+     * <p>Recomputed only when a section's mesh is rebuilt, so terrain changed after the fact will
+     * not move a support until the track is edited. Acceptable for now, and the same caveat the
+     * baked light levels carry.</p>
+     */
+    private static java.util.List<double[]> supportPoints(TrackSection section, World world) {
+        java.util.List<double[]> points = new java.util.ArrayList<>();
+        double total = section.totalLength();
+        for (double s = 0.0D; s < total; s += SUPPORT_SPACING) {
+            com.micatechnologies.minecraft.rcmc.track.math.Vec3 at =
+                section.positionAtDistance(s);
+            BlockPos probe = new BlockPos(at.x, 0, at.z);
+            if (!world.isBlockLoaded(probe)) {
+                // No terrain to stand on yet. Skipping beats guessing a height and leaving a
+                // column ending in mid-air once the chunk loads.
+                continue;
+            }
+            points.add(new double[] { s, world.getHeight(probe.getX(), probe.getZ()) });
+        }
+        return points;
     }
 
     /**

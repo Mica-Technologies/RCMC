@@ -111,6 +111,17 @@ public final class TrackMeshBuilder {
 
     /** Dark oiled steel — deliberately darker than the rails so the lift reads at a distance. */
     private static final float[] CHAIN_COLOR = { 0.18F, 0.17F, 0.15F };
+
+    /** Support columns: slim enough to read as steelwork, not as a wall. */
+    private static final double SUPPORT_HALF_WIDTH = 0.16D;
+
+    /**
+     * Below this height above ground a support is skipped. Track running along the floor does not
+     * need holding up, and a stub column at every sample there would be visual noise.
+     */
+    private static final double MIN_SUPPORT_HEIGHT = 2.0D;
+
+    private static final float[] SUPPORT_COLOR = { 0.42F, 0.43F, 0.46F };
     private static final double TIE_HALF_THICKNESS_S = 0.08D;
 
     /** Arc-length spacing between cross-ties, in blocks. See class javadoc. */
@@ -146,6 +157,19 @@ public final class TrackMeshBuilder {
      */
     public static TrackMesh build(TrackSection section,
                                   java.util.List<com.micatechnologies.minecraft.rcmc.track.ElementSpan> spans) {
+        return build(section, spans, java.util.Collections.<double[]>emptyList());
+    }
+
+    /**
+     * Builds a section's mesh, including support columns down to the ground.
+     *
+     * @param supports each entry is {@code {distanceAlongSection, groundY}}. Ground height has to
+     *                 come from the caller because this class deliberately cannot see the world —
+     *                 that is what keeps the geometry unit-testable.
+     */
+    public static TrackMesh build(TrackSection section,
+                                  java.util.List<com.micatechnologies.minecraft.rcmc.track.ElementSpan> spans,
+                                  java.util.List<double[]> supports) {
         List<MeshQuad> quads = new ArrayList<>();
         double total = section.totalLength();
         if (total <= 0.0D) {
@@ -160,9 +184,58 @@ public final class TrackMeshBuilder {
         sweepTube(section, rings, spineProfile(), SPINE_COLOR, capEnds, quads);
         buildTies(section, total, quads);
         buildLiftChains(section, total, spans, quads);
+        buildSupports(section, supports, quads);
 
         double[] bounds = boundsOf(quads);
         return new TrackMesh(quads, bounds[0], bounds[1], bounds[2], bounds[3], bounds[4], bounds[5]);
+    }
+
+    /**
+     * Drops a support column from the track down to the ground at each requested point.
+     *
+     * <p>Columns hang from the track's own position rather than from a vertical directly below a
+     * node, so a banked or overhanging section is still held up by something that meets it. They
+     * are drawn as a plain square section — a real bent or A-frame is Phase 3.1 work — but even a
+     * plain column changes how the layout reads enormously: unsupported track floating in the air
+     * looks like a bug, not a design choice.</p>
+     */
+    private static void buildSupports(TrackSection section, java.util.List<double[]> supports,
+                                      List<MeshQuad> quads) {
+        if (supports == null || supports.isEmpty()) {
+            return;
+        }
+        for (double[] support : supports) {
+            double distance = support[0];
+            double groundY = support[1];
+            TrackFrame frame = section.frameAtDistance(distance);
+            double topY = frame.position.y + SPINE_CENTER_U;
+            if (topY - groundY < MIN_SUPPORT_HEIGHT) {
+                continue;
+            }
+            buildColumn(frame.position.x, frame.position.z, groundY, topY, quads);
+        }
+    }
+
+    /** A square column between two heights at a fixed x/z. */
+    private static void buildColumn(double x, double z, double bottomY, double topY,
+                                    List<MeshQuad> quads) {
+        double h = SUPPORT_HALF_WIDTH;
+        Vec3 a1 = new Vec3(x - h, bottomY, z - h);
+        Vec3 b1 = new Vec3(x + h, bottomY, z - h);
+        Vec3 c1 = new Vec3(x + h, bottomY, z + h);
+        Vec3 d1 = new Vec3(x - h, bottomY, z + h);
+        Vec3 a2 = new Vec3(x - h, topY, z - h);
+        Vec3 b2 = new Vec3(x + h, topY, z - h);
+        Vec3 c2 = new Vec3(x + h, topY, z + h);
+        Vec3 d2 = new Vec3(x - h, topY, z + h);
+
+        float r = SUPPORT_COLOR[0];
+        float g = SUPPORT_COLOR[1];
+        float b = SUPPORT_COLOR[2];
+        quads.add(new MeshQuad(a1, a2, b2, b1, r, g, b));
+        quads.add(new MeshQuad(b1, b2, c2, c1, r, g, b));
+        quads.add(new MeshQuad(c1, c2, d2, d1, r, g, b));
+        quads.add(new MeshQuad(d1, d2, a2, a1, r, g, b));
     }
 
     /**
