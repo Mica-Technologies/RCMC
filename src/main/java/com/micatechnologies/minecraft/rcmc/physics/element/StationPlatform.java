@@ -251,6 +251,23 @@ public final class StationPlatform extends RideElementSpan {
         return phase;
     }
 
+    /** Configuration accessors, so the element can be written to a save file without reflection. */
+    public double brakeDeceleration() {
+        return brakeDeceleration;
+    }
+
+    public int dwellTicks() {
+        return dwellTicks;
+    }
+
+    public double dispatchAcceleration() {
+        return dispatchAcceleration;
+    }
+
+    public double dispatchSpeed() {
+        return dispatchSpeed;
+    }
+
     public double stopDistance() {
         return stopDistance;
     }

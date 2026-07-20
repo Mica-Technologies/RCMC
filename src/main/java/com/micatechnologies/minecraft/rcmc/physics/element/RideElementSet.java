@@ -57,6 +57,11 @@ public final class RideElementSet implements TrainManager.ExternalAcceleration {
         return Collections.unmodifiableList(elements);
     }
 
+    /** Removes every element. Used when a park is torn down. */
+    public void clear() {
+        elements.clear();
+    }
+
     public int count() {
         return elements.size();
     }

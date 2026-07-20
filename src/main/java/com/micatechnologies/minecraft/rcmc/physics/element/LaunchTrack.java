@@ -65,17 +65,39 @@ public final class LaunchTrack extends RideElementSpan {
     private final AccelerationProfile profile;
 
     /**
+     * The acceleration of a constant profile, or {@link Double#NaN} for any other shape.
+     *
+     * <p>Recorded because an {@link AccelerationProfile} is a function, and a function cannot be
+     * written to a save file. Persisting the number that produced a constant profile lets the
+     * common case round-trip exactly; anything else is reported as unsupported rather than
+     * silently saved as something it is not.</p>
+     */
+    private final double constantAcceleration;
+
+    /** Convenience for the common case: a constant-acceleration launch, which can be persisted. */
+    public LaunchTrack(int sectionId, double startDistance, double endDistance,
+                        double targetSpeed, double acceleration) {
+        this(sectionId, startDistance, endDistance, targetSpeed, constant(acceleration), acceleration);
+    }
+
+    /**
      * @param targetSpeed signed target speed, blocks/s; its sign gives the launch direction
      * @param profile     acceleration magnitude as a function of position along the element
      */
     public LaunchTrack(int sectionId, double startDistance, double endDistance,
                         double targetSpeed, AccelerationProfile profile) {
+        this(sectionId, startDistance, endDistance, targetSpeed, profile, Double.NaN);
+    }
+
+    private LaunchTrack(int sectionId, double startDistance, double endDistance, double targetSpeed,
+                        AccelerationProfile profile, double constantAcceleration) {
         super(sectionId, startDistance, endDistance);
         if (profile == null) {
             throw new IllegalArgumentException("profile must not be null");
         }
         this.targetSpeed = targetSpeed;
         this.profile = profile;
+        this.constantAcceleration = constantAcceleration;
     }
 
     @Override
@@ -90,6 +112,15 @@ public final class LaunchTrack extends RideElementSpan {
         double distance = train.reference().distance();
         double fraction = span <= 0.0D ? 0.0D : clamp01((distance - startDistance) / span);
         return direction * profile.accelerationAt(fraction);
+    }
+
+    /**
+     * Acceleration of a constant profile, or NaN if this launch uses a custom one.
+     *
+     * <p>Callers persisting a launch must check for NaN — see the field javadoc.</p>
+     */
+    public double constantAcceleration() {
+        return constantAcceleration;
     }
 
     public double targetSpeed() {

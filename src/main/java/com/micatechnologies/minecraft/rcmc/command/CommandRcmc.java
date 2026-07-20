@@ -7,7 +7,12 @@ import com.micatechnologies.minecraft.rcmc.net.PacketTrainRemove;
 import com.micatechnologies.minecraft.rcmc.net.PacketTrainSync;
 import com.micatechnologies.minecraft.rcmc.net.RcmcNetwork;
 import com.micatechnologies.minecraft.rcmc.entity.EntityCoasterCar;
+import com.micatechnologies.minecraft.rcmc.RcmcConstants;
 import com.micatechnologies.minecraft.rcmc.physics.PhysicsIntegrator;
+import com.micatechnologies.minecraft.rcmc.physics.element.BrakeRun;
+import com.micatechnologies.minecraft.rcmc.physics.element.ChainLift;
+import com.micatechnologies.minecraft.rcmc.physics.element.RideElementSet;
+import com.micatechnologies.minecraft.rcmc.physics.element.StationPlatform;
 import com.micatechnologies.minecraft.rcmc.RcmcConfig;
 import com.micatechnologies.minecraft.rcmc.physics.Train;
 import com.micatechnologies.minecraft.rcmc.physics.TrainSpec;
@@ -114,7 +119,37 @@ public class CommandRcmc extends CommandBase {
             + String.format("%.1f", section.totalLength()) + " blocks, "
             + section.nodes().size() + " nodes, roll residual "
             + String.format("%.2f", Math.toDegrees(section.rollResidual())) + " deg (corrected).");
-        reply(sender, TextFormatting.GRAY, "Now run /rcmc train " + id + " to put a train on it.");
+        outfitDemo(state, section);
+        reply(sender, TextFormatting.GRAY,
+            "Fitted a station, chain lift and brake run. Run /rcmc train " + id + " to dispatch.");
+    }
+
+    /**
+     * Fits the demo circuit with the hardware that makes it a ride rather than a rolling ball:
+     * a station to load in, a lift to the crest, and a brake run to bleed off speed before the
+     * next station stop.
+     *
+     * <p>Placed by fraction of the lap rather than absolute distance, so it stays correct when the
+     * circuit is built at a different radius. The demo's crest sits at the start of the lap (see
+     * {@code DemoCoaster}), so the lift occupies the run up to it and the station sits just after
+     * the brake run at the end.</p>
+     */
+    private static void outfitDemo(RcmcWorldState state, TrackSection section) {
+        double length = section.totalLength();
+        double tick = RcmcConstants.SECONDS_PER_TICK;
+        RideElementSet elements = state.elements();
+
+        // Station occupies the last stretch, stopping the train just before the lap closes.
+        double stationStart = length * 0.86D;
+        elements.add(new StationPlatform(section.id(), stationStart, length,
+            length * 0.95D, 6.0D, 60, 4.0D, 6.0D, tick));
+
+        // Brake run immediately before it, to arrive at a sane speed rather than at line speed.
+        elements.add(new BrakeRun(section.id(), length * 0.74D, stationStart,
+            8.0D, 5.0D, BrakeRun.Mode.TRIM, tick));
+
+        // Chain lift from the station exit up to the crest at the start of the lap.
+        elements.add(new ChainLift(section.id(), 0.0D, length * 0.16D, 5.0D, 12.0D, tick));
     }
 
     private void spawnTrain(ICommandSender sender, World world, RcmcWorldState state, String[] args)
@@ -216,6 +251,7 @@ public class CommandRcmc extends CommandBase {
     private void clear(ICommandSender sender, World world, RcmcWorldState state) {
         int trains = state.trains().count();
         int sections = state.network().sectionCount();
+        state.elements().clear();
 
         for (EntityCoasterCar car : new ArrayList<>(
             world.getEntities(EntityCoasterCar.class, entity -> true))) {
@@ -236,7 +272,8 @@ public class CommandRcmc extends CommandBase {
 
     private void info(ICommandSender sender, RcmcWorldState state) {
         reply(sender, TextFormatting.AQUA, "Sections: " + state.network().sectionCount()
-            + "  Trains: " + state.trains().count());
+            + "  Trains: " + state.trains().count()
+            + "  Elements: " + state.elements().count());
         for (TrackSection section : state.network().sections()) {
             reply(sender, TextFormatting.GRAY, "  #" + section.id() + " "
                 + (section.isClosed() ? "circuit" : "open") + ", "

@@ -39,6 +39,16 @@ public final class RcmcWorldState {
 
     private final TrackNetwork network;
     private final TrainManager trains = new TrainManager();
+
+    /**
+     * Ride hardware. Server-side this is loaded from saved data; client-side it stays empty —
+     * elements only ever affect the simulation through the acceleration they produce, and the
+     * client learns that indirectly from the corrected train state rather than by running the
+     * elements itself. Predicting ride hardware locally would need every element's internal state
+     * (a station's dwell counter, a launch's phase) synced too, for no visible gain.
+     */
+    private com.micatechnologies.minecraft.rcmc.physics.element.RideElementSet elements =
+        new com.micatechnologies.minecraft.rcmc.physics.element.RideElementSet();
     private final boolean remote;
 
     private RcmcWorldState(TrackNetwork network, boolean remote) {
@@ -60,9 +70,15 @@ public final class RcmcWorldState {
         if (existing != null) {
             return existing;
         }
-        RcmcWorldState created = world.isRemote
-            ? new RcmcWorldState(new TrackNetwork(), true)
-            : new RcmcWorldState(RcmcTrackData.get(world).network(), false);
+        RcmcWorldState created;
+        if (world.isRemote) {
+            created = new RcmcWorldState(new TrackNetwork(), true);
+        }
+        else {
+            RcmcTrackData data = RcmcTrackData.get(world);
+            created = new RcmcWorldState(data.network(), false);
+            created.elements = data.elements();
+        }
         STATES.put(world, created);
         return created;
     }
@@ -73,6 +89,10 @@ public final class RcmcWorldState {
 
     public TrainManager trains() {
         return trains;
+    }
+
+    public com.micatechnologies.minecraft.rcmc.physics.element.RideElementSet elements() {
+        return elements;
     }
 
     /** True on a client world, where the network is a synced mirror rather than the truth. */
@@ -145,7 +165,8 @@ public final class RcmcWorldState {
                 return;
             }
             try {
-                state.trains.tick(state.network, null,
+                // Only the server drives ride hardware; see the `elements` field javadoc.
+                state.trains.tick(state.network, state.remote ? null : state.elements,
                     RcmcConfig.physicsSubSteps, RcmcConstants.SECONDS_PER_TICK);
             }
             catch (RuntimeException e) {

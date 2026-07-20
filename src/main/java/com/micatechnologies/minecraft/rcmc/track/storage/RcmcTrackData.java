@@ -34,6 +34,14 @@ public class RcmcTrackData extends WorldSavedData {
 
     private TrackNetwork network = new TrackNetwork();
 
+    /**
+     * Ride hardware on that network. Stored here rather than in its own WorldSavedData because
+     * elements are meaningless without the track they sit on — splitting them across two saved
+     * blobs would let one load and the other fail, leaving a park half-configured.
+     */
+    private com.micatechnologies.minecraft.rcmc.physics.element.RideElementSet elements =
+        new com.micatechnologies.minecraft.rcmc.physics.element.RideElementSet();
+
     /** Required by {@link WorldSavedData}'s reflective instantiation on load. */
     public RcmcTrackData() {
         super(DATA_NAME);
@@ -64,6 +72,10 @@ public class RcmcTrackData extends WorldSavedData {
         return network;
     }
 
+    public com.micatechnologies.minecraft.rcmc.physics.element.RideElementSet elements() {
+        return elements;
+    }
+
     /**
      * Marks the network dirty so it is written on the next world save.
      *
@@ -77,6 +89,7 @@ public class RcmcTrackData extends WorldSavedData {
     @Override
     public void readFromNBT(NBTTagCompound nbt) {
         this.network = TrackCodec.readNetwork(nbt);
+        this.elements = ElementCodec.read(nbt);
     }
 
     @Override
@@ -84,6 +97,10 @@ public class RcmcTrackData extends WorldSavedData {
         NBTTagCompound written = TrackCodec.writeNetwork(network);
         for (String key : written.getKeySet()) {
             compound.setTag(key, written.getTag(key));
+        }
+        NBTTagCompound elementTag = ElementCodec.write(elements);
+        for (String key : elementTag.getKeySet()) {
+            compound.setTag(key, elementTag.getTag(key));
         }
         return compound;
     }

@@ -43,6 +43,11 @@ public final class DriveTyres extends RideElementSpan {
         return VelocityServo.accelerationToHold(train.velocity(), driveSpeed, maxAcceleration, tickSeconds);
     }
 
+    /** Peak acceleration the tyres can apply; needed to round-trip this element through a save. */
+    public double maxAcceleration() {
+        return maxAcceleration;
+    }
+
     public double driveSpeed() {
         return driveSpeed;
     }
