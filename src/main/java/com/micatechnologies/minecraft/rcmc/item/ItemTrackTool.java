@@ -173,7 +173,7 @@ public class ItemTrackTool extends Item {
         }
 
         state.network().addSection(section);
-        addTypedElements(state, section, session);
+        int createdElements = addTypedElements(state, section, session);
         state.markTrackDirty(world);
         // BOTH, always. Sending only the track leaves clients with a lift hill that renders as
         // plain rail — the element exists and works, but nothing draws a chain on it, so a builder
@@ -191,6 +191,14 @@ public class ItemTrackTool extends Item {
             + section.nodes().size() + " nodes"
             + (closing ? " (circuit)" : "") + ".");
 
+        // Reported at commit time, unconditionally. Segment types have been reported as
+        // not working twice, and each investigation stalled on not knowing WHICH half of the path
+        // failed — whether the tags were recorded and the hardware never made, or the hardware was
+        // made and never took effect. Saying what was actually built removes the guesswork from
+        // the next report.
+        say(player, TextFormatting.DARK_GRAY, "  Segments: " + describeTypes(session)
+            + "  ->  " + createdElements + " element(s)");
+
         report(player, section);
         say(player, TextFormatting.DARK_GRAY, "Run /rcmc train " + id + " to put a train on it.");
     }
@@ -202,13 +210,35 @@ public class ItemTrackTool extends Item {
      * which is free of Minecraft types and therefore testable — it was inline here, and shipped
      * broken because the only way to check it was to build a coaster and ride it.</p>
      */
-    private static void addTypedElements(RcmcWorldState state, TrackSection section,
-                                         TrackBuildSession session) {
+    private static int addTypedElements(RcmcWorldState state, TrackSection section,
+                                        TrackBuildSession session) {
+        int created = 0;
         for (com.micatechnologies.minecraft.rcmc.physics.element.RideElement element
             : com.micatechnologies.minecraft.rcmc.builder.SegmentElements.build(
                 section, session.pendingTypes())) {
             state.elements().add(element);
+            created++;
         }
+        return created;
+    }
+
+    /**
+     * A compact rendering of the type recorded at each node, e.g. {@code PPPLLLLPP}.
+     *
+     * <p>Deliberately shows one character per node rather than a summary: the failure being chased
+     * is types not being recorded at all, and a summary of an empty list looks much like a summary
+     * of a list of plains.</p>
+     */
+    private static String describeTypes(TrackBuildSession session) {
+        java.util.List<TrackBuildSession.SegmentType> types = session.pendingTypes();
+        if (types.isEmpty()) {
+            return "(none recorded)";
+        }
+        StringBuilder out = new StringBuilder(types.size());
+        for (TrackBuildSession.SegmentType type : types) {
+            out.append(type.name().charAt(0));
+        }
+        return out.toString();
     }
 
     /**
