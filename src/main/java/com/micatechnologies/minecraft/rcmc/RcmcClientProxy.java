@@ -38,9 +38,15 @@ public class RcmcClientProxy extends RcmcCommonProxy {
     @net.minecraftforge.fml.common.eventhandler.SubscribeEvent
     public void registerModels(net.minecraftforge.client.event.ModelRegistryEvent event) {
         net.minecraft.item.Item tool = com.micatechnologies.minecraft.rcmc.item.RcmcItems.trackTool;
-        net.minecraftforge.client.model.ModelLoader.setCustomModelResourceLocation(tool, 0,
+        bindModel(tool);
+        bindModel(net.minecraft.item.Item.getItemFromBlock(
+            com.micatechnologies.minecraft.rcmc.block.RcmcBlocks.trackSupport));
+    }
+
+    private static void bindModel(net.minecraft.item.Item item) {
+        net.minecraftforge.client.model.ModelLoader.setCustomModelResourceLocation(item, 0,
             new net.minecraft.client.renderer.block.model.ModelResourceLocation(
-                tool.getRegistryName(), "inventory"));
+                item.getRegistryName(), "inventory"));
     }
 
     @Override

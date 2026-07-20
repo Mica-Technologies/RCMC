@@ -1,3 +1,4 @@
 itemGroup.rcmc=Rollercoaster Minecraft
 
 item.rcmc.track_tool.name=Track Builder
+tile.rcmc.track_support.name=Track Support

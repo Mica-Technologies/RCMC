@@ -1,0 +1,21 @@
+{
+  "parent": "block/block",
+  "textures": {
+    "particle": "minecraft:blocks/iron_block",
+    "steel": "minecraft:blocks/iron_block"
+  },
+  "elements": [
+    {
+      "from": [ 5, 0, 5 ],
+      "to": [ 11, 16, 11 ],
+      "faces": {
+        "down":  { "texture": "#steel", "cullface": "down" },
+        "up":    { "texture": "#steel", "cullface": "up" },
+        "north": { "texture": "#steel" },
+        "south": { "texture": "#steel" },
+        "west":  { "texture": "#steel" },
+        "east":  { "texture": "#steel" }
+      }
+    }
+  ]
+}
