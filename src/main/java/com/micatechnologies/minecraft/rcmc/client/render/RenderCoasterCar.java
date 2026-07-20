@@ -68,7 +68,23 @@ public class RenderCoasterCar extends Render<EntityCoasterCar> {
 
         GlStateManager.disableTexture2D();
         GlStateManager.disableLighting();
+        // Culling off, deliberately, and not merely as a shortcut.
+        //
+        // The basis loaded above is (right, up, forward), and TrackFrame defines
+        // right = forward x up — so right x up = -forward and the triple is LEFT-handed. Its
+        // determinant is -1, which makes the matrix a reflection rather than a rotation, and a
+        // reflection inverts the winding of every face. With culling on, GL then discards exactly
+        // the faces that should be visible and keeps the ones facing away, so flying around a car
+        // shows the inside of its far wall.
+        //
+        // Turning culling off is correct for this placeholder box and costs only fill rate on a
+        // handful of quads. It is NOT the right answer for a real model: those need a proper
+        // rotation, which means resolving the handedness at the source rather than here. Doing
+        // that now would flip the sign of frame.right everywhere, and lateral G and camera roll
+        // both key off it — not a change to make casually alongside a rendering fix.
+        GlStateManager.disableCull();
         drawBox(1.4F, 1.0F, 2.6F);
+        GlStateManager.enableCull();
         GlStateManager.enableLighting();
         GlStateManager.enableTexture2D();
 

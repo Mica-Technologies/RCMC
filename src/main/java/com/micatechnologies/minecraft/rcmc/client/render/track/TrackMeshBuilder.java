@@ -103,11 +103,19 @@ public final class TrackMeshBuilder {
     /** Chain link spacing along the lift, in blocks. Close enough to read as links, not a stripe. */
     private static final double CHAIN_LINK_SPACING = 0.5D;
 
-    private static final double CHAIN_LINK_LENGTH = 0.34D;
-    private static final double CHAIN_LINK_WIDTH = 0.16D;
+    private static final double CHAIN_LINK_LENGTH = 0.30D;
+    private static final double CHAIN_LINK_WIDTH = 0.15D;
+    private static final double CHAIN_LINK_THICKNESS = 0.06D;
 
-    /** Just above the spine and below the rail tops, so cars pass over without z-fighting. */
-    private static final double CHAIN_HEIGHT = -0.16D;
+    /**
+     * Chain height relative to the track centreline.
+     *
+     * <p>Sits between the rails at roughly rail level, which is where a real lift chain runs. It
+     * must clear the ties: those now span from the underside of the rails down to the spine, and
+     * an earlier value of -0.16 put the chain <em>inside</em> that volume, so the two fought for
+     * the same pixels.</p>
+     */
+    private static final double CHAIN_HEIGHT = 0.0D;
 
     /** Dark oiled steel — deliberately darker than the rails so the lift reads at a distance. */
     private static final float[] CHAIN_COLOR = { 0.18F, 0.17F, 0.15F };
@@ -267,24 +275,53 @@ public final class TrackMeshBuilder {
         }
     }
 
-    /** One chain link: a short flat plate across the centreline, canted alternately side to side. */
+    /**
+     * One chain link: a small solid box, canted alternately left and right.
+     *
+     * <p>Solid rather than a flat plate, and emitted once rather than as a front face plus a
+     * reversed backface at the same coordinates. Two coplanar quads in identical positions
+     * z-fight against each other, which is what made the first version of this shimmer.</p>
+     */
     private static void buildChainLink(TrackSection section, double distance, List<MeshQuad> quads) {
         TrackFrame frame = section.frameAtDistance(distance);
-        // Alternating tilt costs nothing and is what stops a row of identical plates reading as a
+        // Alternating tilt costs nothing and is what stops a row of identical links reading as a
         // continuous stripe.
-        double lean = (((int) Math.round(distance / CHAIN_LINK_SPACING)) % 2 == 0) ? 1.0D : -1.0D;
+        boolean flat = ((int) Math.round(distance / CHAIN_LINK_SPACING)) % 2 == 0;
 
-        Vec3 along = frame.forward.scale(CHAIN_LINK_LENGTH * 0.5D);
-        Vec3 across = frame.right.scale(CHAIN_LINK_WIDTH * 0.5D * lean);
         Vec3 centre = frame.position.add(frame.up.scale(CHAIN_HEIGHT));
+        Vec3 along = frame.forward.scale(CHAIN_LINK_LENGTH * 0.5D);
+        // A real chain alternates flat and upright links; swapping which axis is wide is a cheap
+        // way to read as that rather than as a row of identical plates.
+        Vec3 across = (flat ? frame.right : frame.up).scale(CHAIN_LINK_WIDTH * 0.5D);
+        Vec3 through = (flat ? frame.up : frame.right).scale(CHAIN_LINK_THICKNESS * 0.5D);
 
-        Vec3 a = centre.subtract(along).subtract(across);
-        Vec3 b = centre.subtract(along).add(across);
-        Vec3 c = centre.add(along).add(across);
-        Vec3 d = centre.add(along).subtract(across);
-        quads.add(new MeshQuad(a, b, c, d, CHAIN_COLOR[0], CHAIN_COLOR[1], CHAIN_COLOR[2]));
-        // Backface, so the chain is visible from below a lift hill as well as above it.
-        quads.add(new MeshQuad(d, c, b, a, CHAIN_COLOR[0], CHAIN_COLOR[1], CHAIN_COLOR[2]));
+        box(centre, along, across, through, CHAIN_COLOR, quads);
+    }
+
+    /**
+     * An oriented solid box from three half-extent vectors. Faces are wound outward, so
+     * back-face culling keeps only the ones actually visible.
+     */
+    private static void box(Vec3 centre, Vec3 along, Vec3 across, Vec3 through,
+                            float[] color, List<MeshQuad> quads) {
+        Vec3 a = centre.subtract(along).subtract(across).subtract(through);
+        Vec3 b = centre.subtract(along).add(across).subtract(through);
+        Vec3 c = centre.add(along).add(across).subtract(through);
+        Vec3 d = centre.add(along).subtract(across).subtract(through);
+        Vec3 e = centre.subtract(along).subtract(across).add(through);
+        Vec3 f = centre.subtract(along).add(across).add(through);
+        Vec3 g = centre.add(along).add(across).add(through);
+        Vec3 h = centre.add(along).subtract(across).add(through);
+
+        float r = color[0];
+        float gg = color[1];
+        float bb = color[2];
+        quads.add(new MeshQuad(a, b, c, d, r, gg, bb));
+        quads.add(new MeshQuad(h, g, f, e, r, gg, bb));
+        quads.add(new MeshQuad(e, f, b, a, r, gg, bb));
+        quads.add(new MeshQuad(d, c, g, h, r, gg, bb));
+        quads.add(new MeshQuad(b, f, g, c, r, gg, bb));
+        quads.add(new MeshQuad(e, a, d, h, r, gg, bb));
     }
 
     /**
