@@ -210,6 +210,32 @@ public final class TrackSection {
         return Math.max(0.0D, Math.min(total, s));
     }
 
+    /**
+     * The endpoint of this section at {@code end}, in world coordinates.
+     *
+     * <p>Meaningless for a closed circuit, which has no ends — {@link TrackNetwork} refuses to
+     * join one for that reason.</p>
+     */
+    public Vec3 endpointAt(TrackNetwork.End end) {
+        return positionAtDistance(end == TrackNetwork.End.START ? 0.0D : totalLength());
+    }
+
+    /**
+     * Unit vector pointing <em>out of</em> the section at {@code end} — the direction a train is
+     * travelling as it leaves.
+     *
+     * <p>At {@link TrackNetwork.End#END} that is simply the tangent. At
+     * {@link TrackNetwork.End#START} the train is travelling backwards relative to the distance
+     * axis, so the outward direction is the negated tangent. Getting this sign wrong makes every
+     * join at a section's start appear to be a 180° kink.</p>
+     */
+    public Vec3 exitDirectionAt(TrackNetwork.End end) {
+        if (end == TrackNetwork.End.START) {
+            return tangentAtDistance(0.0D).scale(-1.0D);
+        }
+        return tangentAtDistance(totalLength());
+    }
+
     public int id() {
         return id;
     }

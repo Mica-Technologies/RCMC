@@ -94,6 +94,15 @@ public final class TrackNetwork {
      */
     private static final int MAX_JOINS_PER_ADVANCE = 64;
 
+    /**
+     * Largest endpoint separation, in blocks, that {@link #connect} will accept.
+     *
+     * <p>Half a block is generous enough to absorb the rounding a builder's snapping introduces,
+     * and tight enough that a train crossing the join moves less than it does in a single physics
+     * sub-step — so the discontinuity is invisible rather than a visible jump.</p>
+     */
+    public static final double MAX_JOIN_GAP = 0.5D;
+
     private final Map<Integer, TrackSection> sections = new LinkedHashMap<>();
     private final Map<SectionEnd, SectionEnd> joins = new HashMap<>();
 
@@ -166,13 +175,59 @@ public final class TrackNetwork {
         if (a.equals(b)) {
             throw new IllegalArgumentException("cannot join an end to itself: " + a);
         }
-        if (!sections.containsKey(a.sectionId) || !sections.containsKey(b.sectionId)) {
+        TrackSection sectionA = sections.get(a.sectionId);
+        TrackSection sectionB = sections.get(b.sectionId);
+        if (sectionA == null || sectionB == null) {
             throw new IllegalArgumentException("both sections must exist before joining");
         }
+        if (sectionA.isClosed() || sectionB.isClosed()) {
+            throw new IllegalArgumentException(
+                "a closed circuit has no ends to join; close it or join it, not both");
+        }
+
+        JoinAlignment alignment = alignmentOf(a, b);
+        if (alignment.positionGap > MAX_JOIN_GAP) {
+            throw new IllegalArgumentException(
+                "cannot join " + a + " to " + b + ": endpoints are "
+                    + String.format("%.2f", alignment.positionGap) + " blocks apart (limit "
+                    + MAX_JOIN_GAP + "). A train would teleport across this join. Move the "
+                    + "endpoints together first.");
+        }
+
         disconnect(a);
         disconnect(b);
         joins.put(a, b);
         joins.put(b, a);
+    }
+
+    /**
+     * Measures how well two ends meet, without joining them. Safe to call on ends that are already
+     * joined, or on ones that never will be — the editor uses it to preview a candidate join.
+     *
+     * <p>The incoming direction is the <em>negated</em> exit direction of the arriving end: two
+     * sections that meet properly point their exits <em>at each other</em>, so their exit vectors
+     * are antiparallel when the join is smooth.</p>
+     */
+    public JoinAlignment alignmentOf(SectionEnd a, SectionEnd b) {
+        TrackSection sectionA = sections.get(a.sectionId);
+        TrackSection sectionB = sections.get(b.sectionId);
+        if (sectionA == null || sectionB == null) {
+            throw new IllegalArgumentException("both sections must exist");
+        }
+
+        double gap = sectionA.endpointAt(a.end).distanceTo(sectionB.endpointAt(b.end));
+
+        com.micatechnologies.minecraft.rcmc.track.math.Vec3 leaving = sectionA.exitDirectionAt(a.end);
+        com.micatechnologies.minecraft.rcmc.track.math.Vec3 entering =
+            sectionB.exitDirectionAt(b.end).scale(-1.0D);
+        double cos = Math.max(-1.0D, Math.min(1.0D, leaving.dot(entering)));
+        return new JoinAlignment(gap, Math.toDegrees(Math.acos(cos)));
+    }
+
+    /** Alignment of the join on {@code end}, or {@code null} if nothing is joined there. */
+    public JoinAlignment alignmentOf(SectionEnd end) {
+        SectionEnd other = joins.get(end);
+        return other == null ? null : alignmentOf(end, other);
     }
 
     /** Removes the join on {@code end}, if any, from both sides. */

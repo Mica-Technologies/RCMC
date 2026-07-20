@@ -45,8 +45,9 @@ class TrackCodecTest {
         }
         n.addSection(new TrackSection(2, ring, true, null));
 
+        // Starts exactly where section 1 ends — connect() rejects gapped joins.
         n.addSection(new TrackSection(3, Arrays.asList(
-            node(100, 64, 0, 0, null), node(150, 64, 0, 0, null)), false, null));
+            node(80.0D, 64.0D, 10.0D, 0, null), node(150.0D, 64.0D, 10.0D, 0, null)), false, null));
 
         n.connect(new TrackNetwork.SectionEnd(1, TrackNetwork.End.END),
                   new TrackNetwork.SectionEnd(3, TrackNetwork.End.START));
