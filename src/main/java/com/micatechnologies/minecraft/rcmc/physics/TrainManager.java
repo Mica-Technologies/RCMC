@@ -84,14 +84,34 @@ public final class TrainManager {
             if (!train.isRunning()) {
                 continue;
             }
-            double accel = external == null ? 0.0D : external.forTrain(entry.getKey(), train);
+            double accel = 0.0D;
+            if (external != null) {
+                accel = external.forTrain(entry.getKey(), train);
+                // Tell the train whether a ride element is deliberately holding it, so valleying
+                // detection does not misread a normal station dwell as a stalled train.
+                train.setHeld(external.isHolding(entry.getKey(), train));
+            }
             train.tick(network, accel, subSteps, tickSeconds);
         }
     }
 
     /** Supplies the along-track acceleration acting on a train from ride hardware. */
     public interface ExternalAcceleration {
+
         double forTrain(int trainId, Train train);
+
+        /**
+         * Whether a ride element is deliberately holding this train stationary, as opposed to it
+         * having stalled.
+         *
+         * <p>The two are indistinguishable from inside the physics — a train stopped in a station
+         * on level track has the same speed, grade and applied force as one stranded in a valley —
+         * so the ride-control layer has to say which it is. Defaults to false, which is correct for
+         * a park with no elements at all.</p>
+         */
+        default boolean isHolding(int trainId, Train train) {
+            return false;
+        }
     }
 
     @Override

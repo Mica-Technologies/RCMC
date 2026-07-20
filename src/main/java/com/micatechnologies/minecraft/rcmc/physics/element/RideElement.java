@@ -45,4 +45,17 @@ public interface RideElement {
      * re-check it themselves.</p>
      */
     double accelerationFor(Train train);
+
+    /**
+     * Whether this element is deliberately holding a train stationary, rather than the train
+     * having stalled there.
+     *
+     * <p>The physics cannot tell the difference on its own — a train stopped in a station on level
+     * track has the same speed, grade and applied force as one stranded in a valley — so the
+     * element, which is the only thing that knows its own intent, has to say. Most elements never
+     * hold anything, hence the default.</p>
+     */
+    default boolean isHolding() {
+        return false;
+    }
 }

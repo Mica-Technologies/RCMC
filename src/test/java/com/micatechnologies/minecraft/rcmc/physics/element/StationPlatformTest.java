@@ -3,6 +3,7 @@ package com.micatechnologies.minecraft.rcmc.physics.element;
 import static com.micatechnologies.minecraft.rcmc.physics.element.ElementTestSupport.TICK;
 import static com.micatechnologies.minecraft.rcmc.physics.element.ElementTestSupport.flatNetwork;
 import static com.micatechnologies.minecraft.rcmc.physics.element.ElementTestSupport.frictionless;
+import static com.micatechnologies.minecraft.rcmc.physics.element.ElementTestSupport.tickUnder;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -31,7 +32,7 @@ class StationPlatformTest {
 
         int guard = 0;
         while (platform.phase() == StationPlatform.Phase.ARRIVING && guard++ < 2000) {
-            train.tick(flat, platform.accelerationFor(train), 4, TICK);
+            tickUnder(train, flat, platform);
         }
         assertEquals(StationPlatform.Phase.DWELLING, platform.phase(),
             "expected the train to have come to rest and begun dwelling");
@@ -49,17 +50,16 @@ class StationPlatformTest {
         // the arrival braking tested separately above.
         Train train = new Train(TrainSpec.singleCar(), frictionless(), new TrackRef(1, 100.0D), 0.0D);
 
-        // The acceleration used to hold a stopped train is deliberately not a literal zero — see
-        // StationPlatform.HOLD_ACCELERATION's javadoc for why — so these assertions check that it
-        // is negligible (far too small to be a real push) rather than exactly nil.
+        // Holding a stopped train on level track applies exactly zero force, which is physically
+        // correct. That it is indistinguishable from a stalled train is handled by isHolding(),
+        // not by applying a token push.
         double firstAccel = platform.accelerationFor(train);
         assertEquals(0.0D, firstAccel, 1e-6D);
         assertEquals(StationPlatform.Phase.DWELLING, platform.phase());
 
         int dwellCalls = 0;
         while (platform.phase() == StationPlatform.Phase.DWELLING) {
-            double a = platform.accelerationFor(train);
-            train.tick(flat, a, 4, TICK);
+            double a = tickUnder(train, flat, platform);
             dwellCalls++;
             if (platform.phase() == StationPlatform.Phase.DWELLING) {
                 assertEquals(0.0D, a, 1e-6D, "should not meaningfully accelerate while still dwelling");
@@ -81,7 +81,7 @@ class StationPlatformTest {
 
         int guard = 0;
         while (platform.phase() != StationPlatform.Phase.DEPARTED && guard++ < 500) {
-            train.tick(flat, platform.accelerationFor(train), 4, TICK);
+            tickUnder(train, flat, platform);
         }
         assertEquals(StationPlatform.Phase.DEPARTED, platform.phase(),
             "station never reached DEPARTED within the guard limit");
@@ -98,7 +98,7 @@ class StationPlatformTest {
 
         int guard = 0;
         while (platform.phase() != StationPlatform.Phase.DEPARTED && guard++ < 500) {
-            train.tick(flat, platform.accelerationFor(train), 4, TICK);
+            tickUnder(train, flat, platform);
         }
         assertEquals(StationPlatform.Phase.DEPARTED, platform.phase());
 

@@ -137,6 +137,10 @@ public final class TrackRenderer {
         Tessellator tessellator = Tessellator.getInstance();
         BufferBuilder buffer = tessellator.getBuffer();
 
+        // Sampled once per frame rather than per quad: it is the same value everywhere in the
+        // world, and it is what makes the whole layout darken together at dusk.
+        float sunBrightness = world.getSunBrightness(event.getPartialTicks());
+
         for (TrackSection section : network.sections()) {
             CachedSection cached = cacheFor(section, world);
             if (cached == null || cached.quads.length == 0) {
@@ -148,7 +152,7 @@ public final class TrackRenderer {
             if (!frustum.isBoundingBoxInFrustum(cached.bounds)) {
                 continue;
             }
-            draw(buffer, tessellator, cached, camX, camY, camZ);
+            draw(buffer, tessellator, cached, camX, camY, camZ, world, sunBrightness);
         }
 
         GlStateManager.enableTexture2D();
@@ -171,14 +175,26 @@ public final class TrackRenderer {
         return built;
     }
 
-    /** Converts pure geometry into the form actually drawn: quads plus a world-light factor baked
-     *  in once (see the lighting caveat in the class javadoc) and a real {@link AxisAlignedBB}. */
+    /**
+     * Converts pure geometry into the form actually drawn: quads, the sky and block light LEVELS
+     * sampled once at their centroids, and a real {@link AxisAlignedBB}.
+     *
+     * <p>The two light sources are stored <b>separately and unresolved</b>, rather than baking the
+     * single combined brightness {@code World#getLightBrightness} returns. That combined value has
+     * the current time of day already folded into it, so track built at noon would still be lit
+     * like noon at midnight — glowing against a dark world, which is exactly the "renders
+     * fullbright, looks instantly wrong" failure this kind of hand-built geometry is prone to.
+     * Keeping the levels apart lets {@link #brightnessOf} re-resolve them against the current sun
+     * every frame, for the cost of an array lookup per quad.</p>
+     *
+     * <p>What is still baked, and still a real limitation: the light LEVELS themselves. A torch
+     * placed next to finished track will not light it until that section is edited.</p>
+     */
     private static CachedSection bake(TrackSection section, TrackMesh mesh, World world) {
         int n = mesh.quads.size();
         MeshQuad[] quads = mesh.quads.toArray(new MeshQuad[0]);
-        float[] r = new float[n];
-        float[] g = new float[n];
-        float[] b = new float[n];
+        byte[] sky = new byte[n];
+        byte[] block = new byte[n];
 
         for (int i = 0; i < n; i++) {
             MeshQuad q = quads[i];
@@ -186,27 +202,48 @@ public final class TrackRenderer {
             double cy = (q.a.y + q.b.y + q.c.y + q.d.y) / 4.0D;
             double cz = (q.a.z + q.b.z + q.c.z + q.d.z) / 4.0D;
             BlockPos pos = new BlockPos(cx, cy, cz);
-            // Fall back to full brightness rather than forcing a chunk load or risking a lookup
-            // into an unloaded chunk: track that isn't loaded yet shouldn't render as pitch black.
-            float light = world.isBlockLoaded(pos) ? world.getLightBrightness(pos) : 1.0F;
-            r[i] = q.red * light;
-            g[i] = q.green * light;
-            b[i] = q.blue * light;
+            if (world.isBlockLoaded(pos)) {
+                sky[i] = (byte) world.getLightFor(net.minecraft.world.EnumSkyBlock.SKY, pos);
+                block[i] = (byte) world.getLightFor(net.minecraft.world.EnumSkyBlock.BLOCK, pos);
+            }
+            else {
+                // Assume open sky rather than darkness: track in an unloaded chunk briefly
+                // rendering bright is far less jarring than it flashing black.
+                sky[i] = 15;
+                block[i] = 0;
+            }
         }
 
         AxisAlignedBB bounds = new AxisAlignedBB(mesh.minX, mesh.minY, mesh.minZ, mesh.maxX, mesh.maxY, mesh.maxZ);
-        return new CachedSection(section, quads, r, g, b, bounds);
+        return new CachedSection(section, quads, sky, block, bounds);
+    }
+
+    /**
+     * Resolves a baked sky/block light pair against the current time of day.
+     *
+     * <p>Mirrors how vanilla combines the two: whichever contributes more wins, with skylight
+     * scaled by the sun. A torch therefore keeps track lit through the night while open track goes
+     * dark, which is the behaviour a player expects without having to think about it.</p>
+     */
+    private static float brightnessOf(World world, int skyLevel, int blockLevel, float sunBrightness) {
+        int effectiveSky = Math.round(skyLevel * sunBrightness);
+        int level = Math.max(blockLevel, effectiveSky);
+        float[] table = world.provider.getLightBrightnessTable();
+        return table[Math.max(0, Math.min(table.length - 1, level))];
     }
 
     private static void draw(BufferBuilder buffer, Tessellator tessellator, CachedSection cached,
-                              double camX, double camY, double camZ) {
+                              double camX, double camY, double camZ, World world, float sunBrightness) {
         buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_COLOR);
         MeshQuad[] quads = cached.quads;
         for (int i = 0; i < quads.length; i++) {
             MeshQuad q = quads[i];
-            float red = cached.red[i];
-            float green = cached.green[i];
-            float blue = cached.blue[i];
+            // Resolved per frame, not baked: this is what makes track darken at dusk instead of
+            // glowing at the brightness it happened to be built at.
+            float light = brightnessOf(world, cached.skyLight[i], cached.blockLight[i], sunBrightness);
+            float red = q.red * light;
+            float green = q.green * light;
+            float blue = q.blue * light;
             // Subtract the camera position in double precision here, before any value reaches
             // BufferBuilder, rather than translating the modelview matrix by the raw absolute
             // camera position: the vertex format backing this draw call is float32
@@ -241,18 +278,16 @@ public final class TrackRenderer {
 
         final TrackSection section;
         final MeshQuad[] quads;
-        final float[] red;
-        final float[] green;
-        final float[] blue;
+        final byte[] skyLight;
+        final byte[] blockLight;
         final AxisAlignedBB bounds;
 
-        CachedSection(TrackSection section, MeshQuad[] quads, float[] red, float[] green, float[] blue,
+        CachedSection(TrackSection section, MeshQuad[] quads, byte[] skyLight, byte[] blockLight,
                       AxisAlignedBB bounds) {
             this.section = section;
             this.quads = quads;
-            this.red = red;
-            this.green = green;
-            this.blue = blue;
+            this.skyLight = skyLight;
+            this.blockLight = blockLight;
             this.bounds = bounds;
         }
     }

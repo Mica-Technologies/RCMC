@@ -19,6 +19,27 @@ final class ElementTestSupport {
     private ElementTestSupport() {
     }
 
+    /**
+     * Advances a train under an element for one tick, exactly as {@code TrainManager} does.
+     *
+     * <p>Tests must go through this rather than calling {@code train.tick} directly, because the
+     * element's <em>intent</em> is carried separately from its force: a station holding a train on
+     * level track applies zero acceleration, which is indistinguishable from a stalled train
+     * unless {@code setHeld} is also called. Bypassing that is how these tests originally ended up
+     * needing an imperceptible fake force to keep a dwelling train from being declared valleyed.</p>
+     */
+    static double tickUnder(com.micatechnologies.minecraft.rcmc.physics.Train train,
+                            TrackNetwork network, RideElement element) {
+        boolean inside = element.contains(train.reference());
+        // Queried exactly once per tick, and the value returned to the caller rather than letting
+        // a test ask again: StationPlatform advances its dwell counter on each accelerationFor
+        // call, so a second query per tick silently halves every dwell time.
+        double acceleration = inside ? element.accelerationFor(train) : 0.0D;
+        train.setHeld(inside && element.isHolding());
+        train.tick(network, acceleration, 4, TICK);
+        return acceleration;
+    }
+
     static TrackNode node(double x, double y, double z) {
         return new TrackNode(new Vec3(x, y, z));
     }

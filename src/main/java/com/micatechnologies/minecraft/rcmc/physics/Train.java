@@ -64,6 +64,9 @@ public final class Train {
 
     private Status status = Status.RUNNING;
 
+    /** True while a ride element is deliberately holding this train stationary. */
+    private boolean held;
+
     public Train(TrainSpec spec, PhysicsIntegrator integrator, TrackRef start, double initialVelocity) {
         if (spec == null || integrator == null || start == null) {
             throw new IllegalArgumentException("spec, integrator and start are all required");
@@ -122,13 +125,41 @@ public final class Train {
         // A train that has run out of speed on a grade too shallow to restart it is valleyed.
         // Checked against the gravity that would act NEXT step, not the one just used, so a train
         // momentarily at zero speed at the crest of a hill is not misdiagnosed.
-        if (Math.abs(velocity) < STOPPED_SPEED && externalAcceleration == 0.0D) {
+        if (Math.abs(velocity) < STOPPED_SPEED && !held) {
             double gravityHere = averageGravityAlongTrack(network);
             if (Math.abs(gravityHere) < STOPPED_SPEED) {
                 velocity = 0.0D;
                 status = Status.VALLEYED;
             }
         }
+    }
+
+    /**
+     * Whether something is deliberately holding this train stationary — a station brake, a
+     * dispatch hold — as opposed to it having stalled.
+     *
+     * <p>Set by the ride-control layer before {@link #tick}. Without it the two situations are
+     * indistinguishable from inside the physics: a train stopped in a station on level track has
+     * exactly the same speed, grade and applied acceleration as one stranded in a valley, so
+     * valleying detection would fire on every normal dwell.</p>
+     *
+     * <p>This replaces an earlier rule that keyed on {@code externalAcceleration == 0}, which was
+     * wrong twice over. It misread a station holding a train on level track — where zero really is
+     * the physically correct force — as a fault. And it made "apply an imperceptible fake force"
+     * the only way for an element to hold a train, which is the kind of workaround that survives
+     * long after anyone remembers why it is there.</p>
+     */
+    public void setHeld(boolean value) {
+        this.held = value;
+        if (value && status == Status.VALLEYED) {
+            // Being taken under control clears a stall: an operator recovering a stuck train
+            // should not have to delete and respawn it.
+            status = Status.RUNNING;
+        }
+    }
+
+    public boolean isHeld() {
+        return held;
     }
 
     /**

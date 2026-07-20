@@ -73,6 +73,16 @@ public final class RideElementSet implements TrainManager.ExternalAcceleration {
         return element == null ? 0.0D : element.accelerationFor(train);
     }
 
+    /**
+     * Delegates to whichever element contains the train, so a station dwell is not mistaken for a
+     * valleyed train by {@code Train}'s stall detection.
+     */
+    @Override
+    public boolean isHolding(int trainId, Train train) {
+        RideElement element = find(train.reference());
+        return element != null && element.isHolding();
+    }
+
     @Override
     public String toString() {
         return "RideElementSet{" + elements.size() + " elements}";

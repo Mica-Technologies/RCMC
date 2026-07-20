@@ -35,7 +35,7 @@ import com.micatechnologies.minecraft.rcmc.physics.Train;
  * settles well short of or past {@code stopDistance} — the honest physical outcome of underpowered
  * brakes, not a bug.</p>
  *
- * <p><b>DWELLING</b> holds position (see {@link #HOLD_ACCELERATION} — effectively zero
+ * <p><b>DWELLING</b> holds position (see zero force — correct on level track
  * acceleration, but not literally, for reasons that turn out to matter) for exactly
  * {@code dwellTicks} calls — the tick-driven part the task calls for. This assumes the platform
  * sits on track level enough that near-zero acceleration is actually enough to hold position; a
@@ -102,7 +102,6 @@ public final class StationPlatform extends RideElementSpan {
      * this magnitude, a full second of dwelling changes velocity by about {@code 1e-9} blocks/s,
      * far below anything a player or any assertion in this package's tests could observe.</p>
      */
-    private static final double HOLD_ACCELERATION = 1.0e-9D;
 
     private final double stopDistance;
     private final double brakeDeceleration;
@@ -206,7 +205,7 @@ public final class StationPlatform extends RideElementSpan {
             // stuck fighting to correct a few centimetres of position error it should simply accept.
             phase = Phase.DWELLING;
             dwellRemaining = dwellTicks;
-            return HOLD_ACCELERATION;
+            return 0.0D;
         }
         return acceleration;
     }
@@ -214,7 +213,7 @@ public final class StationPlatform extends RideElementSpan {
     private double dwelling() {
         if (dwellRemaining > 0) {
             dwellRemaining--;
-            return HOLD_ACCELERATION;
+            return 0.0D;
         }
         phase = Phase.DISPATCHING;
         return dispatchAcceleration;
