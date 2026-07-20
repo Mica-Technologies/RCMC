@@ -1,6 +1,7 @@
 package com.micatechnologies.minecraft.rcmc;
 
 import com.micatechnologies.minecraft.rcmc.client.ClientTrainTicker;
+import com.micatechnologies.minecraft.rcmc.client.RiderCamera;
 import com.micatechnologies.minecraft.rcmc.client.render.RenderCoasterCar;
 import com.micatechnologies.minecraft.rcmc.entity.EntityCoasterCar;
 import net.minecraftforge.fml.client.registry.RenderingRegistry;
@@ -24,6 +25,7 @@ public class RcmcClientProxy extends RcmcCommonProxy {
         // Without this the client never advances its trains between server corrections, and the
         // ride visibly steps at the correction rate rather than the frame rate.
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new ClientTrainTicker());
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new RiderCamera());
         // ModelRegistryEvent is on the MOD bus, but this proxy is registered to the Forge bus by
         // its own preInit, so register it here to receive it.
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(this);

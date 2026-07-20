@@ -64,6 +64,46 @@ public final class TrackFrame {
     }
 
     /**
+     * How far this frame is rolled about its own forward axis relative to level, in degrees.
+     * Positive means banked to the right.
+     *
+     * <p>"Level" is the orientation whose {@code up} is as close to world-up as the direction of
+     * travel permits — world-up projected into the plane perpendicular to {@link #forward}. That
+     * matches how {@link #fallbackUp} constructs an up vector, so a car on flat unbanked track
+     * reads as exactly zero rather than a small residue.</p>
+     *
+     * <p>Lives here rather than in the rider-camera code that first needed it because it is pure
+     * geometry with no Minecraft types, which is what lets it be tested on a bare JVM — and it is
+     * the sort of signed-angle calculation where losing the sign is both easy and invisible until
+     * a rider banks the wrong way. It is equally what the G-force work (Phase 6.1) will need to
+     * compare authored bank against required bank.</p>
+     *
+     * <p>Returns 0 for perfectly vertical track, where there is no level reference to measure
+     * against.</p>
+     */
+    public double rollDegreesFromLevel() {
+        Vec3 levelUp = Vec3.UP.subtract(forward.scale(Vec3.UP.dot(forward)));
+        if (levelUp.lengthSquared() < 1.0e-6D) {
+            return 0.0D;
+        }
+        levelUp = levelUp.normalize();
+
+        // atan2 of the rotation's sine and cosine components, rather than acos plus a separate
+        // sign recovery. Two reasons, both mattering here:
+        //
+        //  - acos is ill-conditioned near 0 and 180 degrees: acos(1-e) ~ sqrt(2e), so ordinary
+        //    double error in the dot product blows up to ~1e-6 degrees of phantom roll on track
+        //    that is dead level. Small, but this feeds a camera every frame, and it is exactly
+        //    the range most track sits in.
+        //  - atan2 yields the signed angle directly, so there is no second step to get wrong.
+        //    Sign recovery bolted onto an unsigned magnitude is the classic way for banking to
+        //    come out identical in both directions.
+        double sin = levelUp.cross(up).dot(forward);
+        double cos = levelUp.dot(up);
+        return Math.toDegrees(Math.atan2(sin, cos));
+    }
+
+    /**
      * Any unit vector perpendicular to {@code forward}, used when {@code up} degenerates.
      * Picks world-up unless the track is vertical, in which case it picks world-north.
      */
