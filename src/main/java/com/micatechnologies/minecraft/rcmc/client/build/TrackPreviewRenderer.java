@@ -133,7 +133,18 @@ public final class TrackPreviewRenderer {
         }
         float[] tint = warned ? WARNING_COLOR : VALID_COLOR;
 
-        TrackMesh mesh = TrackMeshBuilder.build(preview);
+        // Supports are previewed too. Without them, raising the placement height showed track
+        // floating with no indication of what would hold it up — which is most of what a builder is
+        // judging when they lift a node clear of the ground.
+        java.util.List<double[]> columns = new java.util.ArrayList<>();
+        for (com.micatechnologies.minecraft.rcmc.world.TrackSupports.Column column
+            : com.micatechnologies.minecraft.rcmc.world.TrackSupports.computeUncached(
+                preview, net.minecraft.client.Minecraft.getMinecraft().world)) {
+            columns.add(new double[] { column.x, column.z, column.bottomY, column.topY });
+        }
+        TrackMesh mesh = TrackMeshBuilder.build(preview,
+            java.util.Collections.<com.micatechnologies.minecraft.rcmc.track.ElementSpan>emptyList(),
+            columns);
         Tessellator tessellator = Tessellator.getInstance();
         BufferBuilder buffer = tessellator.getBuffer();
         buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_COLOR);

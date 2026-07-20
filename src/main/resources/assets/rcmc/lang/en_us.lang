@@ -4,3 +4,4 @@ item.rcmc.track_tool.name=Track Builder
 tile.rcmc.track_support.name=Track Support
 key.categories.rcmc=Rollercoaster Minecraft
 key.rcmc.cycle_segment=Cycle Track Segment Type
+key.rcmc.reset_adjustments=Reset Bank and Height

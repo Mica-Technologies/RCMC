@@ -108,6 +108,17 @@ public final class TrackSupports {
         CACHE.remove(world);
     }
 
+    /**
+     * Columns for a section that is not part of the network, computed without caching.
+     *
+     * <p>For the build preview, whose provisional section is a new instance every frame the cursor
+     * moves. Routing that through the cache would replace the entry each frame and never hit,
+     * paying the bookkeeping for none of the benefit.</p>
+     */
+    public static List<Column> computeUncached(TrackSection section, World world) {
+        return compute(section, world);
+    }
+
     private static List<Column> compute(TrackSection section, World world) {
         List<Column> columns = new ArrayList<>();
         double total = section.totalLength();

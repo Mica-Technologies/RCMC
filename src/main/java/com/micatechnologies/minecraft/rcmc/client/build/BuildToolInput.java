@@ -41,11 +41,18 @@ public final class BuildToolInput {
      *  to cross a lift hill's worth of height without wearing out a scroll wheel. */
     private static final double HEIGHT_STEP = 0.5D;
 
+    /** Degrees of bank per scroll notch. */
+    private static final double BANK_STEP = 5.0D;
+
     public static final KeyBinding CYCLE_SEGMENT = new KeyBinding(
         "key.rcmc.cycle_segment", Keyboard.KEY_G, "key.categories.rcmc");
 
+    public static final KeyBinding RESET_ADJUSTMENTS = new KeyBinding(
+        "key.rcmc.reset_adjustments", Keyboard.KEY_R, "key.categories.rcmc");
+
     public static void register() {
         ClientRegistry.registerKeyBinding(CYCLE_SEGMENT);
+        ClientRegistry.registerKeyBinding(RESET_ADJUSTMENTS);
     }
 
     @SubscribeEvent
@@ -53,14 +60,19 @@ public final class BuildToolInput {
         if (event.phase != TickEvent.Phase.END) {
             return;
         }
-        if (!CYCLE_SEGMENT.isPressed()) {
+        // isPressed() consumes one queued press, so these fire once per keystroke rather than
+        // every tick the key is held.
+        boolean cycle = CYCLE_SEGMENT.isPressed();
+        boolean reset = RESET_ADJUSTMENTS.isPressed();
+        if (!holdingTool(Minecraft.getMinecraft().player)) {
             return;
         }
-        // isPressed() consumes one queued press, so this fires once per keystroke rather than every
-        // tick the key is held.
-        if (holdingTool(Minecraft.getMinecraft().player)) {
+        if (cycle) {
             RcmcNetwork.sendToServer(
                 new PacketBuildAdjust(PacketBuildAdjust.Action.CYCLE_TYPE, 0.0D));
+        }
+        if (reset) {
+            RcmcNetwork.sendToServer(new PacketBuildAdjust(PacketBuildAdjust.Action.RESET, 0.0D));
         }
     }
 
@@ -71,14 +83,27 @@ public final class BuildToolInput {
         }
         Minecraft mc = Minecraft.getMinecraft();
         EntityPlayer player = mc.player;
-        if (player == null || !holdingTool(player) || !sneakKeyHeld(mc)) {
+        if (player == null || !holdingTool(player)) {
+            return;
+        }
+        boolean sneak = sneakKeyHeld(mc);
+        boolean control = Keyboard.isKeyDown(Keyboard.KEY_LCONTROL)
+            || Keyboard.isKeyDown(Keyboard.KEY_RCONTROL);
+        if (!sneak && !control) {
             return;
         }
         // Cancelled so the hotbar does not also change — scrolling off the tool mid-adjustment
         // would be maddening.
         event.setCanceled(true);
-        RcmcNetwork.sendToServer(new PacketBuildAdjust(PacketBuildAdjust.Action.ADJUST_HEIGHT,
-            Math.signum(event.getDwheel()) * HEIGHT_STEP));
+        double direction = Math.signum(event.getDwheel());
+        if (control) {
+            RcmcNetwork.sendToServer(new PacketBuildAdjust(
+                PacketBuildAdjust.Action.ADJUST_BANK, direction * BANK_STEP));
+        }
+        else {
+            RcmcNetwork.sendToServer(new PacketBuildAdjust(
+                PacketBuildAdjust.Action.ADJUST_HEIGHT, direction * HEIGHT_STEP));
+        }
     }
 
     /**

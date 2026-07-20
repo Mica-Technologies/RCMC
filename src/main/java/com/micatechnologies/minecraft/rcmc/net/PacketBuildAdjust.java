@@ -24,7 +24,9 @@ public class PacketBuildAdjust implements IMessage {
 
     public enum Action {
         CYCLE_TYPE,
-        ADJUST_HEIGHT
+        ADJUST_HEIGHT,
+        ADJUST_BANK,
+        RESET
     }
 
     private Action action;
@@ -70,19 +72,34 @@ public class PacketBuildAdjust implements IMessage {
         private static void apply(PacketBuildAdjust message, EntityPlayerMP player) {
             TrackBuildSession session = TrackBuildSession.of(player.getUniqueID());
 
-            if (message.action == Action.CYCLE_TYPE) {
-                TrackBuildSession.SegmentType now = session.cycleType();
-                player.sendStatusMessage(new TextComponentString(
-                    TextFormatting.AQUA + "Segment: " + now.label()), true);
-            }
-            else {
-                // Bounded here as well as in the session: a client sending a huge delta should not
-                // be able to walk the offset to its limit in one packet.
-                double delta = Math.max(-4.0D, Math.min(4.0D, message.value));
-                session.adjustHeightOffset(delta);
-                player.sendStatusMessage(new TextComponentString(
-                    TextFormatting.AQUA + String.format("Height offset: %+.1f blocks",
-                        session.heightOffset())), true);
+            // Deltas are bounded here as well as in the session: this is the one packet whose
+            // contents a client controls, and a huge value should not walk a setting to its limit
+            // in a single message.
+            switch (message.action) {
+                case CYCLE_TYPE:
+                    player.sendStatusMessage(new TextComponentString(
+                        TextFormatting.AQUA + "Segment: " + session.cycleType().label()), true);
+                    break;
+                case ADJUST_BANK:
+                    session.setBankDegrees(session.bankDegrees()
+                        + Math.max(-15.0D, Math.min(15.0D, message.value)));
+                    player.sendStatusMessage(new TextComponentString(
+                        TextFormatting.AQUA + String.format("Bank: %+.0f deg",
+                            session.bankDegrees())), true);
+                    break;
+                case RESET:
+                    session.setBankDegrees(0.0D);
+                    session.adjustHeightOffset(-session.heightOffset());
+                    player.sendStatusMessage(new TextComponentString(
+                        TextFormatting.AQUA + "Bank and height reset"), true);
+                    break;
+                case ADJUST_HEIGHT:
+                default:
+                    session.adjustHeightOffset(Math.max(-4.0D, Math.min(4.0D, message.value)));
+                    player.sendStatusMessage(new TextComponentString(
+                        TextFormatting.AQUA + String.format("Height offset: %+.1f blocks",
+                            session.heightOffset())), true);
+                    break;
             }
 
             RcmcNetwork.sendTo(new PacketBuildSessionSync(session), player);
