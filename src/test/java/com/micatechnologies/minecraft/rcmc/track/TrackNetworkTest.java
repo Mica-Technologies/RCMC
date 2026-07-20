@@ -91,6 +91,46 @@ class TrackNetworkTest {
     }
 
     @Test
+    @DisplayName("moving backwards across a join continues backwards, it does not turn around")
+    void backwardTraversalKeepsGoing() {
+        // Regression: advance() used to pick the new section's travel direction from BOTH the
+        // departing and arriving ends, which was correct only for forward motion. Moving
+        // backwards, it re-entered the section it had just left and bounced. Trailing cars of a
+        // multi-car train are addressed by negative offsets, so every long train was wrong.
+        TrackNetwork n = new TrackNetwork();
+        n.addSection(straight(1, 0, 50));
+        n.addSection(straight(2, 50, 50));
+        n.connect(new TrackNetwork.SectionEnd(1, TrackNetwork.End.END),
+                  new TrackNetwork.SectionEnd(2, TrackNetwork.End.START));
+
+        // From 5 blocks into section 2, walking 20 back must land 35 into section 1.
+        TrackNetwork.Traversal t = n.advance(new TrackRef(2, 5.0D), -20.0D);
+        assertEquals(1, t.ref.sectionId(), "should have crossed back onto section 1");
+        assertEquals(35.0D, t.ref.distance(), 1e-6);
+        assertFalse(t.reversed, "an END->START join crossed backwards is still not a reversal");
+    }
+
+    @Test
+    @DisplayName("backing out of a section's start onto another section's end is not a reversal")
+    void backwardTraversalOntoAnEnd() {
+        // Both legs are "travelling backwards along the distance axis", so the sign of a train's
+        // velocity should carry through unchanged. The reversal flag keys on the change in
+        // direction, not on the fact that an END was involved.
+        TrackNetwork n = new TrackNetwork();
+        n.addSection(straight(1, 0, 50));
+        // Runs from x=-50 up to x=0, so its END coincides with section 1's START.
+        n.addSection(new TrackSection(2, Arrays.asList(
+            node(-50, 64, 0), node(-25, 64, 0), node(0, 64, 0)), false, null));
+        n.connect(new TrackNetwork.SectionEnd(1, TrackNetwork.End.START),
+                  new TrackNetwork.SectionEnd(2, TrackNetwork.End.END));
+
+        TrackNetwork.Traversal t = n.advance(new TrackRef(1, 5.0D), -20.0D);
+        assertEquals(2, t.ref.sectionId());
+        assertEquals(n.section(2).totalLength() - 15.0D, t.ref.distance(), 1e-6);
+        assertFalse(t.reversed);
+    }
+
+    @Test
     @DisplayName("running off unconnected track stops at the boundary and reports a dead end")
     void deadEndIsReported() {
         // A train reaching the end of unconnected track is a real operational failure. It must be

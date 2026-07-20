@@ -296,16 +296,19 @@ public final class TrackNetwork {
             TrackSection next = sections.get(arriving.sectionId);
             currentId = arriving.sectionId;
 
-            if (arriving.end == End.START) {
-                // Entering at the start: distance still increases in our direction of travel.
-                position = 0.0D;
-                remaining = offTheEnd ? overshoot : -overshoot;
-            }
-            else {
-                // Entering at the far end: the section's distance axis runs opposite to us, so
-                // our direction of travel flips relative to it.
-                position = next.totalLength();
-                remaining = offTheEnd ? -overshoot : overshoot;
+            // Which way we then travel through the new section depends only on WHICH END we
+            // arrive at, never on which end we left. Arriving at a START means heading into the
+            // section, so toward increasing distance; arriving at an END means heading into it
+            // from the far side, so toward decreasing distance. (An earlier version made this
+            // conditional on the departing end too, which was correct only for forward motion and
+            // sent trailing cars of a train back the way they came.)
+            boolean movingForwardInNext = arriving.end == End.START;
+            position = movingForwardInNext ? 0.0D : next.totalLength();
+            remaining = movingForwardInNext ? overshoot : -overshoot;
+
+            // The travel direction has flipped relative to the track's distance axis if we were
+            // moving one way in the old section's terms and the other way in the new section's.
+            if (offTheEnd != movingForwardInNext) {
                 reversed = !reversed;
             }
         }

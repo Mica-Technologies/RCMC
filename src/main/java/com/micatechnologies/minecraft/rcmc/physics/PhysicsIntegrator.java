@@ -72,15 +72,36 @@ public final class PhysicsIntegrator {
         // is exactly sin(grade): +1 pointing straight up, -1 straight down.
         double gravityAlongTrack = -gravity * frame.forward.y;
 
-        double v = state.velocity;
-        double drag = -rollingResistance * v - airDrag * v * Math.abs(v);
-        double acceleration = gravityAlongTrack + drag + externalAcceleration;
-
+        double newVelocity = advanceVelocity(state.velocity, gravityAlongTrack, externalAcceleration, dt);
         // Semi-implicit Euler: velocity first, then position from the NEW velocity.
-        double newVelocity = clampSpeed(v + acceleration * dt);
-        double newDistance = state.distance + newVelocity * dt;
+        return state.with(state.distance + newVelocity * dt, newVelocity);
+    }
 
-        return state.with(newDistance, newVelocity);
+    /**
+     * Total along-track acceleration from the force model, in blocks/s².
+     *
+     * <p>Split out from {@link #step} because a multi-car train's gravity term is an average over
+     * the whole train rather than a value sampled at one point — see {@code Train}. Both callers
+     * must use the identical force model or a train and a single car would fall at different
+     * rates.</p>
+     *
+     * @param gravityAlongTrack already-projected gravity component, {@code -g·sin(grade)}
+     */
+    public double accelerationFor(double gravityAlongTrack, double velocity, double externalAcceleration) {
+        double drag = -rollingResistance * velocity - airDrag * velocity * Math.abs(velocity);
+        return gravityAlongTrack + drag + externalAcceleration;
+    }
+
+    /** One symplectic velocity update, clamped to the configured speed ceiling. */
+    public double advanceVelocity(double velocity, double gravityAlongTrack,
+                                  double externalAcceleration, double dt) {
+        return clampSpeed(velocity
+            + accelerationFor(gravityAlongTrack, velocity, externalAcceleration) * dt);
+    }
+
+    /** Gravity's along-track component for a unit forward vector. Its y component is sin(grade). */
+    public double gravityAlong(com.micatechnologies.minecraft.rcmc.track.math.Vec3 forward) {
+        return -gravity * forward.y;
     }
 
     private double clampSpeed(double v) {
