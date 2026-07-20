@@ -60,7 +60,7 @@ public final class TrackPreviewRenderer {
         }
 
         List<TrackNode> nodes = new ArrayList<>(ClientBuildSession.nodes());
-        Vec3 candidate = candidateNode(mc);
+        Vec3 candidate = BuildCursor.candidate(mc);
         boolean hasCandidate = candidate != null;
         if (hasCandidate) {
             nodes.add(new TrackNode(candidate, ClientBuildSession.bankDegrees(), null));
@@ -131,7 +131,11 @@ public final class TrackPreviewRenderer {
                 break;
             }
         }
-        float[] tint = warned ? WARNING_COLOR : VALID_COLOR;
+        // A steep placement is flagged even when the validator is content: an abrupt climb between
+        // two adjacent nodes is the single most surprising thing the height offset does, and it is
+        // geometry the builder chose rather than a fault in the curve.
+        BuildCursor.Segment segment = BuildCursor.pendingSegment(net.minecraft.client.Minecraft.getMinecraft());
+        float[] tint = (warned || (segment != null && segment.isSteep())) ? WARNING_COLOR : VALID_COLOR;
 
         // Supports are previewed too. Without them, raising the placement height showed track
         // floating with no indication of what would hold it up — which is most of what a builder is
@@ -203,23 +207,6 @@ public final class TrackPreviewRenderer {
         buffer.pos(x2, y2, z2).color(c[0], c[1], c[2], 0.85F).endVertex();
         buffer.pos(x3, y3, z3).color(c[0], c[1], c[2], 0.85F).endVertex();
         buffer.pos(x4, y4, z4).color(c[0], c[1], c[2], 0.85F).endVertex();
-    }
-
-    /**
-     * Where a click would place a node right now.
-     *
-     * <p>Must match {@code ItemTrackTool.onItemUse} exactly — block above the face hit, centred.
-     * If the two ever disagree the preview is a lie, which is worse than no preview at all.</p>
-     */
-    private static Vec3 candidateNode(Minecraft mc) {
-        RayTraceResult hit = mc.objectMouseOver;
-        if (hit == null || hit.typeOfHit != RayTraceResult.Type.BLOCK || hit.getBlockPos() == null) {
-            return null;
-        }
-        BlockPos pos = hit.getBlockPos();
-        return new Vec3(pos.getX() + 0.5D,
-            pos.getY() + 1.0D + ClientBuildSession.heightOffset(),
-            pos.getZ() + 0.5D);
     }
 
     private static boolean isHoldingTrackTool(EntityPlayer player) {

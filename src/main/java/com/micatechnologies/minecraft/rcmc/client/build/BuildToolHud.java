@@ -34,6 +34,7 @@ public final class BuildToolHud {
     private static final int HEADING = 0xFF55FFFF;
     private static final int VALUE = 0xFFFFFFFF;
     private static final int HINT = 0xFFAAAAAA;
+    private static final int WARN = 0xFFFFB020;
 
     private static final String[] SEGMENT_LABELS =
         {"Plain track", "Chain lift", "Brake run", "Station"};
@@ -67,6 +68,21 @@ public final class BuildToolHud {
         lines.add("Nodes: " + ClientBuildSession.nodes().size()
             + (ClientBuildSession.isClosing() ? "   (circuit)" : ""));
         colors.add(VALUE);
+
+        // The line that explains the height offset's most surprising behaviour. Offset is relative
+        // to the terrain under the cursor and persists between placements, so a big change makes
+        // the track climb it all between two adjacent nodes. Seeing the grade beforehand turns
+        // that from a surprise into a choice.
+        BuildCursor.Segment segment = BuildCursor.pendingSegment(mc);
+        if (segment != null) {
+            lines.add(String.format("Next: %.1f out, %+.1f up  (%.0f°)",
+                segment.run, segment.rise, segment.gradeDegrees));
+            colors.add(segment.isSteep() ? WARN : VALUE);
+            if (segment.isSteep()) {
+                lines.add("  steep - place a node partway to ease it");
+                colors.add(WARN);
+            }
+        }
 
         lines.add("");
         colors.add(HINT);
