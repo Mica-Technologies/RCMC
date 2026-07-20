@@ -75,6 +75,10 @@ public final class TrackValidator {
             checkGrade(samples, issues);
             checkLateralG(samples, issues);
             checkBankRate(samples, issues);
+            // Vertical overshoot is checked per node-to-node span rather than from the continuous
+            // samples, because the thing being measured is the curve relative to ITS ENDPOINTS —
+            // a property of each span, not of any single point on it.
+            issues.addAll(new OvershootCheck().check(section));
             checkSelfIntersection(section, issues);
         }
         return issues;
