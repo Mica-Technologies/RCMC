@@ -29,12 +29,21 @@ public final class SegmentElements {
     /**
      * Builds elements for contiguous runs of the same non-plain type.
      *
-     * <p>A run of nodes sharing a type becomes <b>one</b> element spanning from the first node of
-     * the run to the node <em>after</em> the last one. That trailing node matters and was the bug:
-     * a type recorded at node {@code i} describes the track <em>leaving</em> that node, so a run
-     * covering nodes 0..2 must reach node 3 to include the track those tags describe. Ending at the
-     * last tagged node left the final span unpowered — and for a run of a single node, produced an
-     * element of zero length that did nothing at all.</p>
+     * <p><b>A type recorded at node {@code i} describes the span ARRIVING at it</b> — the track
+     * from node {@code i-1} to node {@code i}. That is what the builder just drew: they select a
+     * type, then click, and the track that appears between their last node and the new one is the
+     * track they meant to type. So a run of tagged nodes {@code [i..j]} becomes one element
+     * spanning {@code nodeDistance(i-1)} to {@code nodeDistance(j)}.</p>
+     *
+     * <p>Getting this backwards is what made segment types appear not to work. Treating the type as
+     * describing the span <em>leaving</em> node {@code i} puts every element exactly one span later
+     * than it was drawn — so the stretch the builder marked as lift came out plain, and the plain
+     * stretch after it came out as lift. The HUD was right the whole time; the track disagreed with
+     * it by one span.</p>
+     *
+     * <p>A run starting at node 0 has no preceding node to span from, so it starts at the section's
+     * beginning. The first click places a node without drawing any track, so there is nothing
+     * earlier for it to describe.</p>
      *
      * @param types segment type recorded at each node, parallel to the section's nodes
      */
@@ -57,16 +66,14 @@ public final class SegmentElements {
             }
 
             if (type != TrackBuildSession.SegmentType.PLAIN) {
-                double from = section.nodeDistance(i);
-                // Extend to the node after the run, or to the end of the section on a closed
-                // circuit where the run reaches the last node.
-                double to;
-                if (runEnd + 1 < nodeCount) {
-                    to = section.nodeDistance(runEnd + 1);
-                }
-                else {
-                    to = section.totalLength();
-                }
+                // Start at the node BEFORE the run: the first tagged node's type describes the
+                // track arriving at it, which begins at its predecessor.
+                double from = section.nodeDistance(Math.max(0, i - 1));
+                // End at the last tagged node — that is where the tagged track stops. On a closed
+                // circuit a run reaching the final node continues to the seam.
+                double to = runEnd >= nodeCount - 1 && section.isClosed()
+                    ? section.totalLength()
+                    : section.nodeDistance(runEnd);
                 if (to > from) {
                     RideElement element = create(type, id, from, to, tick);
                     if (element != null) {

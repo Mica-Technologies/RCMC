@@ -74,10 +74,26 @@ class BuildSessionFlowTest {
         assertEquals(SegmentType.LIFT, types.get(6));
         assertEquals(SegmentType.PLAIN, types.get(7));
 
-        List<RideElement> elements = SegmentElements.build(sectionOf(session), types);
+        TrackSection section = sectionOf(session);
+        List<RideElement> elements = SegmentElements.build(section, types);
         assertEquals(1, elements.size(), "expected exactly one chain lift");
         assertTrue(elements.get(0) instanceof ChainLift,
             "expected a ChainLift, got " + elements.get(0).getClass().getSimpleName());
+
+        // THE assertion this whole file exists for. The builder selected lift, then drew the track
+        // between nodes 2 and 6 — four clicks producing four spans. The element must cover exactly
+        // that stretch.
+        //
+        // It used to be placed one span later, from node 3 to node 7, because a node's type was
+        // taken to describe the track LEAVING it rather than the track arriving at it. The
+        // observable symptom was precise and is worth recording: the stretch marked as lift came
+        // out plain, and the plain stretch after it came out as lift, while the HUD read correctly
+        // throughout. A type list can be entirely right and still produce wrong track.
+        assertEquals(section.nodeDistance(2), elements.get(0).startDistance(), 1e-6,
+            "the lift must start where the builder started drawing it — the node BEFORE the first "
+                + "tagged one");
+        assertEquals(section.nodeDistance(6), elements.get(0).endDistance(), 1e-6,
+            "the lift must end at the last node drawn while it was selected");
     }
 
     @Test
