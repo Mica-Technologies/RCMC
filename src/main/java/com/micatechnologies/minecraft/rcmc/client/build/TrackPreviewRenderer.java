@@ -72,7 +72,13 @@ public final class TrackPreviewRenderer {
         // sky, or across a gap, erased the work in progress. Nodes already placed are committed
         // intent and should stay on screen; only the provisional one depends on where you look.
 
-        boolean closing = ClientBuildSession.isClosing();
+        // Preview the closed loop when a click would close it, so the builder sees the completed
+        // circuit before committing rather than discovering the join afterwards.
+        boolean snapping = BuildCursor.wouldSnapClosed(mc);
+        if (snapping) {
+            nodes.remove(nodes.size() - 1);
+        }
+        boolean closing = ClientBuildSession.isClosing() || snapping;
         // Below the minimum a section needs there is no curve to preview yet. The node marker
         // still draws, so the first click is not invisible feedback.
         TrackSection preview = null;

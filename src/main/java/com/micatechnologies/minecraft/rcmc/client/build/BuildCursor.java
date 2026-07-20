@@ -27,6 +27,23 @@ public final class BuildCursor {
         throw new AssertionError("No instances.");
     }
 
+    /**
+     * Whether a click right now would close the circuit rather than add a node.
+     *
+     * <p>Mirrors {@code ItemTrackTool}'s snap test exactly. The preview has to agree with what the
+     * click does or it is lying, and "did that click add a node or finish my coaster" is not a
+     * question a builder should have to answer by trying it.</p>
+     */
+    public static boolean wouldSnapClosed(Minecraft mc) {
+        List<TrackNode> nodes = ClientBuildSession.nodes();
+        if (nodes.size() < 3) {
+            return false;
+        }
+        Vec3 candidate = candidate(mc);
+        return candidate != null
+            && candidate.distanceTo(nodes.get(0).position()) <= 3.0D;
+    }
+
     /** World position a click would place a node at, or {@code null} if not aimed at a block. */
     public static Vec3 candidate(Minecraft mc) {
         RayTraceResult hit = mc.objectMouseOver;

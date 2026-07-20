@@ -35,6 +35,7 @@ public final class BuildToolHud {
     private static final int VALUE = 0xFFFFFFFF;
     private static final int HINT = 0xFFAAAAAA;
     private static final int WARN = 0xFFFFB020;
+    private static final int SNAP = 0xFF60FF60;
 
     private static final String[] SEGMENT_LABELS =
         {"Plain track", "Chain lift", "Brake run", "Station"};
@@ -73,8 +74,13 @@ public final class BuildToolHud {
         // to the terrain under the cursor and persists between placements, so a big change makes
         // the track climb it all between two adjacent nodes. Seeing the grade beforehand turns
         // that from a surprise into a choice.
+        if (BuildCursor.wouldSnapClosed(mc)) {
+            lines.add("Click here to CLOSE the circuit");
+            colors.add(SNAP);
+        }
+
         BuildCursor.Segment segment = BuildCursor.pendingSegment(mc);
-        if (segment != null) {
+        if (segment != null && !BuildCursor.wouldSnapClosed(mc)) {
             lines.add(String.format("Next: %.1f out, %+.1f up  (%.0f°)",
                 segment.run, segment.rise, segment.gradeDegrees));
             colors.add(segment.isSteep() ? WARN : VALUE);

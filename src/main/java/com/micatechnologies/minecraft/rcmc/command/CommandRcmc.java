@@ -296,6 +296,17 @@ public class CommandRcmc extends CommandBase {
                 + String.format("%.1f", section.totalLength()) + " blocks, "
                 + section.nodes().size() + " nodes");
         }
+        // Elements are listed with their spans because "is the lift actually there, and does it
+        // cover where the train runs" is not answerable by looking at the track — a lift that was
+        // never created and one that spans zero blocks look identical in the world.
+        for (com.micatechnologies.minecraft.rcmc.physics.element.RideElement element
+            : state.elements().elements()) {
+            String type = com.micatechnologies.minecraft.rcmc.track.storage.ElementCodec.typeOf(element);
+            reply(sender, TextFormatting.GRAY, "  " + (type == null ? "?" : type)
+                + " on section " + element.sectionId() + "  "
+                + String.format("%.1f", element.startDistance()) + " - "
+                + String.format("%.1f", element.endDistance()) + " blocks");
+        }
         for (java.util.Map.Entry<Integer, Train> entry : state.trains().asMap().entrySet()) {
             Train train = entry.getValue();
             reply(sender, TextFormatting.GRAY, "  train #" + entry.getKey() + " "

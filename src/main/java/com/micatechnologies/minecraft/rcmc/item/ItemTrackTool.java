@@ -53,6 +53,18 @@ public class ItemTrackTool extends Item {
 
     public static final String NAME = "track_tool";
 
+    /**
+     * How close to the first node a click must land to close the circuit instead of adding a node.
+     *
+     * <p>Generous on purpose. The failure it prevents — two nodes a fraction of a block apart —
+     * produces a curve that has to turn through that gap and looks broken, and a builder aiming at
+     * their own starting node is unambiguous about what they mean.</p>
+     */
+    public static final double SNAP_RADIUS = 3.0D;
+
+    /** A circuit needs three nodes; below that there is no loop to close. */
+    public static final int MIN_CIRCUIT_NODES = 3;
+
     public ItemTrackTool() {
         setRegistryName(RcmcConstants.MOD_NAMESPACE, NAME);
         setTranslationKey(RcmcConstants.MOD_NAMESPACE + "." + NAME);
@@ -72,6 +84,20 @@ public class ItemTrackTool extends Item {
         // ground sits on top of it rather than inside it.
         Vec3 position = new Vec3(pos.getX() + 0.5D,
             pos.getY() + 1.0D + session.heightOffset(), pos.getZ() + 0.5D);
+
+        // Clicking back on the first node closes the loop rather than adding a node almost on top
+        // of it. Placing two nodes a fraction apart is the one thing guaranteed to look wrong: the
+        // curve has to turn through the tiny gap between them, so a circuit built that way never
+        // lined up. Snapping makes "click where you started" mean what a builder intends.
+        if (session.size() >= MIN_CIRCUIT_NODES
+            && position.distanceTo(session.pending().get(0).position()) <= SNAP_RADIUS) {
+            session.setClosing(true);
+            say(player, TextFormatting.GREEN, "Closing the circuit at the first node.");
+            pushSession(player, session);
+            commit(player, world, session);
+            return EnumActionResult.SUCCESS;
+        }
+
         session.add(new TrackNode(position, session.bankDegrees(), null));
 
         pushSession(player, session);
@@ -149,7 +175,14 @@ public class ItemTrackTool extends Item {
         state.network().addSection(section);
         addTypedElements(state, section, session);
         state.markTrackDirty(world);
-        RcmcNetwork.sendToAllIn(new PacketTrackSync(state.network()), world.provider.getDimension());
+        // BOTH, always. Sending only the track leaves clients with a lift hill that renders as
+        // plain rail — the element exists and works, but nothing draws a chain on it, so a builder
+        // who selected "chain lift" sees no evidence it took. That was reported as segment type
+        // not working at all.
+        int dimension = world.provider.getDimension();
+        RcmcNetwork.sendToAllIn(new PacketTrackSync(state.network()), dimension);
+        RcmcNetwork.sendToAllIn(
+            new com.micatechnologies.minecraft.rcmc.net.PacketElementSync(state.elements()), dimension);
         session.reset();
         pushSession(player, session);
 
@@ -163,51 +196,18 @@ public class ItemTrackTool extends Item {
     }
 
     /**
-     * Turns runs of same-typed nodes into real ride elements.
+     * Adds the ride hardware the builder's segment tags describe.
      *
-     * <p>A builder marking three nodes as "chain lift" means one lift spanning them, not three
-     * lifts — so contiguous runs are merged. Runs of {@code PLAIN} produce nothing, which is what
-     * makes plain track the default rather than a thing you have to select.</p>
-     *
-     * <p>Parameters are deliberately conservative defaults; tuning a specific lift's speed or a
-     * brake's target belongs in the ride-controller GUI, not in a placement gesture.</p>
+     * <p>The mapping itself lives in {@link com.micatechnologies.minecraft.rcmc.builder.SegmentElements},
+     * which is free of Minecraft types and therefore testable — it was inline here, and shipped
+     * broken because the only way to check it was to build a coaster and ride it.</p>
      */
     private static void addTypedElements(RcmcWorldState state, TrackSection section,
                                          TrackBuildSession session) {
-        java.util.List<TrackBuildSession.SegmentType> types = session.pendingTypes();
-        double tick = com.micatechnologies.minecraft.rcmc.RcmcConstants.SECONDS_PER_TICK;
-        int id = section.id();
-
-        int i = 0;
-        while (i < types.size()) {
-            TrackBuildSession.SegmentType type = types.get(i);
-            int runEnd = i;
-            while (runEnd + 1 < types.size() && types.get(runEnd + 1) == type) {
-                runEnd++;
-            }
-            if (type != TrackBuildSession.SegmentType.PLAIN && runEnd > i) {
-                double from = section.nodeDistance(i);
-                double to = section.nodeDistance(runEnd);
-                switch (type) {
-                    case LIFT:
-                        state.elements().add(new com.micatechnologies.minecraft.rcmc.physics.element
-                            .ChainLift(id, from, to, 5.0D, 12.0D, tick));
-                        break;
-                    case BRAKE:
-                        state.elements().add(new com.micatechnologies.minecraft.rcmc.physics.element
-                            .BrakeRun(id, from, to, 6.0D, 6.0D,
-                            com.micatechnologies.minecraft.rcmc.physics.element.BrakeRun.Mode.TRIM,
-                            tick));
-                        break;
-                    case STATION:
-                        state.elements().add(new com.micatechnologies.minecraft.rcmc.physics.element
-                            .StationPlatform(id, from, to, to - 2.0D, 6.0D, 60, 4.0D, 6.0D, tick));
-                        break;
-                    default:
-                        break;
-                }
-            }
-            i = runEnd + 1;
+        for (com.micatechnologies.minecraft.rcmc.physics.element.RideElement element
+            : com.micatechnologies.minecraft.rcmc.builder.SegmentElements.build(
+                section, session.pendingTypes())) {
+            state.elements().add(element);
         }
     }
 
