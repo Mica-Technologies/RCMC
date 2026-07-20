@@ -158,7 +158,10 @@ public class CommandRcmc extends CommandBase {
         // rather than at whatever point the geometry happens to call distance zero.
         double startDistance = state.elements().elements().stream()
             .filter(e -> e.sectionId() == sectionId && e instanceof StationPlatform)
-            .mapToDouble(e -> ((StationPlatform) e).stopDistance() - 4.0D)
+            // Exactly ON the stop point, not short of it. A station brakes an arriving train but
+            // never pushes one, so a train spawned at rest before the stop point simply sits there
+            // forever instead of dwelling and dispatching.
+            .mapToDouble(e -> ((StationPlatform) e).stopDistance())
             .findFirst().orElse(0.0D);
 
         TrainSpec spec = new TrainSpec(carCount, 3.0D, 0.5D, 4);

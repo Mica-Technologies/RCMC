@@ -78,7 +78,12 @@ public final class DemoCoaster {
         add(nodes, origin.x - l * 0.1D, baseY, origin.z - w, 0);
 
         // --- Lift hill: steady climb to the crest ---
-        int liftFirst = nodes.size();
+        //
+        // The lift ELEMENT deliberately starts back at the platform end (stationLast), not here.
+        // The first climbing node already sits a quarter of the way up, so anchoring the chain to
+        // it leaves the train to climb that first stretch on dispatch momentum alone — which it
+        // cannot do, and it rolls back into the station. A chain has to grab a train the moment it
+        // leaves the platform, exactly as a real one does.
         add(nodes, origin.x + l * 0.25D, baseY + liftHeight * 0.25D, origin.z - w, 0);
         add(nodes, origin.x + l * 0.55D, baseY + liftHeight * 0.65D, origin.z - w, 0);
         add(nodes, origin.x + l * 0.8D, baseY + liftHeight * 0.93D, origin.z - w, 0);
@@ -114,10 +119,17 @@ public final class DemoCoaster {
 
         // Element spans come from the node distances the section computed, so they track the
         // layout exactly even if the shape above is retuned.
+        // The platform's far end doubles as the lift's start, so there is no unpowered gap
+        // between them. They touch rather than overlap: RideElementSet is first-match-wins by
+        // insertion order, so an overlap would let the station keep claiming a train the lift
+        // should already have.
+        double platformEnd = section.nodeDistance(stationLast);
+
         return new Result(section,
-            section.nodeDistance(stationFirst), section.nodeDistance(stationLast + 1),
-            section.nodeDistance(stationLast),
-            section.nodeDistance(liftFirst), section.nodeDistance(liftLast),
+            section.nodeDistance(stationFirst), platformEnd,
+            // Stop short of the platform end so there is room to accelerate before the chain.
+            platformEnd - 3.0D,
+            platformEnd, section.nodeDistance(liftLast),
             section.nodeDistance(brakeFirst), section.nodeDistance(brakeLast));
     }
 
