@@ -67,6 +67,7 @@ public class Rcmc {
         MinecraftForge.EVENT_BUS.register(this);
         MinecraftForge.EVENT_BUS.register(new RcmcWorldState.Hooks());
         com.micatechnologies.minecraft.rcmc.net.RcmcNetwork.init();
+        com.micatechnologies.minecraft.rcmc.item.RcmcItems.init();
         RcmcTab.initTabElements();
         proxy.preInit(event);
         LOGGER.info("I am {} at version {}", RcmcConstants.MOD_NAME, RcmcConstants.MOD_VERSION);

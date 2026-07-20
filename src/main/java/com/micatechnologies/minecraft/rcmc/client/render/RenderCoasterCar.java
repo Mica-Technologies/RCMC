@@ -47,7 +47,7 @@ public class RenderCoasterCar extends Render<EntityCoasterCar> {
     @Override
     public void doRender(EntityCoasterCar entity, double x, double y, double z,
                          float entityYaw, float partialTicks) {
-        TrackFrame frame = entity.frame();
+        TrackFrame frame = interpolatedFrame(entity, partialTicks);
         if (frame == null) {
             return;
         }
@@ -75,6 +75,35 @@ public class RenderCoasterCar extends Render<EntityCoasterCar> {
         GlStateManager.popMatrix();
 
         super.doRender(entity, x, y, z, entityYaw, partialTicks);
+    }
+
+    /**
+     * The car's orientation blended between last tick's and this tick's, by {@code partialTicks}.
+     *
+     * <p>Position is already interpolated for us — {@code RenderManager} passes {@code x/y/z}
+     * blended from the entity's previous and current position — but orientation is not, and using
+     * the raw current frame makes a car's <em>rotation</em> step at 20 Hz while its position glides.
+     * On a banked curve that reads as the body twitching against its own motion.</p>
+     *
+     * <p>Blending is a normalised lerp of the two basis vectors rather than a proper slerp. Over a
+     * single tick the angle between successive frames is small, where nlerp and slerp differ
+     * negligibly; slerp would only earn its cost if frames were ever far apart, which would itself
+     * be the real bug.</p>
+     */
+    private static TrackFrame interpolatedFrame(EntityCoasterCar entity, float partialTicks) {
+        TrackFrame current = entity.frame();
+        if (current == null) {
+            return null;
+        }
+        TrackFrame previous = entity.previousFrame();
+        if (previous == null || previous == current) {
+            return current;
+        }
+        double t = partialTicks;
+        return new TrackFrame(
+            current.position,
+            previous.forward.lerp(current.forward, t).normalize(),
+            previous.up.lerp(current.up, t).normalize());
     }
 
     /**

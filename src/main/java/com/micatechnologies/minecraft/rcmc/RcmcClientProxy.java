@@ -1,5 +1,6 @@
 package com.micatechnologies.minecraft.rcmc;
 
+import com.micatechnologies.minecraft.rcmc.client.ClientTrainTicker;
 import com.micatechnologies.minecraft.rcmc.client.render.RenderCoasterCar;
 import com.micatechnologies.minecraft.rcmc.entity.EntityCoasterCar;
 import net.minecraftforge.fml.client.registry.RenderingRegistry;
@@ -20,6 +21,24 @@ public class RcmcClientProxy extends RcmcCommonProxy {
     public void preInit(FMLPreInitializationEvent event) {
         super.preInit(event);
         RenderingRegistry.registerEntityRenderingHandler(EntityCoasterCar.class, RenderCoasterCar::new);
+        // Without this the client never advances its trains between server corrections, and the
+        // ride visibly steps at the correction rate rather than the frame rate.
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new ClientTrainTicker());
+        // ModelRegistryEvent is on the MOD bus, but this proxy is registered to the Forge bus by
+        // its own preInit, so register it here to receive it.
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(this);
+    }
+
+    /**
+     * Binds item models. Must run on {@code ModelRegistryEvent}: models bake before {@code init},
+     * so registering a variant any later leaves the item rendering as the missing-model cube.
+     */
+    @net.minecraftforge.fml.common.eventhandler.SubscribeEvent
+    public void registerModels(net.minecraftforge.client.event.ModelRegistryEvent event) {
+        net.minecraft.item.Item tool = com.micatechnologies.minecraft.rcmc.item.RcmcItems.trackTool;
+        net.minecraftforge.client.model.ModelLoader.setCustomModelResourceLocation(tool, 0,
+            new net.minecraft.client.renderer.block.model.ModelResourceLocation(
+                tool.getRegistryName(), "inventory"));
     }
 
     @Override
