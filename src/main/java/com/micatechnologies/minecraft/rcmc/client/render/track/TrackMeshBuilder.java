@@ -147,9 +147,23 @@ public final class TrackMeshBuilder {
     // these from; TrackSection.styleAtDistance is not consulted here. Revisit once track styles
     // (docs/design/TRACK_GEOMETRY.md, "what is not here yet") land. ----
 
-    private static final float[] RAIL_COLOR = {0.62F, 0.62F, 0.66F};
-    private static final float[] SPINE_COLOR = {0.32F, 0.29F, 0.27F};
-    private static final float[] TIE_COLOR = {0.42F, 0.31F, 0.20F};
+    /**
+     * Colours come from the section's own palette rather than from constants, so a builder's paint
+     * choice reaches the geometry.
+     *
+     * <p>Resolved once per build, not per quad, and folded into the vertex colours alongside the
+     * per-face shade. That does mean recolouring rebuilds a section's mesh — the plan called for
+     * resolving palette at draw time to avoid exactly that, and this is the simpler thing that
+     * works: recolouring is a deliberate, occasional act, and the rebuild it triggers is the same
+     * one any other edit causes. Revisit if painting ever becomes something done continuously,
+     * such as a live colour picker.</p>
+     */
+    private static float[] colourOf(TrackSection section,
+                                    com.micatechnologies.minecraft.rcmc.track.TrackPalette.Part part) {
+        com.micatechnologies.minecraft.rcmc.track.TrackPalette.Colour colour =
+            section.palette().of(part);
+        return new float[] { colour.red(), colour.green(), colour.blue() };
+    }
 
     private TrackMeshBuilder() {
         throw new AssertionError("No instances.");
@@ -195,9 +209,12 @@ public final class TrackMeshBuilder {
         double[] rings = ringDistances(section, total);
         boolean capEnds = !section.isClosed();
 
-        sweepTube(section, rings, leftRailProfile(), RAIL_COLOR, capEnds, quads);
-        sweepTube(section, rings, rightRailProfile(), RAIL_COLOR, capEnds, quads);
-        sweepTube(section, rings, spineProfile(), SPINE_COLOR, capEnds, quads);
+        float[] railColour = colourOf(section,
+            com.micatechnologies.minecraft.rcmc.track.TrackPalette.Part.RAIL);
+        sweepTube(section, rings, leftRailProfile(), railColour, capEnds, quads);
+        sweepTube(section, rings, rightRailProfile(), railColour, capEnds, quads);
+        sweepTube(section, rings, spineProfile(), colourOf(section,
+            com.micatechnologies.minecraft.rcmc.track.TrackPalette.Part.SPINE), capEnds, quads);
         buildTies(section, total, quads);
         buildLiftChains(section, total, spans, quads);
         buildSupports(section, supports, quads);
@@ -225,13 +242,15 @@ public final class TrackMeshBuilder {
         // a distance and a ground height, which meant the geometry existed only on the client —
         // fine while supports were decorative, impossible once they had to be solid.
         for (double[] column : supports) {
-            buildColumn(column[0], column[1], column[2], column[3], quads);
+            buildColumn(column[0], column[1], column[2], column[3],
+                colourOf(section, com.micatechnologies.minecraft.rcmc.track.TrackPalette.Part.SUPPORT),
+                quads);
         }
     }
 
     /** A square column between two heights at a fixed x/z. */
     private static void buildColumn(double x, double z, double bottomY, double topY,
-                                    List<MeshQuad> quads) {
+                                    float[] supportColour, List<MeshQuad> quads) {
         double h = SUPPORT_HALF_WIDTH;
         Vec3 a1 = new Vec3(x - h, bottomY, z - h);
         Vec3 b1 = new Vec3(x + h, bottomY, z - h);
@@ -242,9 +261,9 @@ public final class TrackMeshBuilder {
         Vec3 c2 = new Vec3(x + h, topY, z + h);
         Vec3 d2 = new Vec3(x - h, topY, z + h);
 
-        float r = SUPPORT_COLOR[0];
-        float g = SUPPORT_COLOR[1];
-        float b = SUPPORT_COLOR[2];
+        float r = supportColour[0];
+        float g = supportColour[1];
+        float b = supportColour[2];
         quads.add(new MeshQuad(a1, a2, b2, b1, r, g, b));
         quads.add(new MeshQuad(b1, b2, c2, c1, r, g, b));
         quads.add(new MeshQuad(c1, c2, d2, d1, r, g, b));
@@ -524,7 +543,8 @@ public final class TrackMeshBuilder {
         for (int i = 0; i < tieCount; i++) {
             double center = i * TIE_SPACING;
             double[] tieRings = {center - TIE_HALF_THICKNESS_S, center + TIE_HALF_THICKNESS_S};
-            sweepTube(section, tieRings, profile, TIE_COLOR, true, out);
+            sweepTube(section, tieRings, profile, colourOf(section,
+                com.micatechnologies.minecraft.rcmc.track.TrackPalette.Part.TIE), true, out);
         }
     }
 

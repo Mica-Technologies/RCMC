@@ -39,6 +39,9 @@ public final class TrackSection {
     private final boolean closed;
     private final String styleId;
 
+    /** Authored colours. Immutable like the rest of the section; editing returns a new one. */
+    private final TrackPalette palette;
+
     private final ArcLengthTable arcLength;
     private final ParallelTransportFrames frames;
 
@@ -52,6 +55,11 @@ public final class TrackSection {
     private final double rollResidual;
 
     public TrackSection(int id, List<TrackNode> nodes, boolean closed, String styleId) {
+        this(id, nodes, closed, styleId, TrackPalette.DEFAULT);
+    }
+
+    public TrackSection(int id, List<TrackNode> nodes, boolean closed, String styleId,
+                        TrackPalette palette) {
         if (nodes == null) {
             throw new IllegalArgumentException("nodes must not be null");
         }
@@ -65,6 +73,7 @@ public final class TrackSection {
         this.nodes = Collections.unmodifiableList(new ArrayList<>(nodes));
         this.closed = closed;
         this.styleId = styleId;
+        this.palette = palette == null ? TrackPalette.DEFAULT : palette;
 
         List<Vec3> positions = new ArrayList<>(nodes.size());
         for (TrackNode node : this.nodes) {
@@ -253,6 +262,16 @@ public final class TrackSection {
         return styleId;
     }
 
+    public TrackPalette palette() {
+        return palette;
+    }
+
+    /** A copy painted differently. Geometry is rebuilt, which is wasteful but keeps sections
+     *  genuinely immutable; recolouring is rare next to anything that reads them. */
+    public TrackSection withPalette(TrackPalette newPalette) {
+        return new TrackSection(id, nodes, closed, styleId, newPalette);
+    }
+
     public double totalLength() {
         return arcLength.totalLength();
     }
@@ -287,33 +306,33 @@ public final class TrackSection {
     public TrackSection withNode(int index, TrackNode replacement) {
         List<TrackNode> edited = new ArrayList<>(nodes);
         edited.set(index, replacement);
-        return new TrackSection(id, edited, closed, styleId);
+        return new TrackSection(id, edited, closed, styleId, palette);
     }
 
     public TrackSection withNodeInserted(int index, TrackNode inserted) {
         List<TrackNode> edited = new ArrayList<>(nodes);
         edited.add(index, inserted);
-        return new TrackSection(id, edited, closed, styleId);
+        return new TrackSection(id, edited, closed, styleId, palette);
     }
 
     public TrackSection withNodeRemoved(int index) {
         List<TrackNode> edited = new ArrayList<>(nodes);
         edited.remove(index);
-        return new TrackSection(id, edited, closed, styleId);
+        return new TrackSection(id, edited, closed, styleId, palette);
     }
 
     public TrackSection withNodeAppended(TrackNode appended) {
         List<TrackNode> edited = new ArrayList<>(nodes);
         edited.add(appended);
-        return new TrackSection(id, edited, closed, styleId);
+        return new TrackSection(id, edited, closed, styleId, palette);
     }
 
     public TrackSection withClosed(boolean nowClosed) {
-        return nowClosed == closed ? this : new TrackSection(id, nodes, nowClosed, styleId);
+        return nowClosed == closed ? this : new TrackSection(id, nodes, nowClosed, styleId, palette);
     }
 
     public TrackSection withStyle(String newStyleId) {
-        return new TrackSection(id, nodes, closed, newStyleId);
+        return new TrackSection(id, nodes, closed, newStyleId, palette);
     }
 
     /** Reverses the direction of travel. Bank angles negate, since right becomes left. */
@@ -323,7 +342,7 @@ public final class TrackSection {
             TrackNode node = nodes.get(i);
             flipped.add(node.withBank(-node.bankDegrees()));
         }
-        return new TrackSection(id, flipped, closed, styleId);
+        return new TrackSection(id, flipped, closed, styleId, palette);
     }
 
     @Override

@@ -48,6 +48,7 @@ public final class TrackCodec {
     private static final String KEY_NODES = "Nodes";
     private static final String KEY_CLOSED = "Closed";
     private static final String KEY_STYLE = "Style";
+    private static final String KEY_PALETTE = "Palette";
 
     private static final String KEY_X = "X";
     private static final String KEY_Y = "Y";
@@ -153,6 +154,17 @@ public final class TrackCodec {
             tag.setString(KEY_STYLE, section.styleId());
         }
 
+        if (!section.palette().isDefault()) {
+            // Only written when painted, so an untouched park's save file does not grow a colour
+            // record for every section that never used one.
+            NBTTagCompound palette = new NBTTagCompound();
+            for (com.micatechnologies.minecraft.rcmc.track.TrackPalette.Part part
+                : com.micatechnologies.minecraft.rcmc.track.TrackPalette.Part.values()) {
+                palette.setString(part.name(), section.palette().of(part).name());
+            }
+            tag.setTag(KEY_PALETTE, palette);
+        }
+
         NBTTagList nodeList = new NBTTagList();
         for (TrackNode node : section.nodes()) {
             nodeList.appendTag(writeNode(node));
@@ -167,11 +179,23 @@ public final class TrackCodec {
         for (int i = 0; i < nodeList.tagCount(); i++) {
             nodes.add(readNode(nodeList.getCompoundTagAt(i)));
         }
+        com.micatechnologies.minecraft.rcmc.track.TrackPalette palette =
+            com.micatechnologies.minecraft.rcmc.track.TrackPalette.DEFAULT;
+        if (tag.hasKey(KEY_PALETTE, 10)) {
+            NBTTagCompound stored = tag.getCompoundTag(KEY_PALETTE);
+            for (com.micatechnologies.minecraft.rcmc.track.TrackPalette.Part part
+                : com.micatechnologies.minecraft.rcmc.track.TrackPalette.Part.values()) {
+                palette = palette.with(part,
+                    com.micatechnologies.minecraft.rcmc.track.TrackPalette.Colour.byName(
+                        stored.getString(part.name()), palette.of(part)));
+            }
+        }
         return new TrackSection(
             tag.getInteger(KEY_ID),
             nodes,
             tag.getBoolean(KEY_CLOSED),
-            tag.hasKey(KEY_STYLE, 8) ? tag.getString(KEY_STYLE) : null);
+            tag.hasKey(KEY_STYLE, 8) ? tag.getString(KEY_STYLE) : null,
+            palette);
     }
 
     public static NBTTagCompound writeNode(TrackNode node) {

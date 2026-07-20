@@ -50,9 +50,17 @@ public final class BuildToolInput {
     public static final KeyBinding RESET_ADJUSTMENTS = new KeyBinding(
         "key.rcmc.reset_adjustments", Keyboard.KEY_R, "key.categories.rcmc");
 
+    public static final KeyBinding CYCLE_COLOUR = new KeyBinding(
+        "key.rcmc.cycle_colour", Keyboard.KEY_C, "key.categories.rcmc");
+
+    public static final KeyBinding CYCLE_PAINT_PART = new KeyBinding(
+        "key.rcmc.cycle_paint_part", Keyboard.KEY_V, "key.categories.rcmc");
+
     public static void register() {
         ClientRegistry.registerKeyBinding(CYCLE_SEGMENT);
         ClientRegistry.registerKeyBinding(RESET_ADJUSTMENTS);
+        ClientRegistry.registerKeyBinding(CYCLE_COLOUR);
+        ClientRegistry.registerKeyBinding(CYCLE_PAINT_PART);
     }
 
     @SubscribeEvent
@@ -64,7 +72,21 @@ public final class BuildToolInput {
         // every tick the key is held.
         boolean cycle = CYCLE_SEGMENT.isPressed();
         boolean reset = RESET_ADJUSTMENTS.isPressed();
+        boolean colour = CYCLE_COLOUR.isPressed();
+        boolean paintPart = CYCLE_PAINT_PART.isPressed();
         EntityPlayer player = Minecraft.getMinecraft().player;
+
+        // Painting is an editor-only action; the build tool has no section selected to paint.
+        if (holdingEditor(player)) {
+            if (colour) {
+                RcmcNetwork.sendToServer(
+                    new PacketBuildAdjust(PacketBuildAdjust.Action.CYCLE_COLOUR, 0.0D));
+            }
+            if (paintPart) {
+                RcmcNetwork.sendToServer(
+                    new PacketBuildAdjust(PacketBuildAdjust.Action.CYCLE_PAINT_PART, 0.0D));
+            }
+        }
         // G means "change the segment type" for both tools; which one is held decides whether that
         // is the type of the NEXT node placed or of the span already selected.
         if (cycle && holdingEditor(player)) {

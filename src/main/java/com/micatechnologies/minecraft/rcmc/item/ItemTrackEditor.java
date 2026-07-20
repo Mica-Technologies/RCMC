@@ -60,6 +60,10 @@ public class ItemTrackEditor extends Item {
      */
     private static final double PICK_RADIUS = 4.0D;
 
+    /** Which part a colour change applies to; cycled independently of the colour itself. */
+    private static final Map<UUID, com.micatechnologies.minecraft.rcmc.track.TrackPalette.Part>
+        PAINT_PART = new HashMap<>();
+
     /** Per-player selection. Server-side scratch state, like the build session. */
     private static final Map<UUID, Selection> SELECTIONS = new HashMap<>();
 
@@ -274,6 +278,53 @@ public class ItemTrackEditor extends Item {
         say(player, TextFormatting.DARK_GRAY, "  G to change type, sneak+click to delete section.");
     }
 
+    /**
+     * Repaints one part of the selected section, cycling that part's colour.
+     *
+     * <p>Colour is a property of the whole section rather than of a span. Track is painted end to
+     * end in every park worth looking at, and per-span colour would let a builder produce a
+     * patchwork by accident — the thing a fixed palette exists to prevent.</p>
+     */
+    public static void cycleSelectedColour(EntityPlayer player, World world) {
+        RcmcWorldState state = RcmcWorldState.of(world);
+        Selection selection = SELECTIONS.get(player.getUniqueID());
+        if (selection == null) {
+            say(player, TextFormatting.GRAY, "Select a piece of track first.");
+            return;
+        }
+        TrackSection section = state.network().section(selection.sectionId);
+        if (section == null) {
+            SELECTIONS.remove(player.getUniqueID());
+            say(player, TextFormatting.RED, "That section no longer exists.");
+            return;
+        }
+
+        com.micatechnologies.minecraft.rcmc.track.TrackPalette.Part part =
+            PAINT_PART.getOrDefault(player.getUniqueID(),
+                com.micatechnologies.minecraft.rcmc.track.TrackPalette.Part.RAIL);
+        com.micatechnologies.minecraft.rcmc.track.TrackPalette.Colour next =
+            section.palette().of(part).next();
+
+        // replaceSection keeps the section's joins, which a remove-and-add would silently drop.
+        state.network().replaceSection(section.withPalette(section.palette().with(part, next)));
+        state.markTrackDirty(world);
+        broadcast(world, state);
+        say(player, TextFormatting.GREEN, part.name().toLowerCase(java.util.Locale.ROOT)
+            + " -> " + next.label());
+    }
+
+    /** Switches which part subsequent colour changes apply to. */
+    public static void cyclePaintPart(EntityPlayer player) {
+        com.micatechnologies.minecraft.rcmc.track.TrackPalette.Part[] parts =
+            com.micatechnologies.minecraft.rcmc.track.TrackPalette.Part.values();
+        com.micatechnologies.minecraft.rcmc.track.TrackPalette.Part current =
+            PAINT_PART.getOrDefault(player.getUniqueID(), parts[0]);
+        com.micatechnologies.minecraft.rcmc.track.TrackPalette.Part next =
+            parts[(current.ordinal() + 1) % parts.length];
+        PAINT_PART.put(player.getUniqueID(), next);
+        say(player, TextFormatting.AQUA, "Painting: " + next.name().toLowerCase(java.util.Locale.ROOT));
+    }
+
     private static void broadcast(World world, RcmcWorldState state) {
         int dimension = world.provider.getDimension();
         RcmcNetwork.sendToAllIn(new PacketTrackSync(state.network()), dimension);
@@ -290,6 +341,8 @@ public class ItemTrackEditor extends Item {
         tooltip.add(TextFormatting.GRAY + "Right-click track: select a span");
         tooltip.add(TextFormatting.GRAY + "G: cycle that span's segment type");
         tooltip.add(TextFormatting.GRAY + "Sneak + right-click track: delete the section");
+        tooltip.add(TextFormatting.GRAY + "C: cycle that part's colour");
+        tooltip.add(TextFormatting.GRAY + "V: choose which part to paint");
         tooltip.add(TextFormatting.GRAY + "Sneak + right-click air: clear selection");
     }
 }

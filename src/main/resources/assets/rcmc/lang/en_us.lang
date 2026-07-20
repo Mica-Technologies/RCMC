@@ -6,3 +6,5 @@ key.categories.rcmc=Rollercoaster Minecraft
 key.rcmc.cycle_segment=Cycle Track Segment Type
 key.rcmc.reset_adjustments=Reset Bank and Height
 item.rcmc.track_editor.name=Track Editor
+key.rcmc.cycle_colour=Cycle Track Colour
+key.rcmc.cycle_paint_part=Cycle Painted Part

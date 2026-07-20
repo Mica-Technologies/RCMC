@@ -111,6 +111,26 @@ class TrackCodecTest {
     }
 
     @Test
+    @DisplayName("a section's paint survives a save/load round trip")
+    void paletteRoundTrips() {
+        com.micatechnologies.minecraft.rcmc.track.TrackPalette painted =
+            com.micatechnologies.minecraft.rcmc.track.TrackPalette.DEFAULT
+                .with(com.micatechnologies.minecraft.rcmc.track.TrackPalette.Part.RAIL,
+                    com.micatechnologies.minecraft.rcmc.track.TrackPalette.Colour.TEAL)
+                .with(com.micatechnologies.minecraft.rcmc.track.TrackPalette.Part.SUPPORT,
+                    com.micatechnologies.minecraft.rcmc.track.TrackPalette.Colour.PINK);
+
+        TrackNetwork original = new TrackNetwork();
+        original.addSection(new TrackSection(9, Arrays.asList(
+            node(0, 64, 0, 0, null), node(50, 64, 0, 0, null), node(100, 64, 0, 0, null)),
+            false, null, painted));
+
+        TrackNetwork restored = TrackCodec.readNetwork(TrackCodec.writeNetwork(original));
+        assertEquals(painted, restored.section(9).palette(),
+            "paint is authored data and must survive a restart like any other edit");
+    }
+
+    @Test
     @DisplayName("the payload records its format version")
     void payloadIsVersioned() {
         NBTTagCompound tag = TrackCodec.writeNetwork(sampleNetwork());

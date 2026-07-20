@@ -12,6 +12,7 @@ import net.minecraft.network.datasync.DataParameter;
 import net.minecraft.network.datasync.DataSerializers;
 import net.minecraft.network.datasync.EntityDataManager;
 import net.minecraft.util.EnumHand;
+import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 
@@ -181,6 +182,34 @@ public class EntityCoasterCar extends Entity {
     @Override
     public boolean canBeCollidedWith() {
         return !this.isDead;
+    }
+
+    /**
+     * Makes the car solid to <em>other</em> entities, so a player cannot walk through a train.
+     *
+     * <p>Returning a non-null box here is what Minecraft uses to push other entities out; it does
+     * not affect this entity's own movement, which stays governed by the track. That distinction
+     * is the whole reason this is safe: {@link #noClip} keeps the CAR from colliding with the
+     * world — which must remain true, since at 1.5 blocks per tick vanilla collision does not
+     * behave and "off the rails" is not a representable state — while this makes the WORLD collide
+     * with the car.</p>
+     *
+     * <p>Riders are exempt automatically: Minecraft never collides an entity with the thing it is
+     * riding, so boarding does not eject you.</p>
+     */
+    @Override
+    public AxisAlignedBB getCollisionBoundingBox() {
+        return this.isDead ? null : getEntityBoundingBox();
+    }
+
+    /**
+     * Pushed aside rather than pushing. A player walking into a stationary train should be stopped
+     * by it; a train should not be shoved off its own geometry by being leaned on — and could not
+     * be anyway, since its position is recomputed from the track every tick.
+     */
+    @Override
+    public boolean canBePushed() {
+        return false;
     }
 
     @Override
