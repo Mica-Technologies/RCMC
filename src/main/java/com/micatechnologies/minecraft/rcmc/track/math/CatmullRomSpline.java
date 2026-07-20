@@ -20,6 +20,15 @@ import java.util.List;
  * (Yuksel et al., "Parameterization and Applications of Catmull-Rom Curves"), which turns a
  * whole class of player-triggerable physics explosions into a non-issue.</p>
  *
+ * <p><b>Vertical monotonicity.</b> An interpolating spline passes through its control points but
+ * is not confined between them, and the classic symptom on a coaster is track sagging into the
+ * ground just before a climb: the node before the climb takes a steeply upward tangent from its
+ * neighbours, and the segment arriving there dips to accommodate it. Node tangents are therefore
+ * clamped on the <b>Y axis only</b> using the Fritsch–Carlson condition from monotone cubic
+ * interpolation. Horizontal shaping is untouched — constraining that would turn every corner into
+ * a polyline — but the curve can no longer rise above or fall below the two nodes a span runs
+ * between. See {@code OvershootCheck}, kept as a safety net.</p>
+ *
  * <p>Evaluation is by segment: with {@code n} control points there are {@code n - 3}
  * interior segments, each spanning local parameter {@code t} in {@code [0, 1]}. The global
  * parameter {@code u} in {@code [0, 1]} maps uniformly across segments — note that this is
@@ -131,9 +140,10 @@ public final class CatmullRomSpline {
     /**
      * Unit tangent (direction of travel) at global parameter {@code u}.
      *
-     * <p>Computed analytically from the Barry-Goldman recurrence rather than by finite
-     * differences, so it stays exact at segment boundaries where a finite difference would
-     * straddle two segments and smear the direction.</p>
+     * <p>Computed analytically from the Hermite basis rather than by finite differences, so it
+     * stays exact at segment boundaries where a finite difference would straddle two segments and
+     * smear the direction. Both segments meeting at a node derive that node's tangent from the same
+     * neighbours, so the curve is C¹ there — including across a closed circuit's seam.</p>
      */
     public Vec3 tangentAt(double u) {
         int segment = segmentFor(u);
@@ -215,77 +225,133 @@ public final class CatmullRomSpline {
      * the basis matrix only exists for the uniform (alpha = 0) case; non-uniform knots
      * require the recurrence.</p>
      */
+    /**
+     * Evaluates segment {@code i} at local parameter {@code t} in {@code [0, 1]} as a cubic
+     * Hermite curve through its two endpoints, using tangents derived from the centripetal knot
+     * spacing and then clamped for vertical monotonicity.
+     *
+     * <p><b>Why Hermite rather than the Barry–Goldman recurrence this used to use.</b> Both
+     * describe the same curve for unclamped Catmull-Rom, but the recurrence never forms an explicit
+     * per-node tangent — it blends control points directly — so there is nothing to clamp. Writing
+     * the segment as a Hermite with named endpoint tangents makes the tangent a value we can bound,
+     * which is the whole point.</p>
+     */
     private Vec3 positionInSegment(int i, double t) {
+        Segment segment = segmentAt(i);
+        double u = t;
+        double u2 = u * u;
+        double u3 = u2 * u;
+
+        double h00 = 2.0D * u3 - 3.0D * u2 + 1.0D;
+        double h10 = u3 - 2.0D * u2 + u;
+        double h01 = -2.0D * u3 + 3.0D * u2;
+        double h11 = u3 - u2;
+
+        return segment.p1.scale(h00)
+            .add(segment.m1.scale(h10 * segment.span))
+            .add(segment.p2.scale(h01))
+            .add(segment.m2.scale(h11 * segment.span));
+    }
+
+    /** Derivative of {@link #positionInSegment} with respect to the local parameter. */
+    private Vec3 tangentInSegment(int i, double t) {
+        Segment segment = segmentAt(i);
+        double u = t;
+        double u2 = u * u;
+
+        double dh00 = 6.0D * u2 - 6.0D * u;
+        double dh10 = 3.0D * u2 - 4.0D * u + 1.0D;
+        double dh01 = -6.0D * u2 + 6.0D * u;
+        double dh11 = 3.0D * u2 - 2.0D * u;
+
+        return segment.p1.scale(dh00)
+            .add(segment.m1.scale(dh10 * segment.span))
+            .add(segment.p2.scale(dh01))
+            .add(segment.m2.scale(dh11 * segment.span));
+    }
+
+    /** One segment's endpoints, endpoint tangents (per unit knot parameter), and knot span. */
+    private static final class Segment {
+        final Vec3 p1;
+        final Vec3 p2;
+        final Vec3 m1;
+        final Vec3 m2;
+        final double span;
+
+        Segment(Vec3 p1, Vec3 p2, Vec3 m1, Vec3 m2, double span) {
+            this.p1 = p1;
+            this.p2 = p2;
+            this.m1 = m1;
+            this.m2 = m2;
+            this.span = span;
+        }
+    }
+
+    private Segment segmentAt(int i) {
         Vec3 p0 = points.get(i);
         Vec3 p1 = points.get(i + 1);
         Vec3 p2 = points.get(i + 2);
         Vec3 p3 = points.get(i + 3);
 
-        double t0 = 0.0D;
-        double t1 = t0 + knotDelta(p0, p1);
-        double t2 = t1 + knotDelta(p1, p2);
-        double t3 = t2 + knotDelta(p2, p3);
+        double d01 = knotDelta(p0, p1);
+        double d12 = knotDelta(p1, p2);
+        double d23 = knotDelta(p2, p3);
 
-        double tt = t1 + t * (t2 - t1);
+        Vec3 m1 = nodeTangent(p0, p1, p2, d01, d12);
+        Vec3 m2 = nodeTangent(p1, p2, p3, d12, d23);
 
-        Vec3 a1 = lerpKnot(p0, p1, t0, t1, tt);
-        Vec3 a2 = lerpKnot(p1, p2, t1, t2, tt);
-        Vec3 a3 = lerpKnot(p2, p3, t2, t3, tt);
-        Vec3 b1 = lerpKnot(a1, a2, t0, t2, tt);
-        Vec3 b2 = lerpKnot(a2, a3, t1, t3, tt);
-        return lerpKnot(b1, b2, t1, t2, tt);
+        m1 = clampVerticalTangent(m1, (p1.y - p0.y) / d01, (p2.y - p1.y) / d12);
+        m2 = clampVerticalTangent(m2, (p2.y - p1.y) / d12, (p3.y - p2.y) / d23);
+
+        return new Segment(p1, p2, m1, m2, d12);
     }
 
     /**
-     * Derivative of {@link #positionInSegment} with respect to the local parameter, obtained
-     * by differentiating the same recurrence via the product rule.
+     * The non-uniform Catmull-Rom tangent at the middle point: the two adjacent secants, each
+     * weighted by the <em>opposite</em> knot interval.
+     *
+     * <p>Weighting by the opposite interval is what makes this reduce to the familiar
+     * {@code (p2 - p0) / 2} when the knots are evenly spaced, while still leaning toward the
+     * closer neighbour when they are not — which is the entire reason for centripetal spacing.</p>
      */
-    private Vec3 tangentInSegment(int i, double t) {
-        Vec3 p0 = points.get(i);
-        Vec3 p1 = points.get(i + 1);
-        Vec3 p2 = points.get(i + 2);
-        Vec3 p3 = points.get(i + 3);
-
-        double t0 = 0.0D;
-        double t1 = t0 + knotDelta(p0, p1);
-        double t2 = t1 + knotDelta(p1, p2);
-        double t3 = t2 + knotDelta(p2, p3);
-
-        double tt = t1 + t * (t2 - t1);
-
-        Vec3 a1 = lerpKnot(p0, p1, t0, t1, tt);
-        Vec3 a2 = lerpKnot(p1, p2, t1, t2, tt);
-        Vec3 a3 = lerpKnot(p2, p3, t2, t3, tt);
-        Vec3 da1 = p1.subtract(p0).scale(1.0D / (t1 - t0));
-        Vec3 da2 = p2.subtract(p1).scale(1.0D / (t2 - t1));
-        Vec3 da3 = p3.subtract(p2).scale(1.0D / (t3 - t2));
-
-        Vec3 b1 = lerpKnot(a1, a2, t0, t2, tt);
-        Vec3 b2 = lerpKnot(a2, a3, t1, t3, tt);
-        Vec3 db1 = derivLerp(a1, a2, da1, da2, t0, t2, tt);
-        Vec3 db2 = derivLerp(a2, a3, da2, da3, t1, t3, tt);
-
-        // Chain rule: d/dt = d/dtt * (t2 - t1)
-        return derivLerp(b1, b2, db1, db2, t1, t2, tt).scale(t2 - t1);
+    private static Vec3 nodeTangent(Vec3 previous, Vec3 at, Vec3 next, double before, double after) {
+        Vec3 secondBefore = at.subtract(previous).scale(1.0D / before);
+        Vec3 secondAfter = next.subtract(at).scale(1.0D / after);
+        double total = before + after;
+        return secondBefore.scale(after / total).add(secondAfter.scale(before / total));
     }
 
-    private static Vec3 lerpKnot(Vec3 a, Vec3 b, double ta, double tb, double t) {
-        double span = tb - ta;
-        if (span < MIN_KNOT_DELTA) {
-            return a;
+    /**
+     * Clamps a tangent's vertical component so the curve cannot overshoot its own endpoints
+     * vertically — the Fritsch–Carlson condition from monotone cubic interpolation.
+     *
+     * <p><b>The problem this solves.</b> An interpolating spline passes through its control points
+     * but is not confined between them. A node sitting between a level run and a steep climb gets a
+     * sharply upward tangent from its neighbours, and the segment <em>arriving</em> at that node
+     * has to finish with that tangent while still passing through both endpoints — so it dips below
+     * first. On a coaster that reads as track sagging into the ground before every hill, and it was
+     * reported from a real build as the height offset being ignored. It was not: it was being
+     * honoured rather too enthusiastically.</p>
+     *
+     * <p><b>The rule.</b> Where the two adjacent secants disagree in sign the node is a local peak
+     * or trough, and a curve through it must be flat there or it will overshoot — so the tangent is
+     * zeroed. Where they agree, the tangent is capped at three times the shallower secant, which is
+     * the classical bound guaranteeing the cubic stays monotone across the span.</p>
+     *
+     * <p><b>Vertical only, deliberately.</b> Horizontal overshoot is what makes a curve a curve —
+     * constraining it would turn every corner into a polyline. Only the vertical axis has a floor
+     * to hit.</p>
+     */
+    private static Vec3 clampVerticalTangent(Vec3 tangent, double secantBefore, double secantAfter) {
+        if (secantBefore * secantAfter <= 0.0D) {
+            // A local extremum, or a flat neighbour. Any non-zero slope here overshoots.
+            return new Vec3(tangent.x, 0.0D, tangent.z);
         }
-        return a.scale((tb - t) / span).add(b.scale((t - ta) / span));
-    }
-
-    /** Derivative w.r.t. {@code t} of {@link #lerpKnot}, given the operands' own derivatives. */
-    private static Vec3 derivLerp(Vec3 a, Vec3 b, Vec3 da, Vec3 db, double ta, double tb, double t) {
-        double span = tb - ta;
-        if (span < MIN_KNOT_DELTA) {
-            return da;
+        double limit = 3.0D * Math.min(Math.abs(secantBefore), Math.abs(secantAfter));
+        if (Math.abs(tangent.y) <= limit) {
+            return tangent;
         }
-        Vec3 term = b.subtract(a).scale(1.0D / span);
-        Vec3 interpolatedDeriv = da.scale((tb - t) / span).add(db.scale((t - ta) / span));
-        return term.add(interpolatedDeriv);
+        return new Vec3(tangent.x, Math.signum(tangent.y) * limit, tangent.z);
     }
 
     /**
