@@ -3,6 +3,7 @@ package com.micatechnologies.minecraft.rcmc;
 import com.micatechnologies.minecraft.rcmc.client.ClientTrainTicker;
 import com.micatechnologies.minecraft.rcmc.client.RiderCamera;
 import com.micatechnologies.minecraft.rcmc.client.render.RenderCoasterCar;
+import com.micatechnologies.minecraft.rcmc.client.render.track.TrackRenderer;
 import com.micatechnologies.minecraft.rcmc.entity.EntityCoasterCar;
 import net.minecraftforge.fml.client.registry.RenderingRegistry;
 import net.minecraftforge.fml.common.event.FMLInitializationEvent;
@@ -26,6 +27,9 @@ public class RcmcClientProxy extends RcmcCommonProxy {
         // ride visibly steps at the correction rate rather than the frame rate.
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new ClientTrainTicker());
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new RiderCamera());
+        // Draws the track itself — see TrackRenderer's javadoc for why this is a
+        // RenderWorldLastEvent listener rather than a TileEntitySpecialRenderer.
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new TrackRenderer());
         // ModelRegistryEvent is on the MOD bus, but this proxy is registered to the Forge bus by
         // its own preInit, so register it here to receive it.
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(this);
