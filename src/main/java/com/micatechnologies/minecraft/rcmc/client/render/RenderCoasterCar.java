@@ -1,6 +1,9 @@
 package com.micatechnologies.minecraft.rcmc.client.render;
 
 import com.micatechnologies.minecraft.rcmc.entity.EntityCoasterCar;
+import com.micatechnologies.minecraft.rcmc.physics.Train;
+import com.micatechnologies.minecraft.rcmc.physics.TrainSpec;
+import com.micatechnologies.minecraft.rcmc.world.RcmcWorldState;
 import com.micatechnologies.minecraft.rcmc.track.math.TrackFrame;
 import net.minecraft.client.renderer.BufferBuilder;
 import net.minecraft.client.renderer.GlStateManager;
@@ -83,7 +86,7 @@ public class RenderCoasterCar extends Render<EntityCoasterCar> {
         // that now would flip the sign of frame.right everywhere, and lateral G and camera roll
         // both key off it — not a change to make casually alongside a rendering fix.
         GlStateManager.disableCull();
-        drawBox(1.4F, 1.0F, 2.6F);
+        emitModel(entity);
         GlStateManager.enableCull();
         GlStateManager.enableLighting();
         GlStateManager.enableTexture2D();
@@ -123,39 +126,34 @@ public class RenderCoasterCar extends Render<EntityCoasterCar> {
     }
 
     /**
-     * An axis-aligned box in the car's local frame: width along {@code right}, height along
-     * {@code up}, length along {@code forward}. The nose is tinted so the direction of travel and
-     * any roll are both readable at a glance — which is the entire point of a placeholder.
+     * Draws the car, sized from its train's own spec rather than from constants.
+     *
+     * <p>Falling back to defaults when the train is unknown matters on the client, where a car
+     * entity can exist for a tick or two before its train state arrives — drawing nothing there
+     * would make cars visibly pop in.</p>
      */
-    private static void drawBox(float width, float height, float length) {
-        float hw = width / 2.0F;
-        float hl = length / 2.0F;
-        float bottom = 0.0F;
-        float top = height;
+    private static void emitModel(EntityCoasterCar entity) {
+        float length = 3.0F;
+        float couplingGap = 0.5F;
+        int seatRows = 2;
+        boolean drawCoupling = true;
+
+        RcmcWorldState state = RcmcWorldState.of(entity.world);
+        Train train = state == null ? null : state.trains().train(entity.trainId());
+        if (train != null) {
+            TrainSpec spec = train.spec();
+            length = (float) spec.carLength();
+            couplingGap = (float) spec.couplingGap();
+            // Two riders abreast, so rows are half the seat count.
+            seatRows = Math.max(1, spec.seatsPerCar() / 2);
+            // The last car has nothing behind it; a bar there reads as a broken coupling.
+            drawCoupling = entity.carIndex() < spec.carCount() - 1;
+        }
 
         Tessellator tessellator = Tessellator.getInstance();
         BufferBuilder buffer = tessellator.getBuffer();
         buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_COLOR);
-
-        // Sides
-        quad(buffer, -hw, bottom, -hl, -hw, top, -hl, hw, top, -hl, hw, bottom, -hl, 0.75F, 0.15F, 0.15F);
-        quad(buffer, hw, bottom, hl, hw, top, hl, -hw, top, hl, -hw, bottom, hl, 0.95F, 0.55F, 0.15F);
-        quad(buffer, -hw, bottom, hl, -hw, top, hl, -hw, top, -hl, -hw, bottom, -hl, 0.60F, 0.12F, 0.12F);
-        quad(buffer, hw, bottom, -hl, hw, top, -hl, hw, top, hl, hw, bottom, hl, 0.60F, 0.12F, 0.12F);
-        // Top and bottom. The top is lightest so roll reads clearly when the car inverts.
-        quad(buffer, -hw, top, -hl, -hw, top, hl, hw, top, hl, hw, top, -hl, 0.85F, 0.85F, 0.90F);
-        quad(buffer, -hw, bottom, hl, -hw, bottom, -hl, hw, bottom, -hl, hw, bottom, hl, 0.20F, 0.20F, 0.22F);
-
+        CarModel.emit(buffer, length, seatRows, couplingGap, drawCoupling);
         tessellator.draw();
-    }
-
-    private static void quad(BufferBuilder buffer,
-                             float x1, float y1, float z1, float x2, float y2, float z2,
-                             float x3, float y3, float z3, float x4, float y4, float z4,
-                             float r, float g, float b) {
-        buffer.pos(x1, y1, z1).color(r, g, b, 1.0F).endVertex();
-        buffer.pos(x2, y2, z2).color(r, g, b, 1.0F).endVertex();
-        buffer.pos(x3, y3, z3).color(r, g, b, 1.0F).endVertex();
-        buffer.pos(x4, y4, z4).color(r, g, b, 1.0F).endVertex();
     }
 }

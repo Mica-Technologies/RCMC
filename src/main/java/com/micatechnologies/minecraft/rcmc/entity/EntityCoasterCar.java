@@ -165,9 +165,17 @@ public class EntityCoasterCar extends Entity {
         passenger.setRotationYawHead(passenger.getRotationYawHead() + yawDelta);
     }
 
+    /**
+     * Where a rider sits, relative to the track centreline.
+     *
+     * <p>Matches the seat bases in {@code CarModel}: the body floor sits just below the centreline
+     * and the seat cushion just above it, so a rider's feet land in the tub rather than hovering
+     * over it. The old 0.4 predated the car having any interior at all and left riders floating
+     * clear of the bodywork once it existed.</p>
+     */
     @Override
     public double getMountedYOffset() {
-        return 0.4D;
+        return 0.06D;
     }
 
     @Override
