@@ -170,7 +170,8 @@ public final class TrackRenderer {
         if (existing != null && existing.section == section) {
             return existing;
         }
-        CachedSection built = bake(section, TrackMeshBuilder.build(section), world);
+        CachedSection built = bake(section,
+            TrackMeshBuilder.build(section, RcmcWorldState.of(world).elementSpans()), world);
         cache.put(section.id(), built);
         return built;
     }

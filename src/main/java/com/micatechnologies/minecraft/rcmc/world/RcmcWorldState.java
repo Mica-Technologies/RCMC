@@ -3,6 +3,7 @@ package com.micatechnologies.minecraft.rcmc.world;
 import com.micatechnologies.minecraft.rcmc.Rcmc;
 import com.micatechnologies.minecraft.rcmc.RcmcConfig;
 import com.micatechnologies.minecraft.rcmc.RcmcConstants;
+import com.micatechnologies.minecraft.rcmc.net.PacketElementSync;
 import com.micatechnologies.minecraft.rcmc.net.PacketTrackSync;
 import com.micatechnologies.minecraft.rcmc.net.PacketTrainSync;
 import com.micatechnologies.minecraft.rcmc.net.RcmcNetwork;
@@ -95,6 +96,24 @@ public final class RcmcWorldState {
         return elements;
     }
 
+    /**
+     * Render-only description of where ride hardware sits, populated from a sync packet.
+     *
+     * <p>Separate from {@link #elements} because the two sides need different things: the server
+     * needs behaviour, the client needs only enough to draw a lift hill with a chain down it.</p>
+     */
+    private java.util.List<com.micatechnologies.minecraft.rcmc.track.ElementSpan> elementSpans =
+        new java.util.ArrayList<>();
+
+    public java.util.List<com.micatechnologies.minecraft.rcmc.track.ElementSpan> elementSpans() {
+        return elementSpans;
+    }
+
+    public void setElementSpans(
+        java.util.List<com.micatechnologies.minecraft.rcmc.track.ElementSpan> spans) {
+        this.elementSpans = spans == null ? new java.util.ArrayList<>() : spans;
+    }
+
     /** True on a client world, where the network is a synced mirror rather than the truth. */
     public boolean isRemote() {
         return remote;
@@ -145,6 +164,7 @@ public final class RcmcWorldState {
                 return;
             }
             RcmcNetwork.sendTo(new PacketTrackSync(state.network), player);
+            RcmcNetwork.sendTo(new PacketElementSync(state.elements), player);
             for (Map.Entry<Integer, com.micatechnologies.minecraft.rcmc.physics.Train> entry
                 : state.trains.asMap().entrySet()) {
                 RcmcNetwork.sendTo(new PacketTrainSync(entry.getKey(), entry.getValue()), player);

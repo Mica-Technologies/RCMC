@@ -2,6 +2,7 @@ package com.micatechnologies.minecraft.rcmc.command;
 
 import com.micatechnologies.minecraft.rcmc.builder.TrackBuildSession;
 import com.micatechnologies.minecraft.rcmc.debug.DemoCoaster;
+import com.micatechnologies.minecraft.rcmc.net.PacketElementSync;
 import com.micatechnologies.minecraft.rcmc.net.PacketTrackSync;
 import com.micatechnologies.minecraft.rcmc.net.PacketTrainRemove;
 import com.micatechnologies.minecraft.rcmc.net.PacketTrainSync;
@@ -105,51 +106,40 @@ public class CommandRcmc extends CommandBase {
     private void buildDemo(ICommandSender sender, World world, RcmcWorldState state, String[] args)
         throws CommandException {
         EntityPlayer player = getCommandSenderAsPlayer(sender);
-        double radius = args.length > 1 ? parseDouble(args[1], 10.0D, 400.0D) : 60.0D;
-        double drop = args.length > 2 ? parseDouble(args[2], 4.0D, 200.0D) : 28.0D;
+        double scale = args.length > 1 ? parseDouble(args[1], 0.4D, 4.0D) : 1.0D;
+        double lift = args.length > 2 ? parseDouble(args[2], 8.0D, 120.0D) : 34.0D;
 
         int id = state.network().allocateSectionId();
-        TrackSection section = DemoCoaster.build(id,
-            new Vec3(player.posX, player.posY, player.posZ), radius, drop);
+        DemoCoaster.Result demo = DemoCoaster.build(id,
+            new Vec3(player.posX, player.posY, player.posZ), scale, lift);
+        TrackSection section = demo.section;
         state.network().addSection(section);
+
+        double tick = RcmcConstants.SECONDS_PER_TICK;
+        RideElementSet elements = state.elements();
+        // Spans come from the layout itself rather than fractions of the lap — the shape is no
+        // longer uniform, so a fraction would land the lift somewhere arbitrary.
+        elements.add(new StationPlatform(id, demo.stationStart, demo.stationEnd,
+            demo.stationStop, 6.0D, 60, 4.0D, 6.0D, tick));
+        elements.add(new ChainLift(id, demo.liftStart, demo.liftEnd, 5.0D, 12.0D, tick));
+        elements.add(new BrakeRun(id, demo.brakeStart, demo.brakeEnd,
+            6.0D, 6.0D, BrakeRun.Mode.TRIM, tick));
+
         state.markTrackDirty(world);
         broadcastTrack(world, state);
 
-        reply(sender, TextFormatting.GREEN, "Built demo circuit #" + id + " — "
+        reply(sender, TextFormatting.GREEN, "Built demo coaster #" + id + " — "
             + String.format("%.1f", section.totalLength()) + " blocks, "
-            + section.nodes().size() + " nodes, roll residual "
-            + String.format("%.2f", Math.toDegrees(section.rollResidual())) + " deg (corrected).");
-        outfitDemo(state, section);
+            + section.nodes().size() + " nodes, " + String.format("%.0f", lift) + "-block lift.");
+        reply(sender, TextFormatting.GRAY, "Station " + fmt(demo.stationStart) + "-"
+            + fmt(demo.stationEnd) + ", lift " + fmt(demo.liftStart) + "-" + fmt(demo.liftEnd)
+            + ", brakes " + fmt(demo.brakeStart) + "-" + fmt(demo.brakeEnd) + ".");
         reply(sender, TextFormatting.GRAY,
-            "Fitted a station, chain lift and brake run. Run /rcmc train " + id + " to dispatch.");
+            "Run /rcmc train " + id + " 5 0 to park a train in the station — it will dispatch itself.");
     }
 
-    /**
-     * Fits the demo circuit with the hardware that makes it a ride rather than a rolling ball:
-     * a station to load in, a lift to the crest, and a brake run to bleed off speed before the
-     * next station stop.
-     *
-     * <p>Placed by fraction of the lap rather than absolute distance, so it stays correct when the
-     * circuit is built at a different radius. The demo's crest sits at the start of the lap (see
-     * {@code DemoCoaster}), so the lift occupies the run up to it and the station sits just after
-     * the brake run at the end.</p>
-     */
-    private static void outfitDemo(RcmcWorldState state, TrackSection section) {
-        double length = section.totalLength();
-        double tick = RcmcConstants.SECONDS_PER_TICK;
-        RideElementSet elements = state.elements();
-
-        // Station occupies the last stretch, stopping the train just before the lap closes.
-        double stationStart = length * 0.86D;
-        elements.add(new StationPlatform(section.id(), stationStart, length,
-            length * 0.95D, 6.0D, 60, 4.0D, 6.0D, tick));
-
-        // Brake run immediately before it, to arrive at a sane speed rather than at line speed.
-        elements.add(new BrakeRun(section.id(), length * 0.74D, stationStart,
-            8.0D, 5.0D, BrakeRun.Mode.TRIM, tick));
-
-        // Chain lift from the station exit up to the crest at the start of the lap.
-        elements.add(new ChainLift(section.id(), 0.0D, length * 0.16D, 5.0D, 12.0D, tick));
+    private static String fmt(double blocks) {
+        return String.format("%.0f", blocks);
     }
 
     private void spawnTrain(ICommandSender sender, World world, RcmcWorldState state, String[] args)
@@ -163,12 +153,18 @@ public class CommandRcmc extends CommandBase {
             throw new CommandException("No section with id " + sectionId);
         }
         int carCount = args.length > 2 ? parseInt(args[2], 1, 12) : 5;
-        double speed = args.length > 3 ? parseDouble(args[3], 0.0D, 60.0D) : 12.0D;
+        double speed = args.length > 3 ? parseDouble(args[3], 0.0D, 60.0D) : 0.0D;
+        // Start inside the station if there is one, so a train spawns where a ride would load it
+        // rather than at whatever point the geometry happens to call distance zero.
+        double startDistance = state.elements().elements().stream()
+            .filter(e -> e.sectionId() == sectionId && e instanceof StationPlatform)
+            .mapToDouble(e -> ((StationPlatform) e).stopDistance() - 4.0D)
+            .findFirst().orElse(0.0D);
 
         TrainSpec spec = new TrainSpec(carCount, 3.0D, 0.5D, 4);
         PhysicsIntegrator integrator = new PhysicsIntegrator(
             RcmcConfig.gravity, RcmcConfig.rollingResistance, RcmcConfig.airDrag, RcmcConfig.maxSpeed);
-        Train train = new Train(spec, integrator, new TrackRef(sectionId, 0.0D), speed);
+        Train train = new Train(spec, integrator, new TrackRef(sectionId, startDistance), speed);
 
         int trainId = state.trains().allocateTrainId();
         state.trains().add(trainId, train);
@@ -245,7 +241,11 @@ public class CommandRcmc extends CommandBase {
      * Wholesale resend is fine at this scale and will be replaced by deltas with the editor.</p>
      */
     private static void broadcastTrack(World world, RcmcWorldState state) {
-        RcmcNetwork.sendToAllIn(new PacketTrackSync(state.network()), world.provider.getDimension());
+        int dimension = world.provider.getDimension();
+        RcmcNetwork.sendToAllIn(new PacketTrackSync(state.network()), dimension);
+        // Ride hardware is drawn, so its spans travel with the geometry. Sending one without the
+        // other leaves a lift hill rendering as plain track until the next full sync.
+        RcmcNetwork.sendToAllIn(new PacketElementSync(state.elements()), dimension);
     }
 
     private void clear(ICommandSender sender, World world, RcmcWorldState state) {

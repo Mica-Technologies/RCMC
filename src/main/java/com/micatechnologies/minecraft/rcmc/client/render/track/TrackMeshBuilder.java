@@ -81,9 +81,36 @@ public final class TrackMeshBuilder {
     private static final double SPINE_HALF_WIDTH = 0.08D;
     private static final double SPINE_HALF_HEIGHT = 0.12D;
 
-    private static final double TIE_CENTER_U = -0.05D;
     private static final double TIE_HALF_LENGTH_R = HALF_GAUGE + 0.15D;
-    private static final double TIE_HALF_HEIGHT = 0.04D;
+
+    /**
+     * Ties span vertically from the underside of the rails down to the top of the spine, bridging
+     * them into one structure.
+     *
+     * <p>They used to be thin plates floating at {@code u = -0.05}, leaving a visible gap of open
+     * air between the rails and the spine below — the track read as two unrelated ribbons rather
+     * than as a single piece of steelwork. Deriving the extent from the rail and spine geometry
+     * rather than hard-coding it means the gap cannot reopen if either is retuned.</p>
+     *
+     * <p>Real box-spine coaster track is built exactly this way: the running rails are carried on
+     * webbing off a central spine, and the webbing is what you see between the ties.</p>
+     */
+    private static final double TIE_TOP_U = -RAIL_HALF_HEIGHT;
+    private static final double TIE_BOTTOM_U = SPINE_CENTER_U + SPINE_HALF_HEIGHT;
+    private static final double TIE_CENTER_U = (TIE_TOP_U + TIE_BOTTOM_U) * 0.5D;
+    private static final double TIE_HALF_HEIGHT = Math.abs(TIE_TOP_U - TIE_BOTTOM_U) * 0.5D;
+
+    /** Chain link spacing along the lift, in blocks. Close enough to read as links, not a stripe. */
+    private static final double CHAIN_LINK_SPACING = 0.5D;
+
+    private static final double CHAIN_LINK_LENGTH = 0.34D;
+    private static final double CHAIN_LINK_WIDTH = 0.16D;
+
+    /** Just above the spine and below the rail tops, so cars pass over without z-fighting. */
+    private static final double CHAIN_HEIGHT = -0.16D;
+
+    /** Dark oiled steel — deliberately darker than the rails so the lift reads at a distance. */
+    private static final float[] CHAIN_COLOR = { 0.18F, 0.17F, 0.15F };
     private static final double TIE_HALF_THICKNESS_S = 0.08D;
 
     /** Arc-length spacing between cross-ties, in blocks. See class javadoc. */
@@ -107,6 +134,18 @@ public final class TrackMeshBuilder {
      * {@link TrackRenderer}.
      */
     public static TrackMesh build(TrackSection section) {
+        return build(section, java.util.Collections.<com.micatechnologies.minecraft.rcmc.track.ElementSpan>emptyList());
+    }
+
+    /**
+     * Builds a section's mesh, adding hardware detail for any ride elements on it.
+     *
+     * <p>Currently that means the lift chain. A lift hill that looks identical to plain track is a
+     * real usability problem — a builder cannot see where the chain ends, which is exactly the
+     * point a train either crests or rolls back.</p>
+     */
+    public static TrackMesh build(TrackSection section,
+                                  java.util.List<com.micatechnologies.minecraft.rcmc.track.ElementSpan> spans) {
         List<MeshQuad> quads = new ArrayList<>();
         double total = section.totalLength();
         if (total <= 0.0D) {
@@ -120,9 +159,59 @@ public final class TrackMeshBuilder {
         sweepTube(section, rings, rightRailProfile(), RAIL_COLOR, capEnds, quads);
         sweepTube(section, rings, spineProfile(), SPINE_COLOR, capEnds, quads);
         buildTies(section, total, quads);
+        buildLiftChains(section, total, spans, quads);
 
         double[] bounds = boundsOf(quads);
         return new TrackMesh(quads, bounds[0], bounds[1], bounds[2], bounds[3], bounds[4], bounds[5]);
+    }
+
+    /**
+     * Lays a chain of dark links down the centre of every chain-lift span on this section.
+     *
+     * <p>Links are spaced by arc length and alternate slightly left and right of centre, which is
+     * what reads as a chain rather than a painted stripe at the distance a coaster is normally
+     * viewed from. They sit just below the rail tops so a car passing over does not z-fight with
+     * them.</p>
+     *
+     * <p>Only the geometry is here; whether a span <em>is</em> a lift comes from the server, since
+     * ride hardware is not part of the track's own data.</p>
+     */
+    private static void buildLiftChains(TrackSection section, double total,
+                                        java.util.List<com.micatechnologies.minecraft.rcmc.track.ElementSpan> spans,
+                                        List<MeshQuad> quads) {
+        if (spans == null || spans.isEmpty()) {
+            return;
+        }
+        for (com.micatechnologies.minecraft.rcmc.track.ElementSpan span : spans) {
+            if (span.sectionId != section.id() || !span.isLift()) {
+                continue;
+            }
+            double from = Math.max(0.0D, Math.min(total, span.startDistance));
+            double to = Math.max(0.0D, Math.min(total, span.endDistance));
+            for (double s = from; s <= to; s += CHAIN_LINK_SPACING) {
+                buildChainLink(section, s, quads);
+            }
+        }
+    }
+
+    /** One chain link: a short flat plate across the centreline, canted alternately side to side. */
+    private static void buildChainLink(TrackSection section, double distance, List<MeshQuad> quads) {
+        TrackFrame frame = section.frameAtDistance(distance);
+        // Alternating tilt costs nothing and is what stops a row of identical plates reading as a
+        // continuous stripe.
+        double lean = (((int) Math.round(distance / CHAIN_LINK_SPACING)) % 2 == 0) ? 1.0D : -1.0D;
+
+        Vec3 along = frame.forward.scale(CHAIN_LINK_LENGTH * 0.5D);
+        Vec3 across = frame.right.scale(CHAIN_LINK_WIDTH * 0.5D * lean);
+        Vec3 centre = frame.position.add(frame.up.scale(CHAIN_HEIGHT));
+
+        Vec3 a = centre.subtract(along).subtract(across);
+        Vec3 b = centre.subtract(along).add(across);
+        Vec3 c = centre.add(along).add(across);
+        Vec3 d = centre.add(along).subtract(across);
+        quads.add(new MeshQuad(a, b, c, d, CHAIN_COLOR[0], CHAIN_COLOR[1], CHAIN_COLOR[2]));
+        // Backface, so the chain is visible from below a lift hill as well as above it.
+        quads.add(new MeshQuad(d, c, b, a, CHAIN_COLOR[0], CHAIN_COLOR[1], CHAIN_COLOR[2]));
     }
 
     /**

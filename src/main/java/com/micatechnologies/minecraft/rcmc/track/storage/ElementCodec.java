@@ -91,6 +91,32 @@ public final class ElementCodec {
         return set;
     }
 
+    /**
+     * The type tag used for {@code element} in save data, or {@code null} if it has none.
+     *
+     * <p>Public so the render-sync packet uses the same names as the save file. Two independent
+     * lists of type strings would drift, and the symptom would be ride hardware that saves
+     * correctly but draws as the wrong thing.</p>
+     */
+    public static String typeOf(RideElement element) {
+        if (element instanceof ChainLift) {
+            return "chain_lift";
+        }
+        if (element instanceof LaunchTrack) {
+            return "launch";
+        }
+        if (element instanceof BrakeRun) {
+            return "brake";
+        }
+        if (element instanceof StationPlatform) {
+            return "station";
+        }
+        if (element instanceof DriveTyres) {
+            return "drive_tyres";
+        }
+        return null;
+    }
+
     private static NBTTagCompound writeElement(RideElement element) {
         NBTTagCompound tag = new NBTTagCompound();
         tag.setInteger(KEY_SECTION, element.sectionId());
