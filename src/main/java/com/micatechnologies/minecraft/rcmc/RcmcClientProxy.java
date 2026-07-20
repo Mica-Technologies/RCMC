@@ -2,6 +2,9 @@ package com.micatechnologies.minecraft.rcmc;
 
 import com.micatechnologies.minecraft.rcmc.client.ClientTrainTicker;
 import com.micatechnologies.minecraft.rcmc.client.RiderCamera;
+import com.micatechnologies.minecraft.rcmc.client.hud.GForceEffects;
+import com.micatechnologies.minecraft.rcmc.client.hud.RideHud;
+import com.micatechnologies.minecraft.rcmc.client.hud.RideMonitor;
 import com.micatechnologies.minecraft.rcmc.client.render.RenderCoasterCar;
 import com.micatechnologies.minecraft.rcmc.client.render.track.TrackRenderer;
 import com.micatechnologies.minecraft.rcmc.entity.EntityCoasterCar;
@@ -30,6 +33,12 @@ public class RcmcClientProxy extends RcmcCommonProxy {
         // Draws the track itself — see TrackRenderer's javadoc for why this is a
         // RenderWorldLastEvent listener rather than a TileEntitySpecialRenderer.
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new TrackRenderer());
+        // RideHud and GForceEffects both read from one shared RideMonitor rather than each
+        // deriving rider state independently — see RideMonitor's javadoc.
+        RideMonitor rideMonitor = new RideMonitor();
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(rideMonitor);
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new RideHud(rideMonitor));
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new GForceEffects(rideMonitor));
         // ModelRegistryEvent is on the MOD bus, but this proxy is registered to the Forge bus by
         // its own preInit, so register it here to receive it.
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(this);

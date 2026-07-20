@@ -61,6 +61,54 @@ public final class RcmcConfig {
     /** Whether the client applies camera roll to riders in banked track and inversions. */
     public static boolean enableCameraRoll = true;
 
+    /** Whether the live speed/G-force/height readout is drawn while riding. Pure convenience. */
+    public static boolean enableRideHud = true;
+
+    /**
+     * Time constant, in seconds, of the low-pass filter {@code GForceSmoother} applies before
+     * {@code GForceEffects} reacts to a G reading. Larger values make the screen effects slower
+     * to ramp up (and slower to release) but more resistant to single-tick spikes; see
+     * {@code GForceSmoother}'s javadoc for the exact filter.
+     */
+    public static double gForceSmoothingSeconds = 1.0D;
+
+    /** Whether sustained vertical G drives the grey-out/red-out screen tint. */
+    public static boolean enableGForceTint = true;
+
+    /**
+     * Sustained vertical G above which the grey-out tint starts to appear. 4.5g is roughly where
+     * real pilots and coaster riders begin greying out under sustained positive Gz.
+     */
+    public static double grayOutThresholdG = 4.5D;
+
+    /** Sustained G above {@link #grayOutThresholdG} over which the grey-out ramps to full intensity. */
+    public static double grayOutRangeG = 1.5D;
+
+    /**
+     * Sustained vertical G at or below which the red-out tint starts to appear. Negative Gz
+     * (airtime taken to an extreme) pools blood toward the head at a smaller magnitude than
+     * positive Gz causes greying, hence the smaller-magnitude default than {@link #grayOutThresholdG}.
+     */
+    public static double redOutThresholdG = -2.0D;
+
+    /** Sustained G below {@link #redOutThresholdG} over which the red-out ramps to full intensity. */
+    public static double redOutRangeG = 1.5D;
+
+    /**
+     * Peak alpha (0-1) of the grey-out/red-out tint at full ramp. Deliberately modest by default —
+     * this is a comfort cue, not meant to actually blind the rider.
+     */
+    public static double gForceTintMaxAlpha = 0.4D;
+
+    /** Whether sustained longitudinal G kicks the camera FOV. */
+    public static boolean enableGForceFovKick = true;
+
+    /** Degrees of FOV change per g of sustained longitudinal acceleration. */
+    public static double fovKickDegreesPerG = 2.0D;
+
+    /** Hard cap, in degrees, on the FOV kick in either direction. */
+    public static double fovKickMaxDegrees = 8.0D;
+
     private static Configuration config;
 
     private RcmcConfig() {
@@ -97,6 +145,37 @@ public final class RcmcConfig {
         enableCameraRoll = config.get(CATEGORY_CLIENT, "enableCameraRoll", enableCameraRoll,
             "Roll the rider's camera with banked track and inversions. Disable if it causes "
                 + "motion discomfort.").getBoolean();
+
+        enableRideHud = config.get(CATEGORY_CLIENT, "enableRideHud", enableRideHud,
+            "Show the live speed/G-force/height readout while riding.").getBoolean();
+        gForceSmoothingSeconds = config.get(CATEGORY_CLIENT, "gForceSmoothingSeconds",
+            gForceSmoothingSeconds, "Time constant, in seconds, of the smoothing applied before "
+                + "G-force screen effects react. Higher is slower to ramp up and slower to "
+                + "release, and more resistant to single-tick spikes.", 0.05D, 10.0D).getDouble();
+
+        enableGForceTint = config.get(CATEGORY_CLIENT, "enableGForceTint", enableGForceTint,
+            "Tint the screen grey/red under sustained heavy G. A motion-comfort and "
+                + "accessibility setting, not decoration — disable freely.").getBoolean();
+        grayOutThresholdG = config.get(CATEGORY_CLIENT, "grayOutThresholdG", grayOutThresholdG,
+            "Sustained vertical g above which the grey-out tint starts to appear.").getDouble();
+        grayOutRangeG = config.get(CATEGORY_CLIENT, "grayOutRangeG", grayOutRangeG,
+            "Sustained g above grayOutThresholdG over which the grey-out ramps to full "
+                + "intensity.", 0.1D, 20.0D).getDouble();
+        redOutThresholdG = config.get(CATEGORY_CLIENT, "redOutThresholdG", redOutThresholdG,
+            "Sustained vertical g at or below which the red-out tint starts to appear.").getDouble();
+        redOutRangeG = config.get(CATEGORY_CLIENT, "redOutRangeG", redOutRangeG,
+            "Sustained g below redOutThresholdG over which the red-out ramps to full intensity.",
+            0.1D, 20.0D).getDouble();
+        gForceTintMaxAlpha = config.get(CATEGORY_CLIENT, "gForceTintMaxAlpha", gForceTintMaxAlpha,
+            "Peak opacity (0-1) of the grey-out/red-out tint at full ramp.", 0.0D, 1.0D).getDouble();
+
+        enableGForceFovKick = config.get(CATEGORY_CLIENT, "enableGForceFovKick", enableGForceFovKick,
+            "Kick the camera FOV with sustained longitudinal G (launches, brake runs). A "
+                + "motion-comfort setting, not decoration — disable freely.").getBoolean();
+        fovKickDegreesPerG = config.get(CATEGORY_CLIENT, "fovKickDegreesPerG", fovKickDegreesPerG,
+            "Degrees of FOV change per g of sustained longitudinal acceleration.").getDouble();
+        fovKickMaxDegrees = config.get(CATEGORY_CLIENT, "fovKickMaxDegrees", fovKickMaxDegrees,
+            "Hard cap, in degrees, on the FOV kick in either direction.", 0.0D, 45.0D).getDouble();
 
         if (config.hasChanged()) {
             config.save();
