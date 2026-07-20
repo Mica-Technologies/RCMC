@@ -183,30 +183,18 @@ public final class TrackRenderer {
     }
 
     /**
-     * Where to drop support columns under {@code section}, and how far down each one reaches.
+     * Support columns under {@code section}, as {@code {x, z, bottomY, topY}}.
      *
-     * <p>Sampled at a fixed arc-length interval so spacing stays even through curves, and probed
-     * against the world's surface height. Ground height is looked up here rather than inside
-     * {@code TrackMeshBuilder} because that class deliberately cannot see the world — keeping it
-     * blind is what makes the geometry unit-testable without a game instance.</p>
-     *
-     * <p>Recomputed only when a section's mesh is rebuilt, so terrain changed after the fact will
-     * not move a support until the track is edited. Acceptable for now, and the same caveat the
-     * baked light levels carry.</p>
+     * <p>Delegates to {@link com.micatechnologies.minecraft.rcmc.world.TrackSupports} rather than
+     * computing them here. They were computed here originally, which put them on the client only —
+     * so a dedicated server had nothing to collide against once they needed to be solid. One
+     * source, both sides, same answer.</p>
      */
     private static java.util.List<double[]> supportPoints(TrackSection section, World world) {
         java.util.List<double[]> points = new java.util.ArrayList<>();
-        double total = section.totalLength();
-        for (double s = 0.0D; s < total; s += SUPPORT_SPACING) {
-            com.micatechnologies.minecraft.rcmc.track.math.Vec3 at =
-                section.positionAtDistance(s);
-            BlockPos probe = new BlockPos(at.x, 0, at.z);
-            if (!world.isBlockLoaded(probe)) {
-                // No terrain to stand on yet. Skipping beats guessing a height and leaving a
-                // column ending in mid-air once the chunk loads.
-                continue;
-            }
-            points.add(new double[] { s, world.getHeight(probe.getX(), probe.getZ()) });
+        for (com.micatechnologies.minecraft.rcmc.world.TrackSupports.Column column
+            : com.micatechnologies.minecraft.rcmc.world.TrackSupports.columnsFor(section, world)) {
+            points.add(new double[] { column.x, column.z, column.bottomY, column.topY });
         }
         return points;
     }

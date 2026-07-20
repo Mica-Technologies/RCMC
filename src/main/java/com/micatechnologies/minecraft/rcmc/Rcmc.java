@@ -66,6 +66,10 @@ public class Rcmc {
         RcmcConfig.init(event.getSuggestedConfigurationFile());
         MinecraftForge.EVENT_BUS.register(this);
         MinecraftForge.EVENT_BUS.register(new RcmcWorldState.Hooks());
+        // Registered on BOTH sides: the server needs it so supports are actually solid, the client
+        // so its own movement prediction agrees and the player does not rubber-band at every post.
+        MinecraftForge.EVENT_BUS.register(
+            new com.micatechnologies.minecraft.rcmc.world.TrackCollisionHandler());
         com.micatechnologies.minecraft.rcmc.net.RcmcNetwork.init();
         com.micatechnologies.minecraft.rcmc.block.RcmcBlocks.init();
         com.micatechnologies.minecraft.rcmc.item.RcmcItems.init();

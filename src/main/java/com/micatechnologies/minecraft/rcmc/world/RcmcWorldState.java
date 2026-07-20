@@ -149,6 +149,7 @@ public final class RcmcWorldState {
         @SubscribeEvent
         public void onWorldUnload(WorldEvent.Unload event) {
             STATES.remove(event.getWorld());
+            TrackSupports.invalidate(event.getWorld());
         }
 
         /** New arrivals need the track before any train state can mean anything. */

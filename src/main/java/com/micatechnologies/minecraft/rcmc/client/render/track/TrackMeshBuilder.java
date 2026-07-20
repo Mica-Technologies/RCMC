@@ -120,8 +120,16 @@ public final class TrackMeshBuilder {
     /** Dark oiled steel — deliberately darker than the rails so the lift reads at a distance. */
     private static final float[] CHAIN_COLOR = { 0.18F, 0.17F, 0.15F };
 
-    /** Support columns: slim enough to read as steelwork, not as a wall. */
-    private static final double SUPPORT_HALF_WIDTH = 0.16D;
+    /**
+     * Support columns: slim enough to read as steelwork, not as a wall.
+     *
+     * <p>Taken from {@code TrackSupports} rather than declared here, so the column you can see and
+     * the column you bump into are one number. Two constants that "must match" eventually will
+     * not, and the symptom — colliding with air beside a post, or walking through its edge — is
+     * maddening to diagnose from a bug report.</p>
+     */
+    private static final double SUPPORT_HALF_WIDTH =
+        com.micatechnologies.minecraft.rcmc.world.TrackSupports.HALF_WIDTH;
 
     /**
      * Below this height above ground a support is skipped. Track running along the floor does not
@@ -212,15 +220,12 @@ public final class TrackMeshBuilder {
         if (supports == null || supports.isEmpty()) {
             return;
         }
-        for (double[] support : supports) {
-            double distance = support[0];
-            double groundY = support[1];
-            TrackFrame frame = section.frameAtDistance(distance);
-            double topY = frame.position.y + SPINE_CENTER_U;
-            if (topY - groundY < MIN_SUPPORT_HEIGHT) {
-                continue;
-            }
-            buildColumn(frame.position.x, frame.position.z, groundY, topY, quads);
+        // Each entry is {x, z, bottomY, topY}, computed by TrackSupports so the rendered column and
+        // the collision box are the same object described once. They used to be computed here from
+        // a distance and a ground height, which meant the geometry existed only on the client —
+        // fine while supports were decorative, impossible once they had to be solid.
+        for (double[] column : supports) {
+            buildColumn(column[0], column[1], column[2], column[3], quads);
         }
     }
 
