@@ -1,5 +1,6 @@
 package com.micatechnologies.minecraft.rcmc.command;
 
+import com.micatechnologies.minecraft.rcmc.builder.TrackBuildSession;
 import com.micatechnologies.minecraft.rcmc.debug.DemoCoaster;
 import com.micatechnologies.minecraft.rcmc.net.PacketTrackSync;
 import com.micatechnologies.minecraft.rcmc.net.PacketTrainSync;
@@ -43,7 +44,7 @@ public class CommandRcmc extends CommandBase {
 
     @Override
     public String getUsage(ICommandSender sender) {
-        return "/rcmc <demo|train|clear|info>";
+        return "/rcmc <demo|train|clear|info|build>";
     }
 
     @Override
@@ -55,7 +56,10 @@ public class CommandRcmc extends CommandBase {
     public List<String> getTabCompletions(MinecraftServer server, ICommandSender sender,
                                           String[] args, BlockPos targetPos) {
         if (args.length == 1) {
-            return getListOfStringsMatchingLastWord(args, "demo", "train", "clear", "info");
+            return getListOfStringsMatchingLastWord(args, "demo", "train", "clear", "info", "build");
+        }
+        if (args.length == 2 && "build".equalsIgnoreCase(args[0])) {
+            return getListOfStringsMatchingLastWord(args, "bank", "circuit", "status", "cancel");
         }
         return new ArrayList<>();
     }
@@ -83,6 +87,9 @@ public class CommandRcmc extends CommandBase {
                 break;
             case "info":
                 info(sender, state);
+                break;
+            case "build":
+                build(sender, args);
                 break;
             default:
                 throw new CommandException(getUsage(sender));
@@ -143,6 +150,55 @@ public class CommandRcmc extends CommandBase {
 
         reply(sender, TextFormatting.GREEN, "Spawned train #" + trainId + " — " + carCount
             + " cars on section " + sectionId + " at " + speed + " blocks/s.");
+    }
+
+    /**
+     * {@code /rcmc build …} — settings for the in-hand track builder.
+     *
+     * <p>These live on a command rather than in the item's own interaction because they are modal
+     * state ("every node from here on is banked 30°"), and there are only so many click
+     * combinations available on one item before the tool becomes unlearnable. A proper GUI
+     * replaces this in Phase 2.2.</p>
+     */
+    private void build(ICommandSender sender, String[] args) throws CommandException {
+        EntityPlayer player = getCommandSenderAsPlayer(sender);
+        TrackBuildSession session = TrackBuildSession.of(player.getUniqueID());
+        String sub = args.length > 1 ? args[1].toLowerCase(java.util.Locale.ROOT) : "status";
+
+        switch (sub) {
+            case "bank": {
+                if (args.length < 3) {
+                    throw new CommandException("/rcmc build bank <degrees>");
+                }
+                double degrees = parseDouble(args[2], -180.0D, 180.0D);
+                session.setBankDegrees(degrees);
+                reply(sender, TextFormatting.GREEN, "Nodes placed from now on will be banked "
+                    + String.format("%.0f", session.bankDegrees()) + "°.");
+                break;
+            }
+            case "circuit": {
+                boolean closing = args.length < 3 || Boolean.parseBoolean(args[2]);
+                session.setClosing(closing);
+                reply(sender, TextFormatting.GREEN, closing
+                    ? "Next section will close into a circuit (needs at least 3 nodes)."
+                    : "Next section will be an open run.");
+                break;
+            }
+            case "cancel": {
+                int discarded = session.size();
+                session.reset();
+                reply(sender, TextFormatting.YELLOW,
+                    "Discarded " + discarded + " pending node(s) and reset bank/circuit mode.");
+                break;
+            }
+            case "status":
+            default: {
+                reply(sender, TextFormatting.AQUA, "Pending nodes: " + session.size()
+                    + "  Bank: " + String.format("%.0f", session.bankDegrees()) + "°"
+                    + "  Mode: " + (session.isClosing() ? "circuit" : "open"));
+                break;
+            }
+        }
     }
 
     /**
