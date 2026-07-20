@@ -69,8 +69,9 @@ public final class BuildToolInput {
         if (event.getDwheel() == 0) {
             return;
         }
-        EntityPlayer player = Minecraft.getMinecraft().player;
-        if (player == null || !player.isSneaking() || !holdingTool(player)) {
+        Minecraft mc = Minecraft.getMinecraft();
+        EntityPlayer player = mc.player;
+        if (player == null || !holdingTool(player) || !sneakKeyHeld(mc)) {
             return;
         }
         // Cancelled so the hotbar does not also change — scrolling off the tool mid-adjustment
@@ -78,6 +79,20 @@ public final class BuildToolInput {
         event.setCanceled(true);
         RcmcNetwork.sendToServer(new PacketBuildAdjust(PacketBuildAdjust.Action.ADJUST_HEIGHT,
             Math.signum(event.getDwheel()) * HEIGHT_STEP));
+    }
+
+    /**
+     * Whether the sneak KEY is down, which is not the same question as whether the player is
+     * sneaking.
+     *
+     * <p>{@code EntityPlayer.isSneaking()} reports the sneaking <em>flag</em>, and while flying
+     * that flag stays false — shift descends instead. Checking it meant this never fired for
+     * anyone building in creative flight, which is essentially everyone, so the scroll fell
+     * through to vanilla and changed hotbar slots. Reading the key binding directly asks the
+     * question actually intended: "is the player holding shift right now".</p>
+     */
+    private static boolean sneakKeyHeld(Minecraft mc) {
+        return mc.gameSettings != null && mc.gameSettings.keyBindSneak.isKeyDown();
     }
 
     private static boolean holdingTool(EntityPlayer player) {
