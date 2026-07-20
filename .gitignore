@@ -85,6 +85,9 @@ run/config/*
 logs/
 crash-reports/
 
+# Output of .github/scripts/server-smoke-test.sh when run locally.
+server-smoke.log
+
 # macOS Finder metadata
 .DS_Store
 
