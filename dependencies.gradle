@@ -51,6 +51,14 @@ dependencies {
     //   - Any client-side config/HUD framework. RCMC's operator panels are plain Forge GUIs
     //     so a dedicated server never needs a client-only mod on its classpath. (SUM took a
     //     dedicated server down in 2026.07 doing exactly that; see its addon.gradle.)
+    //   - DynamX, or any 6-DoF rigid-body physics engine. DynamX is CC BY-NC-ND (NonCommercial,
+    //     NoDerivatives) so its code cannot be reused at all, but the deeper reason is design:
+    //     a train on track has ONE degree of freedom, and a rigid-body solver is nondeterministic
+    //     across machines, which would cost us the client-side prediction the netcode depends on.
+    //     DynamX itself cannot reconcile — it can only snap or kick. See Appendix B of
+    //     docs/AGENT-PLANS/MASTER_PLAN.md. If cosmetic crash/ragdoll physics is ever wanted, the
+    //     dependency to add is Libbulletjme directly (zlib/BSD-3/MIT, permissive), client-side
+    //     only, never DynamX.
     //
     // MixinBooter is added automatically by the buildscript because usesMixins = true.
     // JEI and TheOneProbe are on the dev classpath via includeCommonDevEnvMods.
