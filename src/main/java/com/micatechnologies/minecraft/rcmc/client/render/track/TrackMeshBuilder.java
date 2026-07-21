@@ -72,16 +72,13 @@ public final class TrackMeshBuilder {
     private static final int MAX_RINGS = 8000;
 
     // ---- cross-section, in blocks, in the frame's local (right, up) plane ----
+    // Gauge, tie length and spine size come from the section's TrackStyles; only the
+    // style-independent pieces remain constants here.
 
-    private static final double HALF_GAUGE = 0.55D;
     private static final double RAIL_HALF_WIDTH = 0.05D;
     private static final double RAIL_HALF_HEIGHT = 0.05D;
 
     private static final double SPINE_CENTER_U = -0.35D;
-    private static final double SPINE_HALF_WIDTH = 0.08D;
-    private static final double SPINE_HALF_HEIGHT = 0.12D;
-
-    private static final double TIE_HALF_LENGTH_R = HALF_GAUGE + 0.15D;
 
     /**
      * Ties span vertically from the underside of the rails down to the top of the spine, bridging
@@ -90,15 +87,13 @@ public final class TrackMeshBuilder {
      * <p>They used to be thin plates floating at {@code u = -0.05}, leaving a visible gap of open
      * air between the rails and the spine below — the track read as two unrelated ribbons rather
      * than as a single piece of steelwork. Deriving the extent from the rail and spine geometry
-     * rather than hard-coding it means the gap cannot reopen if either is retuned.</p>
+     * rather than hard-coding it means the gap cannot reopen if either is retuned (which is also
+     * why it is computed per style rather than stored: transit spines differ).</p>
      *
      * <p>Real box-spine coaster track is built exactly this way: the running rails are carried on
      * webbing off a central spine, and the webbing is what you see between the ties.</p>
      */
     private static final double TIE_TOP_U = -RAIL_HALF_HEIGHT;
-    private static final double TIE_BOTTOM_U = SPINE_CENTER_U + SPINE_HALF_HEIGHT;
-    private static final double TIE_CENTER_U = (TIE_TOP_U + TIE_BOTTOM_U) * 0.5D;
-    private static final double TIE_HALF_HEIGHT = Math.abs(TIE_TOP_U - TIE_BOTTOM_U) * 0.5D;
 
     /** Chain link spacing along the lift, in blocks. Close enough to read as links, not a stripe. */
     private static final double CHAIN_LINK_SPACING = 0.5D;
@@ -208,16 +203,18 @@ public final class TrackMeshBuilder {
 
         double[] rings = ringDistances(section, total);
         boolean capEnds = !section.isClosed();
+        TrackStyles style = TrackStyles.of(section.styleId());
 
         float[] railColour = colourOf(section,
             com.micatechnologies.minecraft.rcmc.track.TrackPalette.Part.RAIL);
-        sweepTube(section, rings, leftRailProfile(), railColour, capEnds, quads);
-        sweepTube(section, rings, rightRailProfile(), railColour, capEnds, quads);
-        sweepTube(section, rings, spineProfile(), colourOf(section,
+        sweepTube(section, rings, railProfile(style, -1), railColour, capEnds, quads);
+        sweepTube(section, rings, railProfile(style, 1), railColour, capEnds, quads);
+        sweepTube(section, rings, spineProfile(style), colourOf(section,
             com.micatechnologies.minecraft.rcmc.track.TrackPalette.Part.SPINE), capEnds, quads);
-        buildTies(section, total, quads);
+        buildTies(section, total, style, quads);
         buildLiftChains(section, total, spans, quads);
         buildSupports(section, supports, quads);
+        buildCatenary(section, total, rings, style, quads);
 
         double[] bounds = boundsOf(quads);
         return new TrackMesh(quads, bounds[0], bounds[1], bounds[2], bounds[3], bounds[4], bounds[5]);
@@ -479,20 +476,19 @@ public final class TrackMeshBuilder {
         };
     }
 
-    private static ProfileEdge[] leftRailProfile() {
-        return rectangle(-HALF_GAUGE, 0.0D, RAIL_HALF_WIDTH, RAIL_HALF_HEIGHT);
+    private static ProfileEdge[] railProfile(TrackStyles style, int side) {
+        return rectangle(side * style.halfGauge, 0.0D, RAIL_HALF_WIDTH, RAIL_HALF_HEIGHT);
     }
 
-    private static ProfileEdge[] rightRailProfile() {
-        return rectangle(HALF_GAUGE, 0.0D, RAIL_HALF_WIDTH, RAIL_HALF_HEIGHT);
+    private static ProfileEdge[] spineProfile(TrackStyles style) {
+        return rectangle(0.0D, SPINE_CENTER_U, style.spineHalfWidth, style.spineHalfHeight);
     }
 
-    private static ProfileEdge[] spineProfile() {
-        return rectangle(0.0D, SPINE_CENTER_U, SPINE_HALF_WIDTH, SPINE_HALF_HEIGHT);
-    }
-
-    private static ProfileEdge[] tieProfile() {
-        return rectangle(0.0D, TIE_CENTER_U, TIE_HALF_LENGTH_R, TIE_HALF_HEIGHT);
+    private static ProfileEdge[] tieProfile(TrackStyles style) {
+        double tieBottom = SPINE_CENTER_U + style.spineHalfHeight;
+        double centre = (TIE_TOP_U + tieBottom) * 0.5D;
+        double halfHeight = Math.abs(TIE_TOP_U - tieBottom) * 0.5D;
+        return rectangle(0.0D, centre, style.tieHalfLength, halfHeight);
     }
 
     // ---- sweeping ----
@@ -576,8 +572,9 @@ public final class TrackMeshBuilder {
      * instead, for an open section, which only slightly shortens the first/last tie — an
      * acceptable edge effect at a track's dead end).</p>
      */
-    private static void buildTies(TrackSection section, double total, List<MeshQuad> out) {
-        ProfileEdge[] profile = tieProfile();
+    private static void buildTies(TrackSection section, double total, TrackStyles style,
+                                  List<MeshQuad> out) {
+        ProfileEdge[] profile = tieProfile(style);
         int tieCount = section.isClosed()
             ? (int) Math.floor(total / TIE_SPACING)
             : (int) Math.floor(total / TIE_SPACING) + 1;
@@ -587,6 +584,162 @@ public final class TrackMeshBuilder {
             double[] tieRings = {center - TIE_HALF_THICKNESS_S, center + TIE_HALF_THICKNESS_S};
             sweepTube(section, tieRings, profile, colourOf(section,
                 com.micatechnologies.minecraft.rcmc.track.TrackPalette.Part.TIE), true, out);
+        }
+    }
+
+    // ---- catenary ----
+    // Heights are frame-local u above the railheads, sizes chosen so a metro car (roof ~2.75)
+    // clears the contact wire with a pantograph's worth of daylight. All of this is dressing:
+    // nothing reads it back, and the "requires power" gameplay hook remains deliberately unbuilt.
+
+    private static final double CONTACT_WIRE_U = 3.4D;
+    private static final double CONTACT_WIRE_HALF = 0.03D;
+
+    /** Messenger height above the contact wire: at the mast, and at midspan (the sag). */
+    private static final double MESSENGER_AT_MAST = 1.0D;
+    private static final double MESSENGER_AT_MIDSPAN = 0.15D;
+
+    private static final double MAST_SPACING = 24.0D;
+    private static final double MAST_TOP_U = 4.7D;
+    private static final double MAST_BOTTOM_U = -0.45D;
+    private static final double MAST_HALF_WIDTH = 0.09D;
+
+    /** How far outside the gauge a mast stands. */
+    private static final double MAST_CLEARANCE = 0.9D;
+
+    private static final double MESSENGER_SAMPLE_STEP = 1.5D;
+    private static final double DROPPER_SPACING = 6.0D;
+
+    /** Rigid overhead rail (tunnel style) runs lower — tunnels have no room for sag. */
+    private static final double RIGID_BAR_U = 2.9D;
+
+    private static final float[] MAST_COLOR = { 0.36F, 0.37F, 0.40F };
+    private static final float[] CONTACT_COLOR = { 0.48F, 0.33F, 0.24F };
+    private static final float[] MESSENGER_COLOR = { 0.20F, 0.21F, 0.23F };
+    private static final float[] RIGID_COLOR = { 0.30F, 0.31F, 0.34F };
+
+    /**
+     * Overhead electrification, per the section's style. Three looks:
+     *
+     * <ul>
+     *   <li><b>POLES</b> — a mast beside the track every {@link #MAST_SPACING} blocks with a
+     *       bracket arm reaching over the centreline; contact wire swept at constant height;
+     *       messenger wire sagging between masts with droppers. The classic light-rail span.</li>
+     *   <li><b>PORTALS</b> — the same wires carried by two-legged gantry frames spanning the
+     *       track instead of single masts.</li>
+     *   <li><b>TUNNEL</b> — a rigid conductor bar swept like a third rail overhead, with clamp
+     *       stubs instead of masts; nothing sags because nothing hangs.</li>
+     * </ul>
+     *
+     * <p>Masts hang off the track's own frames (like the support columns do), so elevated and
+     * banked transit track carries its own electrification with it.</p>
+     */
+    private static void buildCatenary(TrackSection section, double total, double[] rings,
+                                      TrackStyles style, List<MeshQuad> out) {
+        if (style.catenary == TrackStyles.Catenary.NONE) {
+            return;
+        }
+        boolean capEnds = !section.isClosed();
+
+        if (style.catenary == TrackStyles.Catenary.TUNNEL) {
+            sweepTube(section, rings, rectangle(0.0D, RIGID_BAR_U, 0.07D, 0.10D),
+                RIGID_COLOR, capEnds, out);
+            for (double s = 0.0D; s < total; s += DROPPER_SPACING) {
+                TrackFrame frame = section.frameAtDistance(s);
+                box(worldPoint(frame, 0.0D, RIGID_BAR_U + 0.16D),
+                    frame.forward.scale(0.05D), frame.right.scale(0.05D),
+                    frame.up.scale(0.10D), RIGID_COLOR, out);
+            }
+            return;
+        }
+
+        sweepTube(section, rings, rectangle(0.0D, CONTACT_WIRE_U,
+            CONTACT_WIRE_HALF, CONTACT_WIRE_HALF), CONTACT_COLOR, capEnds, out);
+
+        // Mast positions: every MAST_SPACING, plus an anchor at the far end of an open run so
+        // the wire never dangles unsupported past the last mast. On a closed circuit s = total
+        // IS the s = 0 mast, so the wrap span closes itself.
+        List<Double> masts = new ArrayList<>();
+        for (double s = 0.0D; s < total - 1.0e-6D; s += MAST_SPACING) {
+            masts.add(s);
+        }
+        masts.add(total);
+
+        for (int i = 0; i < masts.size() - (section.isClosed() ? 1 : 0); i++) {
+            buildMast(section, masts.get(i), style, out);
+        }
+        for (int i = 0; i < masts.size() - 1; i++) {
+            buildMessengerSpan(section, masts.get(i), masts.get(i + 1), out);
+        }
+    }
+
+    private static void buildMast(TrackSection section, double s, TrackStyles style,
+                                  List<MeshQuad> out) {
+        TrackFrame frame = section.frameAtDistance(s);
+        double offset = style.halfGauge + MAST_CLEARANCE;
+        double postCentreU = (MAST_TOP_U + MAST_BOTTOM_U) * 0.5D;
+        double postHalfU = (MAST_TOP_U - MAST_BOTTOM_U) * 0.5D;
+
+        if (style.catenary == TrackStyles.Catenary.PORTALS) {
+            for (int side = -1; side <= 1; side += 2) {
+                box(worldPoint(frame, side * offset, postCentreU),
+                    frame.forward.scale(MAST_HALF_WIDTH), frame.right.scale(MAST_HALF_WIDTH),
+                    frame.up.scale(postHalfU), MAST_COLOR, out);
+            }
+            // The portal beam spans post to post above the wires.
+            box(worldPoint(frame, 0.0D, MAST_TOP_U - 0.1D),
+                frame.forward.scale(MAST_HALF_WIDTH), frame.right.scale(offset + MAST_HALF_WIDTH),
+                frame.up.scale(MAST_HALF_WIDTH), MAST_COLOR, out);
+        } else {
+            box(worldPoint(frame, offset, postCentreU),
+                frame.forward.scale(MAST_HALF_WIDTH), frame.right.scale(MAST_HALF_WIDTH),
+                frame.up.scale(postHalfU), MAST_COLOR, out);
+            // Bracket arm from the mast out over the centreline, at registration height.
+            box(worldPoint(frame, offset * 0.5D, CONTACT_WIRE_U + MESSENGER_AT_MAST * 0.5D),
+                frame.forward.scale(0.06D), frame.right.scale(offset * 0.5D + MAST_HALF_WIDTH),
+                frame.up.scale(0.06D), MAST_COLOR, out);
+        }
+    }
+
+    /**
+     * The messenger wire between two masts: sampled along the arc with a parabolic sag —
+     * highest at each mast, {@link #MESSENGER_AT_MIDSPAN} above the contact wire at midspan —
+     * plus vertical droppers tying the two wires together. Segments are thin oriented boxes,
+     * like the chain links and for the same z-fighting reason.
+     */
+    private static void buildMessengerSpan(TrackSection section, double s0, double s1,
+                                           List<MeshQuad> out) {
+        double span = s1 - s0;
+        if (span < 1.0e-3D) {
+            return;
+        }
+        Vec3 previous = null;
+        TrackFrame previousFrame = null;
+        for (double s = s0; ; s = Math.min(s1, s + MESSENGER_SAMPLE_STEP)) {
+            double t = (s - s0) / span;
+            double rise = MESSENGER_AT_MIDSPAN
+                + (MESSENGER_AT_MAST - MESSENGER_AT_MIDSPAN) * (2.0D * t - 1.0D) * (2.0D * t - 1.0D);
+            TrackFrame frame = section.frameAtDistance(s);
+            Vec3 point = worldPoint(frame, 0.0D, CONTACT_WIRE_U + rise);
+            if (previous != null) {
+                Vec3 half = point.subtract(previous).scale(0.5D);
+                box(previous.add(half), half, previousFrame.right.scale(0.025D),
+                    previousFrame.up.scale(0.025D), MESSENGER_COLOR, out);
+            }
+            previous = point;
+            previousFrame = frame;
+            if (s >= s1 - 1.0e-9D) {
+                break;
+            }
+        }
+        for (double s = s0 + DROPPER_SPACING * 0.5D; s < s1; s += DROPPER_SPACING) {
+            double t = (s - s0) / span;
+            double rise = MESSENGER_AT_MIDSPAN
+                + (MESSENGER_AT_MAST - MESSENGER_AT_MIDSPAN) * (2.0D * t - 1.0D) * (2.0D * t - 1.0D);
+            TrackFrame frame = section.frameAtDistance(s);
+            box(worldPoint(frame, 0.0D, CONTACT_WIRE_U + rise * 0.5D),
+                frame.forward.scale(0.02D), frame.right.scale(0.02D),
+                frame.up.scale(rise * 0.5D), MESSENGER_COLOR, out);
         }
     }
 

@@ -56,7 +56,7 @@ public class CommandRcmc extends CommandBase {
 
     @Override
     public String getUsage(ICommandSender sender) {
-        return "/rcmc <demo|train|clear|info|build|paint|rate|block|station|line|rmsection>";
+        return "/rcmc <demo|train|clear|info|build|paint|style|rate|block|station|line|rmsection>";
     }
 
     @Override
@@ -69,7 +69,12 @@ public class CommandRcmc extends CommandBase {
                                           String[] args, BlockPos targetPos) {
         if (args.length == 1) {
             return getListOfStringsMatchingLastWord(args, "demo", "train", "clear", "info", "build",
-                "paint", "rate", "block", "station", "line", "rmsection");
+                "paint", "style", "rate", "block", "station", "line", "rmsection");
+        }
+        if (args.length == 3 && "style".equalsIgnoreCase(args[0])) {
+            return getListOfStringsMatchingLastWord(args,
+                com.micatechnologies.minecraft.rcmc.track.TrackStyleIds.COMMAND_CHOICES
+                    .toArray(new String[0]));
         }
         if (args.length == 2 && "line".equalsIgnoreCase(args[0])) {
             return getListOfStringsMatchingLastWord(args, "create", "list", "remove", "start", "stop");
@@ -121,6 +126,9 @@ public class CommandRcmc extends CommandBase {
                 break;
             case "block":
                 block(sender, state, args);
+                break;
+            case "style":
+                style(sender, world, state, args);
                 break;
             case "station":
                 station(sender, world, state, args);
@@ -292,6 +300,40 @@ public class CommandRcmc extends CommandBase {
 
         reply(sender, TextFormatting.GREEN, "Spawned train #" + trainId + " — " + carCount
             + " cars on section " + sectionId + " at " + speed + " blocks/s.");
+    }
+
+    /**
+     * {@code /rcmc style <sectionId> <style>} — restyles a section: the classic coaster look, or
+     * the wider transit gauge with optional overhead electrification (catenary poles, portal
+     * gantries, or a tunnel conductor bar). Purely visual — the spline and the physics are
+     * untouched — and per section, so one park can mix electrified metro and bare coaster.
+     */
+    private void style(ICommandSender sender, World world, RcmcWorldState state, String[] args)
+        throws CommandException {
+        if (args.length < 3) {
+            throw new CommandException("/rcmc style <sectionId> <"
+                + String.join("|", com.micatechnologies.minecraft.rcmc.track.TrackStyleIds.COMMAND_CHOICES)
+                + ">");
+        }
+        int sectionId = parseInt(args[1]);
+        TrackSection section = state.network().section(sectionId);
+        if (section == null) {
+            throw new CommandException("No section with id " + sectionId);
+        }
+        String styleId;
+        try {
+            styleId = com.micatechnologies.minecraft.rcmc.track.TrackStyleIds.resolve(args[2]);
+        }
+        catch (IllegalArgumentException e) {
+            throw new CommandException(e.getMessage());
+        }
+        // replaceSection keeps joins and switches; a fresh instance also invalidates the client
+        // mesh cache, which keys on section identity.
+        state.network().replaceSection(section.withStyle(styleId));
+        state.markTrackDirty(world);
+        broadcastTrack(world, state);
+        reply(sender, TextFormatting.GREEN, "Section " + sectionId + " style -> "
+            + (styleId == null ? "coaster" : styleId));
     }
 
     /**
