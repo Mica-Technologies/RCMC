@@ -325,6 +325,7 @@ public class CommandRcmc extends CommandBase {
                     throw new CommandException("No station named " + args[2]);
                 }
                 state.markTrackDirty(world);
+                RcmcNetwork.sendToAllIn(new com.micatechnologies.minecraft.rcmc.net.PacketTransitSync(transit), world.provider.getDimension());
                 reply(sender, TextFormatting.GREEN, "Removed station " + args[2] + ".");
                 return;
             }
@@ -339,6 +340,7 @@ public class CommandRcmc extends CommandBase {
                 transit.addStation(new com.micatechnologies.minecraft.rcmc.physics.transit
                     .TransitStation(args[1], hit.ref));
                 state.markTrackDirty(world);
+                RcmcNetwork.sendToAllIn(new com.micatechnologies.minecraft.rcmc.net.PacketTransitSync(transit), world.provider.getDimension());
                 reply(sender, TextFormatting.GREEN, "Station " + args[1] + " at section "
                     + hit.ref.sectionId() + " @ " + fmt(hit.ref.distance())
                     + " (trains stop with their lead car here).");
@@ -398,6 +400,7 @@ public class CommandRcmc extends CommandBase {
                 transit.addLine(new com.micatechnologies.minecraft.rcmc.physics.transit
                     .TransitLine(args[2], stops, loop));
                 state.markTrackDirty(world);
+                RcmcNetwork.sendToAllIn(new com.micatechnologies.minecraft.rcmc.net.PacketTransitSync(transit), world.provider.getDimension());
                 reply(sender, TextFormatting.GREEN, "Line " + args[2] + " created — "
                     + stops.size() + " stops, " + (loop ? "loop" : "shuttle") + ".");
                 return;
@@ -430,6 +433,7 @@ public class CommandRcmc extends CommandBase {
                     throw new CommandException("No line named " + args[2]);
                 }
                 state.markTrackDirty(world);
+                RcmcNetwork.sendToAllIn(new com.micatechnologies.minecraft.rcmc.net.PacketTransitSync(transit), world.provider.getDimension());
                 reply(sender, TextFormatting.GREEN, "Removed line " + args[2] + ".");
                 return;
             }

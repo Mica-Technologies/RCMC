@@ -26,6 +26,14 @@ public class RcmcClientProxy extends RcmcCommonProxy {
     public void preInit(FMLPreInitializationEvent event) {
         super.preInit(event);
         RenderingRegistry.registerEntityRenderingHandler(EntityCoasterCar.class, RenderCoasterCar::new);
+        // Transit signage draws its panels and text from a tile renderer; the block itself is
+        // just the mounting hardware.
+        net.minecraftforge.fml.client.registry.ClientRegistry.bindTileEntitySpecialRenderer(
+            com.micatechnologies.minecraft.rcmc.block.sign.TileStationSign.class,
+            new com.micatechnologies.minecraft.rcmc.client.render.sign.RenderStationSign());
+        net.minecraftforge.fml.client.registry.ClientRegistry.bindTileEntitySpecialRenderer(
+            com.micatechnologies.minecraft.rcmc.block.sign.TileArrivalBoard.class,
+            new com.micatechnologies.minecraft.rcmc.client.render.sign.RenderArrivalBoard());
         // Without this the client never advances its trains between server corrections, and the
         // ride visibly steps at the correction rate rather than the frame rate.
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new ClientTrainTicker());
@@ -65,6 +73,10 @@ public class RcmcClientProxy extends RcmcCommonProxy {
         bindModel(com.micatechnologies.minecraft.rcmc.item.RcmcItems.pieceTool);
         bindModel(net.minecraft.item.Item.getItemFromBlock(
             com.micatechnologies.minecraft.rcmc.block.RcmcBlocks.trackSupport));
+        bindModel(net.minecraft.item.Item.getItemFromBlock(
+            com.micatechnologies.minecraft.rcmc.block.RcmcBlocks.stationSign));
+        bindModel(net.minecraft.item.Item.getItemFromBlock(
+            com.micatechnologies.minecraft.rcmc.block.RcmcBlocks.arrivalBoard));
     }
 
     private static void bindModel(net.minecraft.item.Item item) {

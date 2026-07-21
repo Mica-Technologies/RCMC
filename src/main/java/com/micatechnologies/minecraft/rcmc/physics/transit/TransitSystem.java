@@ -110,6 +110,43 @@ public final class TransitSystem {
         return signalsByLine.get(key(lineName));
     }
 
+    /** Every line that stops at a station of this name — what a sign linked to it renders. */
+    public java.util.List<TransitLine> linesServing(String stationName) {
+        java.util.List<TransitLine> serving = new java.util.ArrayList<>();
+        for (TransitLine line : lines.values()) {
+            if (line.indexOfStation(stationName) >= 0) {
+                serving.add(line);
+            }
+        }
+        return serving;
+    }
+
+    /**
+     * Replaces the authored content (stations, lines, signals) wholesale — the client-side sync
+     * path, mirroring how the track network itself is cleared and rebuilt from a full packet.
+     * Services are untouched; a client has none.
+     */
+    public void replaceAuthoredFrom(TransitSystem incoming) {
+        stations.clear();
+        lines.clear();
+        signalsByLine.clear();
+        for (TransitStation station : incoming.stations()) {
+            addStation(station);
+        }
+        for (TransitLine line : incoming.lines()) {
+            addLine(line);
+        }
+    }
+
+    /** Wire-format snapshots of every running service, for {@code PacketServiceSync}. */
+    public java.util.List<ServiceSnapshot> serviceSnapshots() {
+        java.util.List<ServiceSnapshot> snapshots = new java.util.ArrayList<>(services.size());
+        for (LineService service : services.values()) {
+            snapshots.add(ServiceSnapshot.of(service));
+        }
+        return snapshots;
+    }
+
     // --- Services. -----------------------------------------------------------------------------
 
     /**

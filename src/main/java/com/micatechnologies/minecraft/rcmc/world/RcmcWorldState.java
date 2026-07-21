@@ -141,6 +141,23 @@ public final class RcmcWorldState {
         this.elementSpans = spans == null ? new java.util.ArrayList<>() : spans;
     }
 
+    /**
+     * Latest service snapshots, client-side — what the arrival boards render from. Populated by
+     * {@code PacketServiceSync}; empty on the server, which reads its live services directly.
+     */
+    private java.util.List<com.micatechnologies.minecraft.rcmc.physics.transit.ServiceSnapshot>
+        serviceSnapshots = new java.util.ArrayList<>();
+
+    public java.util.List<com.micatechnologies.minecraft.rcmc.physics.transit.ServiceSnapshot>
+        serviceSnapshots() {
+        return serviceSnapshots;
+    }
+
+    public void setServiceSnapshots(
+        java.util.List<com.micatechnologies.minecraft.rcmc.physics.transit.ServiceSnapshot> snapshots) {
+        this.serviceSnapshots = snapshots == null ? new java.util.ArrayList<>() : snapshots;
+    }
+
     /** True on a client world, where the network is a synced mirror rather than the truth. */
     public boolean isRemote() {
         return remote;
@@ -212,6 +229,8 @@ public final class RcmcWorldState {
             }
             RcmcNetwork.sendTo(new PacketTrackSync(state.network), player);
             RcmcNetwork.sendTo(new PacketElementSync(state.elements), player);
+            RcmcNetwork.sendTo(new com.micatechnologies.minecraft.rcmc.net.PacketTransitSync(
+                state.transit), player);
             for (Map.Entry<Integer, com.micatechnologies.minecraft.rcmc.physics.Train> entry
                 : state.trains.asMap().entrySet()) {
                 RcmcNetwork.sendTo(new PacketTrainSync(entry.getKey(), entry.getValue()), player);
@@ -272,6 +291,13 @@ public final class RcmcWorldState {
                     : state.trains.asMap().entrySet()) {
                     RcmcNetwork.sendToAllIn(new PacketTrainSync(entry.getKey(), entry.getValue()),
                         dimension);
+                }
+                // Arrival-board data rides the same cadence: a snapshot only changes when a
+                // service passes a stop or cycles its doors, so this is already generous. Sent
+                // when empty too, so a board blanks when the last service is withdrawn.
+                if (!state.transit.isEmpty()) {
+                    RcmcNetwork.sendToAllIn(new com.micatechnologies.minecraft.rcmc.net
+                        .PacketServiceSync(state.transit.serviceSnapshots()), dimension);
                 }
             }
         }

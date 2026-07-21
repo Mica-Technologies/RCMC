@@ -81,6 +81,19 @@ public final class TransitLine {
         return stations.size();
     }
 
+    /** Index of the station with this name (case-insensitive), or {@code -1}. Signage's lookup. */
+    public int indexOfStation(String stationName) {
+        if (stationName == null) {
+            return -1;
+        }
+        for (int i = 0; i < stations.size(); i++) {
+            if (stations.get(i).name().equalsIgnoreCase(stationName)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
     public boolean isLoop() {
         return loop;
     }
