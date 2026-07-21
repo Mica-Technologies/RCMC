@@ -97,6 +97,18 @@ public final class RcmcWorldState {
     }
 
     /**
+     * Park-wide block signalling. Server-side truth, like {@link #elements}: a client that braked
+     * its own predicted train for a block it believes is occupied would fight the server's
+     * correction, and occupancy depends on trains the client may not have been told about.
+     */
+    private final com.micatechnologies.minecraft.rcmc.physics.block.BlockSystems blocks =
+        new com.micatechnologies.minecraft.rcmc.physics.block.BlockSystems();
+
+    public com.micatechnologies.minecraft.rcmc.physics.block.BlockSystems blocks() {
+        return blocks;
+    }
+
+    /**
      * Render-only description of where ride hardware sits, populated from a sync packet.
      *
      * <p>Separate from {@link #elements} because the two sides need different things: the server
@@ -187,7 +199,22 @@ public final class RcmcWorldState {
             }
             try {
                 // Only the server drives ride hardware; see the `elements` field javadoc.
-                state.trains.tick(state.network, state.remote ? null : state.elements,
+                com.micatechnologies.minecraft.rcmc.physics.TrainManager.ExternalAcceleration control
+                    = null;
+                if (!state.remote) {
+                    if (state.blocks.isEmpty()) {
+                        control = state.elements;
+                    }
+                    else {
+                        // Occupancy first, and for every section before any train moves: a hold
+                        // decision must read one consistent snapshot rather than depend on the
+                        // order TrainManager happens to iterate in.
+                        state.blocks.updateOccupancy(state.trains, state.network);
+                        control = new com.micatechnologies.minecraft.rcmc.physics.block
+                            .BlockSignaledElementSet(state.elements, state.blocks);
+                    }
+                }
+                state.trains.tick(state.network, control,
                     RcmcConfig.physicsSubSteps, RcmcConstants.SECONDS_PER_TICK);
             }
             catch (RuntimeException e) {

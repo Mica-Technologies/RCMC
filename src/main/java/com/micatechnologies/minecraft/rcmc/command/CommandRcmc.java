@@ -10,6 +10,8 @@ import com.micatechnologies.minecraft.rcmc.net.RcmcNetwork;
 import com.micatechnologies.minecraft.rcmc.entity.EntityCoasterCar;
 import com.micatechnologies.minecraft.rcmc.RcmcConstants;
 import com.micatechnologies.minecraft.rcmc.physics.PhysicsIntegrator;
+import com.micatechnologies.minecraft.rcmc.physics.block.BlockSection;
+import com.micatechnologies.minecraft.rcmc.physics.block.BlockSystem;
 import com.micatechnologies.minecraft.rcmc.physics.element.BrakeRun;
 import com.micatechnologies.minecraft.rcmc.physics.element.ChainLift;
 import com.micatechnologies.minecraft.rcmc.physics.element.RideElementSet;
@@ -54,7 +56,7 @@ public class CommandRcmc extends CommandBase {
 
     @Override
     public String getUsage(ICommandSender sender) {
-        return "/rcmc <demo|train|clear|info|build|paint|rate>";
+        return "/rcmc <demo|train|clear|info|build|paint|rate|block>";
     }
 
     @Override
@@ -67,7 +69,7 @@ public class CommandRcmc extends CommandBase {
                                           String[] args, BlockPos targetPos) {
         if (args.length == 1) {
             return getListOfStringsMatchingLastWord(args, "demo", "train", "clear", "info", "build",
-                "paint", "rate");
+                "paint", "rate", "block");
         }
         if (args.length == 2 && "build".equalsIgnoreCase(args[0])) {
             return getListOfStringsMatchingLastWord(args, "bank", "circuit", "status", "cancel");
@@ -107,6 +109,9 @@ public class CommandRcmc extends CommandBase {
                 break;
             case "rate":
                 rate(sender, state, args);
+                break;
+            case "block":
+                block(sender, state, args);
                 break;
             default:
                 throw new CommandException(getUsage(sender));
@@ -366,6 +371,13 @@ public class CommandRcmc extends CommandBase {
                 + String.format("%.1f", element.startDistance()) + " - "
                 + String.format("%.1f", element.endDistance()) + " blocks");
         }
+        for (Integer signalled : state.blocks().sectionIds()) {
+            BlockSystem system = state.blocks().get(signalled);
+            reply(sender, TextFormatting.GRAY, "  section " + signalled + " signalled: "
+                + system.blockCount() + " blocks, safety "
+                + (system.isSafetyEnabled() ? "on" : "OFF")
+                + (system.hasCollision() ? ", COLLISION DETECTED" : ""));
+        }
         for (java.util.Map.Entry<Integer, Train> entry : state.trains().asMap().entrySet()) {
             Train train = entry.getValue();
             reply(sender, TextFormatting.GRAY, "  train #" + entry.getKey() + " "
@@ -449,6 +461,69 @@ public class CommandRcmc extends CommandBase {
                 + stats.finalStatus + " — the ratings above describe an incomplete run.");
         }
     }
+
+    /**
+     * {@code /rcmc block <sectionId> <count|off>} — divides a section into equal block sections, or
+     * removes its signalling.
+     *
+     * <p>Block signalling is what makes more than one train on a circuit safe: a train is not
+     * allowed to enter a block another train occupies, and is braked to a stop at the boundary if
+     * it would. Without it, a second train on a circuit will eventually run into the first.</p>
+     *
+     * <p>Equal division is a starting point, not the end state — real parks put boundaries where
+     * the track allows a train to be held (a level brake run, not mid-drop), which is a placement
+     * decision the builder should make. This exists so the capability is usable now.</p>
+     *
+     * <p>Two limits are worth knowing before relying on it. Occupancy is tracked by lead car only,
+     * so blocks must be comfortably longer than the trains using them. And N trains on N
+     * wall-to-wall blocks deadlock permanently — a proven property of exclusive fixed-block
+     * signalling, not a defect — so leave fewer trains than blocks.</p>
+     */
+    private void block(ICommandSender sender, RcmcWorldState state, String[] args)
+        throws CommandException {
+        if (args.length < 3) {
+            throw new CommandException("/rcmc block <sectionId> <count|off>");
+        }
+        int sectionId = parseInt(args[1]);
+        TrackSection section = state.network().section(sectionId);
+        if (section == null) {
+            throw new CommandException("No section #" + sectionId + " — try /rcmc info");
+        }
+
+        if ("off".equalsIgnoreCase(args[2])) {
+            if (state.blocks().remove(sectionId) == null) {
+                throw new CommandException("Section #" + sectionId + " has no block signalling");
+            }
+            reply(sender, TextFormatting.YELLOW, "Block signalling removed from section #"
+                + sectionId + " — trains on it are no longer separated.");
+            return;
+        }
+
+        int count = parseInt(args[2], 2, 32);
+        double length = section.totalLength();
+        BlockSystem system = new BlockSystem(section.isClosed(), true,
+            BLOCK_BRAKE_DECELERATION, RcmcConstants.SECONDS_PER_TICK);
+        for (int i = 0; i < count; i++) {
+            double from = length * i / count;
+            // The last block ends exactly at the section's length rather than at a rounded
+            // fraction of it, so no sliver of unsignalled track is left at the seam.
+            double to = i == count - 1 ? length : length * (i + 1) / count;
+            system.addBlock(new BlockSection("b" + (i + 1), sectionId, from, to));
+        }
+        state.blocks().put(sectionId, system);
+
+        reply(sender, TextFormatting.GREEN, "Section #" + sectionId + " divided into " + count
+            + " blocks of " + String.format("%.1f", length / count) + " blocks each"
+            + (section.isClosed() ? " (circuit — the last block wraps to the first)" : ""));
+        reply(sender, TextFormatting.GRAY, "  Run at most " + (count - 1)
+            + " trains here: " + count + " trains on " + count + " blocks deadlocks.");
+    }
+
+    /**
+     * How hard a block brake stops a train, in blocks/s². Deliberately firm — a block brake exists
+     * to prevent a collision, and a gentle one that fails to stop in time is worse than none.
+     */
+    private static final double BLOCK_BRAKE_DECELERATION = 4.0D;
 
     /** Ratings read as RCT-style two-decimal scores rather than raw doubles. */
     private static String score(double value) {

@@ -26,9 +26,24 @@ import com.micatechnologies.minecraft.rcmc.physics.element.RideElementSet;
 public final class BlockSignaledElementSet implements TrainManager.ExternalAcceleration {
 
     private final RideElementSet elements;
-    private final BlockSystem blocks;
+
+    /**
+     * Typed as the interface rather than {@link BlockSystem} so this composes equally with a single
+     * circuit's signalling and with a whole park's ({@link BlockSystems}). The composition rule
+     * below is the same either way.
+     */
+    private final TrainManager.ExternalAcceleration blocks;
 
     public BlockSignaledElementSet(RideElementSet elements, BlockSystem blocks) {
+        this(elements, (TrainManager.ExternalAcceleration) blocks);
+    }
+
+    public BlockSignaledElementSet(RideElementSet elements, BlockSystems blocks) {
+        this(elements, (TrainManager.ExternalAcceleration) blocks);
+    }
+
+    private BlockSignaledElementSet(RideElementSet elements,
+                                    TrainManager.ExternalAcceleration blocks) {
         if (elements == null || blocks == null) {
             throw new IllegalArgumentException("elements and blocks are both required");
         }
@@ -62,7 +77,8 @@ public final class BlockSignaledElementSet implements TrainManager.ExternalAccel
         return elements;
     }
 
-    public BlockSystem blockSystem() {
+    /** The signalling layer, whether one circuit's or a whole park's. */
+    public TrainManager.ExternalAcceleration signalling() {
         return blocks;
     }
 
