@@ -7,6 +7,8 @@ import com.micatechnologies.minecraft.rcmc.net.PacketBuildSessionSync;
 import com.micatechnologies.minecraft.rcmc.net.PacketTrackSync;
 import com.micatechnologies.minecraft.rcmc.net.RcmcNetwork;
 import com.micatechnologies.minecraft.rcmc.track.TrackNode;
+import com.micatechnologies.minecraft.rcmc.track.TrackAttachment;
+import com.micatechnologies.minecraft.rcmc.track.TrackNetwork;
 import com.micatechnologies.minecraft.rcmc.track.TrackSection;
 import com.micatechnologies.minecraft.rcmc.track.math.Vec3;
 import com.micatechnologies.minecraft.rcmc.track.validation.TrackIssue;
@@ -89,13 +91,33 @@ public class ItemTrackTool extends Item {
         // of it. Placing two nodes a fraction apart is the one thing guaranteed to look wrong: the
         // curve has to turn through the tiny gap between them, so a circuit built that way never
         // lined up. Snapping makes "click where you started" mean what a builder intends.
-        if (session.size() >= MIN_CIRCUIT_NODES
-            && position.distanceTo(session.pending().get(0).position()) <= SNAP_RADIUS) {
+        // What counts as "back where I started" depends on whether this chain is continuing an
+        // existing section. If it is, the chain's own first node is the middle of the finished
+        // track, not its start — closing there would loop the extension back on itself and leave
+        // the original run hanging off the side. The circuit closes at the section's OTHER free
+        // end, which is where a builder carrying on round actually arrives.
+        Vec3 closeAt = closeTarget(world, session);
+        if (session.size() >= MIN_CIRCUIT_NODES && closeAt != null
+            && position.distanceTo(closeAt) <= SNAP_RADIUS) {
             session.setClosing(true);
             say(player, TextFormatting.GREEN, "Closing the circuit at the first node.");
             pushSession(player, session);
             commit(player, world, session);
             return EnumActionResult.SUCCESS;
+        }
+
+        // Starting a chain near a free end of existing track continues that track instead of
+        // laying a separate section beside it. Only on the FIRST node: snapping mid-chain would
+        // hijack a layout that merely passes close to something else.
+        if (session.isEmpty()) {
+            TrackAttachment.Target target =
+                TrackAttachment.find(state(world).network(), position, SNAP_RADIUS);
+            if (target != null) {
+                position = target.position;
+                session.setAttachment(target);
+                say(player, TextFormatting.AQUA, "Continuing section #" + target.sectionId
+                    + " from its " + (target.appends() ? "end" : "start") + ".");
+            }
         }
 
         session.add(new TrackNode(position, session.bankDegrees(), null));
@@ -160,10 +182,31 @@ public class ItemTrackTool extends Item {
         }
 
         RcmcWorldState state = RcmcWorldState.of(world);
-        int id = state.network().allocateSectionId();
+        TrackAttachment.Target attachment = session.attachment();
+        boolean extending = attachment != null && state.network().hasSection(attachment.sectionId);
+
+        int id;
         TrackSection section;
         try {
-            section = new TrackSection(id, session.pending(), closing, null);
+            if (extending) {
+                TrackSection existing = state.network().section(attachment.sectionId);
+                if (!attachment.appends() && !canPrependSafely(state, existing)) {
+                    // Prepending redistributes every distance on the section, and not by a constant
+                    // (see TrackAttachment.extend). Anything anchored by distance would end up over
+                    // different track, so refuse rather than move a lift hill silently.
+                    say(player, TextFormatting.RED, "Section #" + existing.id()
+                        + " has ride hardware or a train on it, so it can only be continued from its"
+                        + " far end — building onto its start would move everything already placed.");
+                    return;
+                }
+                id = existing.id();
+                section = TrackAttachment.extend(
+                    existing, attachment.end, session.pending(), closing);
+            }
+            else {
+                id = state.network().allocateSectionId();
+                section = new TrackSection(id, session.pending(), closing, null);
+            }
         }
         catch (IllegalArgumentException e) {
             // Degenerate node layout — report it and keep the session so the builder can undo
@@ -172,7 +215,12 @@ public class ItemTrackTool extends Item {
             return;
         }
 
-        state.network().addSection(section);
+        if (extending) {
+            state.network().replaceSection(section);
+        }
+        else {
+            state.network().addSection(section);
+        }
         int createdElements = addTypedElements(state, section, session);
         state.markTrackDirty(world);
         // BOTH, always. Sending only the track leaves clients with a lift hill that renders as
@@ -186,8 +234,8 @@ public class ItemTrackTool extends Item {
         session.reset();
         pushSession(player, session);
 
-        say(player, TextFormatting.GREEN, "Built section #" + id + " — "
-            + String.format("%.1f", section.totalLength()) + " blocks, "
+        say(player, TextFormatting.GREEN, (extending ? "Extended section #" : "Built section #")
+            + id + " — " + String.format("%.1f", section.totalLength()) + " blocks, "
             + section.nodes().size() + " nodes"
             + (closing ? " (circuit)" : "") + ".");
 
@@ -201,6 +249,52 @@ public class ItemTrackTool extends Item {
 
         report(player, section);
         say(player, TextFormatting.DARK_GRAY, "Run /rcmc train " + id + " to put a train on it.");
+    }
+
+    /**
+     * The point at which clicking closes the chain into a circuit, or {@code null} if it cannot yet
+     * be closed.
+     */
+    private static Vec3 closeTarget(World world, TrackBuildSession session) {
+        TrackAttachment.Target attachment = session.attachment();
+        if (attachment == null) {
+            return session.isEmpty() ? null : session.pending().get(0).position();
+        }
+        TrackSection existing = state(world).network().section(attachment.sectionId);
+        if (existing == null) {
+            return session.isEmpty() ? null : session.pending().get(0).position();
+        }
+        // The far end: continuing from one end and arriving at the other is what makes a circuit.
+        return existing.endpointAt(attachment.end == TrackNetwork.End.END
+            ? TrackNetwork.End.START
+            : TrackNetwork.End.END);
+    }
+
+    /** The world's RCMC state, for the snap lookup during placement. */
+    private static RcmcWorldState state(World world) {
+        return RcmcWorldState.of(world);
+    }
+
+    /**
+     * Whether {@code section} can have track prepended without stranding anything anchored to it.
+     *
+     * <p>Only a bare section qualifies. See {@link TrackAttachment#extend} for why a caller cannot
+     * simply shift the anchors along instead.</p>
+     */
+    private static boolean canPrependSafely(RcmcWorldState state, TrackSection section) {
+        for (com.micatechnologies.minecraft.rcmc.physics.element.RideElement element
+            : state.elements().elements()) {
+            if (element.sectionId() == section.id()) {
+                return false;
+            }
+        }
+        for (com.micatechnologies.minecraft.rcmc.physics.Train train
+            : state.trains().asMap().values()) {
+            if (train.reference() != null && train.reference().sectionId() == section.id()) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**

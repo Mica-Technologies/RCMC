@@ -71,6 +71,26 @@ public final class TrackBuildSession {
      */
     private double heightOffset;
 
+    /**
+     * The free end of an existing section this chain is continuing from, or {@code null} for a
+     * fresh section.
+     *
+     * <p>Recorded when the first node snaps rather than worked out at commit time: by then the
+     * first node sits exactly on the old endpoint and is indistinguishable from a node a builder
+     * happened to place there, and guessing would silently swallow a section a builder meant to
+     * keep separate.</p>
+     */
+    private com.micatechnologies.minecraft.rcmc.track.TrackAttachment.Target attachment;
+
+    public com.micatechnologies.minecraft.rcmc.track.TrackAttachment.Target attachment() {
+        return attachment;
+    }
+
+    public void setAttachment(
+        com.micatechnologies.minecraft.rcmc.track.TrackAttachment.Target target) {
+        this.attachment = target;
+    }
+
     public static TrackBuildSession of(UUID playerId) {
         return SESSIONS.computeIfAbsent(playerId, id -> new TrackBuildSession());
     }
@@ -135,6 +155,7 @@ public final class TrackBuildSession {
     }
 
     public void reset() {
+        attachment = null;
         pending.clear();
         pendingTypes.clear();
         bankDegrees = 0.0D;
