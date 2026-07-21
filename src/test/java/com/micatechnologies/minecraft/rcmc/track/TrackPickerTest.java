@@ -93,6 +93,51 @@ class TrackPickerTest {
     }
 
     @Test
+    @DisplayName("a look ray aimed at track hits it, from well beyond reach")
+    void rayHitsTrack() {
+        TrackNetwork network = new TrackNetwork();
+        network.addSection(straight());
+
+        // Standing 20 blocks below and to the side, looking up at the track — the case a point
+        // query cannot serve, because there is no block anywhere near what is being pointed at.
+        Vec3 eyes = new Vec3(50, 44, 20);
+        Vec3 look = new Vec3(50, 64, 0).subtract(eyes);
+        TrackPicker.Hit hit = TrackPicker.pickAlongRay(network, eyes, look, 64.0D, 1.5D);
+        assertNotNull(hit, "a ray aimed straight at track should hit it");
+        assertEquals(1, hit.ref.sectionId());
+        // Where the ray first comes within the aim radius, which on an oblique approach is a
+        // little short of the point aimed at — near enough that it is the same span either way.
+        assertEquals(50.0D, hit.ref.distance(), 2.0D);
+    }
+
+    @Test
+    @DisplayName("a look ray aimed away from track hits nothing")
+    void rayMissesTrack() {
+        TrackNetwork network = new TrackNetwork();
+        network.addSection(straight());
+        assertNull(TrackPicker.pickAlongRay(network,
+            new Vec3(50, 44, 20), new Vec3(0, -1, 0), 64.0D, 1.5D));
+        // Track behind the player is not "in front of the cursor".
+        assertNull(TrackPicker.pickAlongRay(network,
+            new Vec3(50, 44, 20), new Vec3(0, -1, 1), 64.0D, 1.5D));
+    }
+
+    @Test
+    @DisplayName("a ray through two sections picks the nearer one")
+    void rayPicksNearest() {
+        TrackNetwork network = new TrackNetwork();
+        network.addSection(straight());
+        network.addSection(new TrackSection(2, Arrays.asList(
+            at(0, 74, 0), at(50, 74, 0), at(100, 74, 0)), false, null));
+
+        // Looking straight up from under both: the lower one is in the way.
+        TrackPicker.Hit hit = TrackPicker.pickAlongRay(network,
+            new Vec3(50, 40, 0), new Vec3(0, 1, 0), 64.0D, 1.5D);
+        assertNotNull(hit);
+        assertEquals(1, hit.ref.sectionId(), "near track should occlude far track");
+    }
+
+    @Test
     @DisplayName("span lookup returns the pair of nodes a distance falls between")
     void spanIndex() {
         TrackSection section = straight();

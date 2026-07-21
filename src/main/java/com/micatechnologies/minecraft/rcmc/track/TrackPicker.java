@@ -54,6 +54,89 @@ public final class TrackPicker {
         return best != null && best.distanceFromQuery <= maxDistance ? best : null;
     }
 
+    /**
+     * The first piece of track a look ray passes within {@code radius} of, or {@code null}.
+     *
+     * <p>This — not {@link #pick(TrackNetwork, Vec3, double)} — is what "I clicked on that track"
+     * means. Track is rendered geometry with no block behind it, so a click aimed at it produces
+     * either a block hit somewhere else entirely or no hit at all; a point query can only work when
+     * the player happens to be standing next to what they are pointing at.</p>
+     *
+     * <p>Nearest along the ray wins rather than nearest to it, so track in front occludes track
+     * behind it the way a solid object would. The hit is therefore where the ray first enters the
+     * radius, which on a ray approaching the track at a shallow angle is a little short of the
+     * point aimed at — within a span's length, which is the unit an edit applies to anyway.</p>
+     *
+     * @param origin    where the ray starts, normally the player's eyes
+     * @param direction look direction; need not be normalised
+     * @param maxRange  how far down the ray to look, in blocks
+     * @param radius    how far off the ray track may be and still count as pointed at
+     */
+    public static Hit pickAlongRay(TrackNetwork network, Vec3 origin, Vec3 direction,
+                                   double maxRange, double radius) {
+        if (direction.lengthSquared() <= 0.0D) {
+            return null;
+        }
+        Vec3 unit = direction.normalize();
+
+        double bestAlong = Double.MAX_VALUE;
+        Hit best = null;
+        for (TrackSection section : network.sections()) {
+            double total = section.totalLength();
+            if (total <= 0.0D) {
+                continue;
+            }
+            for (double s = 0.0D; s <= total; s += COARSE_STEP) {
+                // A coarse sample may sit up to half a step from where the track actually passes
+                // closest to the ray, so the shortlist is widened by that before refining.
+                double off = offRay(origin, unit, section.positionAtDistance(s), maxRange);
+                if (off > radius + COARSE_STEP) {
+                    continue;
+                }
+                double at = s;
+                double window = COARSE_STEP;
+                for (int pass = 0; pass < REFINEMENTS; pass++) {
+                    double from = Math.max(0.0D, at - window);
+                    double to = Math.min(total, at + window);
+                    double step = (to - from) / 10.0D;
+                    if (step <= 0.0D) {
+                        break;
+                    }
+                    for (double t = from; t <= to; t += step) {
+                        double d = offRay(origin, unit, section.positionAtDistance(t), maxRange);
+                        if (d < off) {
+                            off = d;
+                            at = t;
+                        }
+                    }
+                    window = step;
+                }
+                if (off > radius) {
+                    continue;
+                }
+                double along = section.positionAtDistance(at).subtract(origin).dot(unit);
+                if (along >= 0.0D && along <= maxRange && along < bestAlong) {
+                    bestAlong = along;
+                    best = new Hit(new TrackRef(section.id(), at), off);
+                }
+            }
+        }
+        return best;
+    }
+
+    /**
+     * How far a point lies off the ray, or {@link Double#MAX_VALUE} if it is behind the origin or
+     * past the range — those are misses, not distant hits.
+     */
+    private static double offRay(Vec3 origin, Vec3 unit, Vec3 point, double maxRange) {
+        Vec3 relative = point.subtract(origin);
+        double along = relative.dot(unit);
+        if (along < 0.0D || along > maxRange) {
+            return Double.MAX_VALUE;
+        }
+        return relative.subtract(unit.scale(along)).length();
+    }
+
     /** Nearest point on one section. Never null for a section with length. */
     public static Hit pickOn(TrackSection section, Vec3 query) {
         double total = section.totalLength();

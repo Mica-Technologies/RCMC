@@ -60,6 +60,18 @@ public class ItemTrackEditor extends Item {
      */
     private static final double PICK_RADIUS = 4.0D;
 
+    /**
+     * How far down the player's look ray to search for track.
+     *
+     * <p>Well beyond vanilla reach on purpose. There is no block to interact with, so nothing here
+     * is bounded by reach; a builder looking at a lift hill from the ground is pointing at it just
+     * as unambiguously from thirty blocks as from three.</p>
+     */
+    private static final double LOOK_RANGE = 64.0D;
+
+    /** How far off the look ray track may sit and still count as aimed at. */
+    private static final double AIM_RADIUS = 1.5D;
+
     /** Which part a colour change applies to; cycled independently of the colour itself. */
     private static final Map<UUID, com.micatechnologies.minecraft.rcmc.track.TrackPalette.Part>
         PAINT_PART = new HashMap<>();
@@ -99,35 +111,77 @@ public class ItemTrackEditor extends Item {
             return EnumActionResult.SUCCESS;
         }
         RcmcWorldState state = RcmcWorldState.of(world);
-        Vec3 query = new Vec3(pos.getX() + 0.5D + hitX - 0.5D,
-            pos.getY() + hitY, pos.getZ() + 0.5D + hitZ - 0.5D);
 
-        TrackPicker.Hit hit = TrackPicker.pick(state.network(), query, PICK_RADIUS);
+        // The look ray first: the block that was clicked is whatever happened to be BEHIND the
+        // track, so the ray is the thing that actually describes what the player was pointing at.
+        TrackPicker.Hit hit = pickAlongLook(player, state);
         if (hit == null) {
-            say(player, TextFormatting.GRAY, "No track within " + (int) PICK_RADIUS + " blocks.");
+            Vec3 query = new Vec3(pos.getX() + hitX, pos.getY() + hitY, pos.getZ() + hitZ);
+            hit = TrackPicker.pick(state.network(), query, PICK_RADIUS);
+        }
+        if (hit == null) {
+            say(player, TextFormatting.GRAY, "No track under the cursor, and none within "
+                + (int) PICK_RADIUS + " blocks of where you clicked.");
             return EnumActionResult.SUCCESS;
         }
-        TrackSection section = state.network().section(hit.ref.sectionId());
-
-        if (player.isSneaking()) {
-            deleteSection(player, world, state, section);
-            return EnumActionResult.SUCCESS;
-        }
-
-        int span = TrackPicker.spanIndexAt(section, hit.ref.distance());
-        SELECTIONS.put(player.getUniqueID(), new Selection(section.id(), span, hit.ref.distance()));
-        report(player, state, section, hit.ref.distance(), span);
+        apply(player, world, state, hit);
         return EnumActionResult.SUCCESS;
     }
 
     @Override
     public ActionResult<ItemStack> onItemRightClick(World world, EntityPlayer player, EnumHand hand) {
         ItemStack held = player.getHeldItem(hand);
-        if (!world.isRemote && player.isSneaking()) {
+        if (world.isRemote) {
+            return new ActionResult<>(EnumActionResult.SUCCESS, held);
+        }
+        RcmcWorldState state = RcmcWorldState.of(world);
+
+        // Track is rendered geometry with no block behind it, so aiming at track hanging in the air
+        // is a MISS as far as vanilla is concerned and arrives here rather than at onItemUse. This
+        // handler doing nothing but clear the selection was the whole of "the wand does nothing".
+        TrackPicker.Hit hit = pickAlongLook(player, state);
+        if (hit != null) {
+            apply(player, world, state, hit);
+            return new ActionResult<>(EnumActionResult.SUCCESS, held);
+        }
+        if (player.isSneaking()) {
             SELECTIONS.remove(player.getUniqueID());
             say(player, TextFormatting.GRAY, "Selection cleared.");
         }
+        else {
+            say(player, TextFormatting.GRAY, "No track under the cursor.");
+        }
         return new ActionResult<>(EnumActionResult.SUCCESS, held);
+    }
+
+    /** Selects what was pointed at, or deletes its section when sneaking. */
+    private static void apply(EntityPlayer player, World world, RcmcWorldState state,
+                              TrackPicker.Hit hit) {
+        TrackSection section = state.network().section(hit.ref.sectionId());
+        if (section == null) {
+            return;
+        }
+        if (player.isSneaking()) {
+            deleteSection(player, world, state, section);
+            return;
+        }
+        int span = TrackPicker.spanIndexAt(section, hit.ref.distance());
+        SELECTIONS.put(player.getUniqueID(), new Selection(section.id(), span, hit.ref.distance()));
+        report(player, state, section, hit.ref.distance(), span);
+    }
+
+    /**
+     * What the player is pointing at, by casting their look ray against the track itself.
+     *
+     * <p>Run server-side, where the selection lives; the server tracks the player's rotation from
+     * their movement packets, so the ray is the same one the client drew its crosshair along.</p>
+     */
+    private static TrackPicker.Hit pickAlongLook(EntityPlayer player, RcmcWorldState state) {
+        net.minecraft.util.math.Vec3d eyes = player.getPositionEyes(1.0F);
+        net.minecraft.util.math.Vec3d look = player.getLookVec();
+        return TrackPicker.pickAlongRay(state.network(),
+            new Vec3(eyes.x, eyes.y, eyes.z), new Vec3(look.x, look.y, look.z),
+            LOOK_RANGE, AIM_RADIUS);
     }
 
     /**
@@ -338,7 +392,7 @@ public class ItemTrackEditor extends Item {
     @Override
     @SideOnly(Side.CLIENT)
     public void addInformation(ItemStack stack, World world, List<String> tooltip, ITooltipFlag flag) {
-        tooltip.add(TextFormatting.GRAY + "Right-click track: select a span");
+        tooltip.add(TextFormatting.GRAY + "Right-click while looking at track: select a span");
         tooltip.add(TextFormatting.GRAY + "G: cycle that span's segment type");
         tooltip.add(TextFormatting.GRAY + "Sneak + right-click track: delete the section");
         tooltip.add(TextFormatting.GRAY + "C: cycle that part's colour");

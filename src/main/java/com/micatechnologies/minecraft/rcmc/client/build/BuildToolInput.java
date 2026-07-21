@@ -102,9 +102,9 @@ public final class BuildToolInput {
                     new PacketBuildAdjust(PacketBuildAdjust.Action.CYCLE_PIECE, 1.0D));
             }
             if (reset) {
-                // R undoes a piece rather than resetting adjustments, because the piece tool's
-                // sneak+right-click-air undo does not reach a player who is flying — the sneak
-                // FLAG stays false while flying, and building is done flying.
+                // R undoes a piece rather than resetting adjustments, simply because a dedicated
+                // key is a better gesture for something used this often than sneak+right-click-air,
+                // which also has to be aimed at nothing.
                 RcmcNetwork.sendToServer(
                     new PacketBuildAdjust(PacketBuildAdjust.Action.UNDO_PIECE, 0.0D));
             }
@@ -164,14 +164,21 @@ public final class BuildToolInput {
     }
 
     /**
-     * Whether the sneak KEY is down, which is not the same question as whether the player is
-     * sneaking.
+     * Whether the sneak key is down.
      *
-     * <p>{@code EntityPlayer.isSneaking()} reports the sneaking <em>flag</em>, and while flying
-     * that flag stays false — shift descends instead. Checking it meant this never fired for
-     * anyone building in creative flight, which is essentially everyone, so the scroll fell
-     * through to vanilla and changed hotbar slots. Reading the key binding directly asks the
-     * question actually intended: "is the player holding shift right now".</p>
+     * <p>An earlier version of this comment claimed {@code EntityPlayer.isSneaking()} stays false
+     * while flying, and that this was why shift+scroll did nothing. <b>That is wrong</b> and is
+     * recorded here because it is a plausible-sounding claim that has now been raised twice.
+     * {@code EntityPlayerSP.isSneaking()} returns {@code movementInput.sneak}, which
+     * {@code MovementInputFromOptions} sets from {@code keyBindSneak.isKeyDown()} with no flight
+     * condition; the fly-descend branch reads that flag but never clears it, and
+     * {@code onUpdateWalkingPlayer} relays it to the server. It is true while flying on both
+     * sides.</p>
+     *
+     * <p>What actually broke shift+scroll was not cancelling the mouse event, so vanilla changed
+     * hotbar slots underneath it — fixed at the {@code setCanceled(true)} calls in
+     * {@link #onMouse}. Reading the key binding is kept anyway: this is client-side input handling,
+     * where the key state is the question being asked and needs no round trip.</p>
      */
     private static boolean sneakKeyHeld(Minecraft mc) {
         return mc.gameSettings != null && mc.gameSettings.keyBindSneak.isKeyDown();
