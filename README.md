@@ -1,10 +1,15 @@
-# RCMC — Rollercoaster Minecraft
+# RCMC — Rails & Coasters: Minecraft
 
-A Minecraft **1.12.2 Forge** mod that adds real rollercoasters: track laid out as continuous
-splines rather than block-aligned rails, multi-car trains that ride it under a genuine physics
-simulation, and a first-person ride experience with the camera bolted to the car.
+A Minecraft **1.12.2 Forge** mod that adds real rail-guided rides: track laid out as
+continuous splines rather than block-aligned rails, multi-car trains that ride it under a
+genuine physics simulation, and a first-person ride experience with the camera bolted to
+the car.
 
-Think *RollerCoaster Tycoon*, in Minecraft — not minecarts with a fresh texture.
+Rollercoasters are the first ride family — think *RollerCoaster Tycoon*, in Minecraft, not
+minecarts with a fresh texture. Powered rail transit (metro-style trains, with traction,
+service braking, stations and signalling) is the second, built on the same spline track and
+physics core. The scope stays deliberately focused: a few kinds of ride done properly, not
+an everything-on-rails megamod.
 
 > **Status: pre-alpha.** The repository is scaffolded and the geometry/physics core is in
 > place and unit-tested. There is no placeable track in-game yet. See
@@ -12,7 +17,7 @@ Think *RollerCoaster Tycoon*, in Minecraft — not minecarts with a fresh textur
 
 ## What makes it different from minecarts
 
-| | Vanilla / Railcraft | RCMC |
+| Aspect | Vanilla / Railcraft | RCMC |
 | --- | --- | --- |
 | Track shape | Block-aligned, 45° increments | Arbitrary 3D splines through placed nodes |
 | Banking | None | Authored roll angle, transported along the curve |

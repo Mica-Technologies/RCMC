@@ -2,7 +2,7 @@
   {
     "modid": "${modid}",
     "name": "${modname}",
-    "description": "Spline-based rollercoaster track and physics-simulated, rideable coaster trains for Minecraft 1.12.2.",
+    "description": "Spline-based track and physics-simulated, rideable trains — rollercoasters today, metro and passenger rail next — for Minecraft 1.12.2.",
     "version": "${version}",
     "mcversion": "${mcversion}",
     "credits": "Mica Technologies",

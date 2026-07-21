@@ -21,12 +21,13 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 /**
- * Main mod class for RCMC (Rollercoaster Minecraft).
+ * Main mod class for RCMC (Rails &amp; Coasters: Minecraft).
  *
- * <p>RCMC adds spline-based rollercoaster track that is laid out as continuous curves
- * rather than block-aligned rails, and multi-car trains that ride it under a real physics
- * simulation (gravity, rolling/air resistance, lift hills, launches, brake runs, banking
- * and G-force limits).</p>
+ * <p>RCMC adds spline-based track that is laid out as continuous curves rather than
+ * block-aligned rails, and multi-car trains that ride it under a real physics simulation
+ * (gravity, rolling/air resistance, lift hills, launches, brake runs, banking and G-force
+ * limits). Rollercoasters are the first ride family; powered rail transit (metro-style
+ * trains) shares the same track and physics core.</p>
  *
  * <p>Lifecycle contract for the rest of the mod:</p>
  * <ul>

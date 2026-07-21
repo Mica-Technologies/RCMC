@@ -4,10 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Purpose
 
-RCMC ("Rollercoaster Minecraft") is a **Minecraft 1.12.2 Forge mod** (mod id: `rcmc`) that adds
-spline-based rollercoaster track and physics-simulated, rideable coaster trains. The goal is
-RollerCoaster Tycoon-grade rides — arbitrary 3D curves, banking, inversions, lift hills,
-launches, brake runs, block sections — not retextured minecarts.
+RCMC ("Rails & Coasters: Minecraft") is a **Minecraft 1.12.2 Forge mod** (mod id: `rcmc`) that
+adds spline-based track and physics-simulated, rideable trains. Rollercoasters are the first
+ride family — RollerCoaster Tycoon-grade rides with arbitrary 3D curves, banking, inversions,
+lift hills, launches, brake runs and block sections, not retextured minecarts. Powered rail
+transit (metro-style trains with traction, service braking, stations and signalling) is the
+second, sharing the same track and physics core.
 
 Build system is GregTechCEu Buildscripts (a RetroFuturaGradle wrapper), the same as the
 sibling mods `minecraft-city-super-mod` (CSM) and `uia-server-utility-mod` (SUM).

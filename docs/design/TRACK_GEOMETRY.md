@@ -1,7 +1,7 @@
 # Track Geometry
 
-How RCMC represents a piece of rollercoaster track, and why each choice was made over the
-obvious alternatives.
+How RCMC represents a piece of spline track — the shared foundation for rollercoasters and
+rail transit alike — and why each choice was made over the obvious alternatives.
 
 ## The problem
 
