@@ -254,8 +254,14 @@ public class ItemTrackTool extends Item {
         }
     }
 
-    /** Surfaces validator findings without blocking the build. */
-    private static void report(EntityPlayer player, TrackSection section) {
+    /**
+     * Surfaces validator findings without blocking the build.
+     *
+     * <p>Package-private so {@link ItemPieceTool} reports a committed section in exactly the same
+     * words. Two builders' tools describing the same geometry differently would make a report of
+     * "the validator says X" impossible to act on without also knowing which wand was held.</p>
+     */
+    static void report(EntityPlayer player, TrackSection section) {
         List<TrackIssue> issues = new TrackValidator(ValidationLimits.DEFAULT).validate(section);
         if (issues.isEmpty()) {
             return;
@@ -277,7 +283,7 @@ public class ItemTrackTool extends Item {
         }
     }
 
-    private static void say(EntityPlayer player, TextFormatting colour, String message) {
+    static void say(EntityPlayer player, TextFormatting colour, String message) {
         player.sendMessage(new TextComponentString(colour + message));
     }
 

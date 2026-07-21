@@ -62,6 +62,7 @@ public class RcmcClientProxy extends RcmcCommonProxy {
         net.minecraft.item.Item tool = com.micatechnologies.minecraft.rcmc.item.RcmcItems.trackTool;
         bindModel(tool);
         bindModel(com.micatechnologies.minecraft.rcmc.item.RcmcItems.trackEditor);
+        bindModel(com.micatechnologies.minecraft.rcmc.item.RcmcItems.pieceTool);
         bindModel(net.minecraft.item.Item.getItemFromBlock(
             com.micatechnologies.minecraft.rcmc.block.RcmcBlocks.trackSupport));
     }
