@@ -22,10 +22,30 @@ public final class TrainSpec {
         SEATS
     }
 
+    /**
+     * Which family of rolling stock this is. More than cosmetic: it selects both the model the
+     * renderer emits and how the car body is placed on the track — see
+     * {@code Train.bodyFrameOfCar}. A {@link #METRO} car is long enough that orienting its rigid
+     * body from a single track point visibly cuts curves; its body is placed from its two bogies
+     * instead. Coaster cars are short enough that the single-point placement they have always
+     * used is indistinguishable, and keeping it avoids perturbing every existing ride.
+     */
+    public enum CarStyle {
+        COASTER,
+        METRO;
+
+        /** Ordinal-indexed lookup for the wire format, clamped rather than trusted. */
+        public static CarStyle byOrdinal(int ordinal) {
+            CarStyle[] all = values();
+            return all[Math.max(0, Math.min(all.length - 1, ordinal))];
+        }
+    }
+
     private final int carCount;
     private final double carLength;
     private final double couplingGap;
     private final int seatsPerCar;
+    private final CarStyle carStyle;
 
     /**
      * Paint, as ordinals into {@code TrackPalette.Colour}.
@@ -57,6 +77,12 @@ public final class TrainSpec {
      */
     public TrainSpec(int carCount, double carLength, double couplingGap, int seatsPerCar,
                      int bodyColour, int trimColour, int seatColour) {
+        this(carCount, carLength, couplingGap, seatsPerCar,
+            bodyColour, trimColour, seatColour, CarStyle.COASTER);
+    }
+
+    public TrainSpec(int carCount, double carLength, double couplingGap, int seatsPerCar,
+                     int bodyColour, int trimColour, int seatColour, CarStyle carStyle) {
         if (carCount < 1) {
             throw new IllegalArgumentException("carCount must be >= 1, got " + carCount);
         }
@@ -66,6 +92,9 @@ public final class TrainSpec {
         if (couplingGap < 0.0D) {
             throw new IllegalArgumentException("couplingGap must be >= 0, got " + couplingGap);
         }
+        if (carStyle == null) {
+            throw new IllegalArgumentException("carStyle is required");
+        }
         this.carCount = carCount;
         this.carLength = carLength;
         this.couplingGap = couplingGap;
@@ -73,6 +102,7 @@ public final class TrainSpec {
         this.bodyColour = bodyColour;
         this.trimColour = trimColour;
         this.seatColour = seatColour;
+        this.carStyle = carStyle;
     }
 
     public int bodyColour() {
@@ -104,12 +134,46 @@ public final class TrainSpec {
         return new TrainSpec(carCount, carLength, couplingGap, seatsPerCar,
             part == Part.BODY ? colour : bodyColour,
             part == Part.TRIM ? colour : trimColour,
-            part == Part.SEATS ? colour : seatColour);
+            part == Part.SEATS ? colour : seatColour,
+            carStyle);
     }
 
     /** A single car, roughly the size of a standard coaster car. */
     public static TrainSpec singleCar() {
         return new TrainSpec(1, 3.0D, 0.0D, 4);
+    }
+
+    /**
+     * The metro presets below are proportioned from real North American rolling stock at the
+     * mod's 1 block ≈ 1 metre scale. {@code carLength} is bogie-centre ("truck centre") spacing
+     * per this class's convention; US stock places trucks at roughly 72% of body length, so the
+     * renderer derives the visible body as {@code carLength / 0.72} and the coupling gap here is
+     * sized to hold ~0.7 blocks of daylight between bodies. All three are ~3 blocks wide in
+     * model terms — real heavy-rail bodies run 2.7–3.05 m.
+     */
+
+    /**
+     * Compact metro car, proportioned like NYC Subway A-Division stock (R142: 15.65 m long,
+     * 2.68 m wide) — the small profile for tight, twisty tunnels. Stainless body, dark trim.
+     */
+    public static TrainSpec metroTrainCompact(int carCount) {
+        return new TrainSpec(carCount, 11.3D, 5.1D, 8, 0, 1, 5, CarStyle.METRO);
+    }
+
+    /**
+     * Standard metro car, proportioned like MBTA Orange Line stock (CRRC, 65 ft class ≈ 19.8 m)
+     * — silver body, orange trim band, the default metro consist.
+     */
+    public static TrainSpec metroTrain(int carCount) {
+        return new TrainSpec(carCount, 14.3D, 6.2D, 10, 0, 4, 1, CarStyle.METRO);
+    }
+
+    /**
+     * Long metro car, proportioned like LA Metro B/D Line stock (HR4000: 75 ft / 22.86 m long,
+     * 10 ft / 3.05 m wide — NYC B-Division 75-footers share the length). White body, red trim.
+     */
+    public static TrainSpec metroTrainLong(int carCount) {
+        return new TrainSpec(carCount, 16.5D, 7.1D, 12, 2, 3, 8, CarStyle.METRO);
     }
 
     public int carCount() {
@@ -126,6 +190,10 @@ public final class TrainSpec {
 
     public int seatsPerCar() {
         return seatsPerCar;
+    }
+
+    public CarStyle carStyle() {
+        return carStyle;
     }
 
     public int totalSeats() {

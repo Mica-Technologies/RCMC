@@ -38,6 +38,7 @@ public class PacketTrainSync implements IMessage {
     private int bodyColour;
     private int trimColour;
     private int seatColour;
+    private int carStyle;
     private int sectionId;
     private double distance;
     private double velocity;
@@ -56,6 +57,7 @@ public class PacketTrainSync implements IMessage {
         this.bodyColour = spec.bodyColour();
         this.trimColour = spec.trimColour();
         this.seatColour = spec.seatColour();
+        this.carStyle = spec.carStyle().ordinal();
         this.sectionId = train.reference().sectionId();
         this.distance = train.reference().distance();
         this.velocity = train.velocity();
@@ -71,6 +73,7 @@ public class PacketTrainSync implements IMessage {
         bodyColour = buf.readInt();
         trimColour = buf.readInt();
         seatColour = buf.readInt();
+        carStyle = buf.readInt();
         sectionId = buf.readInt();
         // Doubles, not floats: distance is what the client's integrator continues from, and float
         // rounding here would inject a position error on every correction rather than removing one.
@@ -88,6 +91,7 @@ public class PacketTrainSync implements IMessage {
         buf.writeInt(bodyColour);
         buf.writeInt(trimColour);
         buf.writeInt(seatColour);
+        buf.writeInt(carStyle);
         buf.writeInt(sectionId);
         buf.writeDouble(distance);
         buf.writeDouble(velocity);
@@ -120,7 +124,7 @@ public class PacketTrainSync implements IMessage {
                 manager.add(message.trainId, new Train(
                     new TrainSpec(message.carCount, message.carLength, message.couplingGap,
                         message.seatsPerCar, message.bodyColour, message.trimColour,
-                        message.seatColour),
+                        message.seatColour, TrainSpec.CarStyle.byOrdinal(message.carStyle)),
                     new PhysicsIntegrator(RcmcConfig.gravity, RcmcConfig.rollingResistance,
                         RcmcConfig.airDrag, RcmcConfig.maxSpeed),
                     ref, message.velocity));

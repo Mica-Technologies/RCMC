@@ -194,6 +194,48 @@ public final class Train {
         return network.frameAt(refOfCar(network, index));
     }
 
+    /**
+     * The frame the car <em>body</em> of car {@code index} should be placed from.
+     *
+     * <p>For coaster stock this is simply {@link #frameOfCar}: the cars are short enough that a
+     * rigid body oriented from one track point is indistinguishable from anything fancier. A
+     * metro car is not — ten blocks of rigid body oriented by one point's tangent swings its ends
+     * wide off the track on every curve. Real long stock rests on two bogies, each following the
+     * rails, with the body spanning them; this reproduces exactly that. Each bogie is a plain
+     * point at a fixed along-track offset (the one-degree-of-freedom rule extends untouched —
+     * {@code spec.carLength()} is <em>defined</em> as the bogie-centre spacing), and the body
+     * frame is derived: position at the bogies' midpoint — the chord, which on a curve is
+     * correctly pulled toward its inside — forward along the bogie-to-bogie chord, up blended
+     * from the two bogie frames and re-orthogonalised by {@link TrackFrame}'s constructor.</p>
+     *
+     * <p>Physics never reads this. Gravity sampling, occupancy and stopping distances all use the
+     * per-car track references, same as always; this exists for the entity, the renderer and the
+     * seat placement.</p>
+     */
+    public TrackFrame bodyFrameOfCar(TrackNetwork network, int index) {
+        if (spec.carStyle() != TrainSpec.CarStyle.METRO) {
+            return frameOfCar(network, index);
+        }
+        double half = spec.carLength() / 2.0D;
+        double centerOffset = spec.offsetOfCar(index);
+        TrackFrame front = network.frameAt(network.advance(reference, -(centerOffset - half)).ref);
+        TrackFrame rear = network.frameAt(network.advance(reference, -(centerOffset + half)).ref);
+
+        com.micatechnologies.minecraft.rcmc.track.math.Vec3 chord =
+            front.position.subtract(rear.position);
+        if (chord.lengthSquared() < 1.0e-9D) {
+            // Degenerate (both bogies clamped onto the same dead end); fall back to the point frame.
+            return frameOfCar(network, index);
+        }
+        com.micatechnologies.minecraft.rcmc.track.math.Vec3 mid =
+            front.position.add(rear.position).scale(0.5D);
+        com.micatechnologies.minecraft.rcmc.track.math.Vec3 up = front.up.add(rear.up);
+        if (up.lengthSquared() < 1.0e-9D) {
+            up = front.up;
+        }
+        return new TrackFrame(mid, chord, up);
+    }
+
     /** Frames of every car, front to back. */
     public List<TrackFrame> carFrames(TrackNetwork network) {
         List<TrackFrame> result = new ArrayList<>(spec.carCount());

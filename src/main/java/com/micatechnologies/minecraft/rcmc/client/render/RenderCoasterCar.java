@@ -172,10 +172,17 @@ public class RenderCoasterCar extends Render<EntityCoasterCar> {
         Tessellator tessellator = Tessellator.getInstance();
         BufferBuilder buffer = tessellator.getBuffer();
         buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_COLOR);
-        CarModel.emit(buffer, length, seatRows, couplingGap, drawCoupling,
-            colourOf(spec, TrainSpec.Part.BODY, 3),
-            colourOf(spec, TrainSpec.Part.TRIM, 4),
-            colourOf(spec, TrainSpec.Part.SEATS, 1));
+        if (spec != null && spec.carStyle() == TrainSpec.CarStyle.METRO) {
+            MetroCarModel.emit(buffer, length, drawCoupling,
+                colourOf(spec, TrainSpec.Part.BODY, 3),
+                colourOf(spec, TrainSpec.Part.TRIM, 4),
+                colourOf(spec, TrainSpec.Part.SEATS, 1));
+        } else {
+            CarModel.emit(buffer, length, seatRows, couplingGap, drawCoupling,
+                colourOf(spec, TrainSpec.Part.BODY, 3),
+                colourOf(spec, TrainSpec.Part.TRIM, 4),
+                colourOf(spec, TrainSpec.Part.SEATS, 1));
+        }
         tessellator.draw();
     }
 }

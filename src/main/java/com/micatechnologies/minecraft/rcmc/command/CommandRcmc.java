@@ -74,6 +74,9 @@ public class CommandRcmc extends CommandBase {
         if (args.length == 2 && "build".equalsIgnoreCase(args[0])) {
             return getListOfStringsMatchingLastWord(args, "bank", "circuit", "status", "cancel");
         }
+        if (args.length == 5 && "train".equalsIgnoreCase(args[0])) {
+            return getListOfStringsMatchingLastWord(args, "coaster", "metro", "metrocompact", "metrolong");
+        }
         return new ArrayList<>();
     }
 
@@ -228,6 +231,7 @@ public class CommandRcmc extends CommandBase {
         }
         int carCount = args.length > 2 ? parseInt(args[2], 1, 12) : 5;
         double speed = args.length > 3 ? parseDouble(args[3], 0.0D, 60.0D) : 0.0D;
+        String style = args.length > 4 ? args[4].toLowerCase(java.util.Locale.ROOT) : "coaster";
         // Start inside the station if there is one, so a train spawns where a ride would load it
         // rather than at whatever point the geometry happens to call distance zero.
         double startDistance = state.elements().elements().stream()
@@ -238,7 +242,24 @@ public class CommandRcmc extends CommandBase {
             .mapToDouble(e -> ((StationPlatform) e).stopDistance())
             .findFirst().orElse(0.0D);
 
-        TrainSpec spec = new TrainSpec(carCount, 3.0D, 0.5D, 4);
+        TrainSpec spec;
+        switch (style) {
+            case "metro":
+                spec = TrainSpec.metroTrain(carCount);
+                break;
+            case "metrocompact":
+                spec = TrainSpec.metroTrainCompact(carCount);
+                break;
+            case "metrolong":
+                spec = TrainSpec.metroTrainLong(carCount);
+                break;
+            case "coaster":
+                spec = new TrainSpec(carCount, 3.0D, 0.5D, 4);
+                break;
+            default:
+                throw new CommandException(
+                    "Unknown train style '" + style + "' — coaster, metro, metrocompact or metrolong");
+        }
         PhysicsIntegrator integrator = new PhysicsIntegrator(
             RcmcConfig.gravity, RcmcConfig.rollingResistance, RcmcConfig.airDrag, RcmcConfig.maxSpeed);
         Train train = new Train(spec, integrator, new TrackRef(sectionId, startDistance), speed);

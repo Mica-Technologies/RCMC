@@ -123,8 +123,16 @@ public class EntityCoasterCar extends Entity {
             return;
         }
 
-        this.frame = train.frameOfCar(network, index);
+        // The BODY frame, not the raw track-point frame: identical for coaster cars, and the
+        // two-bogie chord placement for long metro cars — see Train.bodyFrameOfCar.
+        this.frame = train.bodyFrameOfCar(network, index);
         setPosition(frame.position.x, frame.position.y, frame.position.z);
+
+        // Metro cars are much larger than the default coaster box; size the entity to match once
+        // the spec is known (idempotent — setSize is a no-op when unchanged).
+        if (train.spec().carStyle() == com.micatechnologies.minecraft.rcmc.physics.TrainSpec.CarStyle.METRO) {
+            setSize(3.0F, 2.75F);
+        }
 
         // Motion is reported rather than integrated: several vanilla systems (knockback, the
         // player-movement check, sound attenuation) read it, and leaving it at zero while the
@@ -169,13 +177,19 @@ public class EntityCoasterCar extends Entity {
     /**
      * Where a rider sits, relative to the track centreline.
      *
-     * <p>Matches the seat cushions in {@code CarModel}. The whole car body sits ABOVE the
-     * railheads — anything below them clips through the track — so the cushion is well clear of
-     * the centreline and a rider has to be raised to meet it. Change this whenever the model's
-     * floor height changes; the two are one measurement expressed in two places.</p>
+     * <p>Matches the seat cushions in {@code CarModel} — or, for metro stock, the bench tops in
+     * {@code MetroCarModel}, whose high floor puts riders a full block higher. Change these
+     * whenever the corresponding model's seat height changes; each pair is one measurement
+     * expressed in two places.</p>
      */
     @Override
     public double getMountedYOffset() {
+        RcmcWorldState state = RcmcWorldState.of(this.world);
+        Train train = state == null ? null : state.trains().train(trainId());
+        if (train != null && train.spec().carStyle()
+            == com.micatechnologies.minecraft.rcmc.physics.TrainSpec.CarStyle.METRO) {
+            return 1.35D;
+        }
         return 0.31D;
     }
 
