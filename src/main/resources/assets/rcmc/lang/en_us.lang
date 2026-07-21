@@ -8,3 +8,4 @@ key.rcmc.reset_adjustments=Reset Bank and Height
 item.rcmc.track_editor.name=Track Editor
 key.rcmc.cycle_colour=Cycle Track Colour
 key.rcmc.cycle_paint_part=Cycle Painted Part
+item.rcmc.piece_tool.name=Coaster Piece Builder

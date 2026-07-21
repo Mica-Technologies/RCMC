@@ -47,7 +47,14 @@ public final class BuildToolHud {
         }
         Minecraft mc = Minecraft.getMinecraft();
         EntityPlayer player = mc.player;
-        if (player == null || !holdingTool(player) || mc.gameSettings.showDebugInfo) {
+        if (player == null || mc.gameSettings.showDebugInfo) {
+            return;
+        }
+        if (holdingPieceTool(player)) {
+            drawPiecePanel(mc);
+            return;
+        }
+        if (!holdingTool(player)) {
             return;
         }
 
@@ -102,6 +109,49 @@ public final class BuildToolHud {
         draw(mc, lines, colors);
     }
 
+    /**
+     * The piece tool's panel: which prefab is selected, how big it is, and how far the chain has
+     * got.
+     *
+     * <p>The name comes from the element itself via {@code PiecePalette}, not from a table here.
+     * A HUD that maintained its own list of piece names would be one palette edit away from
+     * confidently labelling a corkscrew as a helix.</p>
+     */
+    private static void drawPiecePanel(Minecraft mc) {
+        List<String> lines = new ArrayList<>();
+        List<Integer> colors = new ArrayList<>();
+
+        lines.add("Piece Builder");
+        colors.add(HEADING);
+
+        lines.add("Piece: " + ClientPieceSession.selectedName());
+        colors.add(VALUE);
+
+        lines.add(ClientPieceSession.selectedParameterText());
+        colors.add(VALUE);
+
+        if (ClientPieceSession.isStarted()) {
+            lines.add("Chain: " + ClientPieceSession.pieceCount() + " piece(s), "
+                + ClientPieceSession.chain().size() + " nodes");
+            colors.add(VALUE);
+        }
+        else {
+            lines.add("Right-click a block to start a chain");
+            colors.add(SNAP);
+        }
+
+        lines.add("");
+        colors.add(HINT);
+        lines.add("G / Ctrl+scroll  choose piece");
+        colors.add(HINT);
+        lines.add("Shift+scroll  resize    R  undo piece");
+        colors.add(HINT);
+        lines.add("Right-click  add        RC air  finish");
+        colors.add(HINT);
+
+        draw(mc, lines, colors);
+    }
+
     private static void draw(Minecraft mc, List<String> lines, List<Integer> colors) {
         ScaledResolution resolution = new ScaledResolution(mc);
         int widest = 0;
@@ -124,6 +174,12 @@ public final class BuildToolHud {
             mc.fontRenderer.drawStringWithShadow(lines.get(i),
                 x + MARGIN, y + MARGIN + i * LINE_HEIGHT, colors.get(i));
         }
+    }
+
+    private static boolean holdingPieceTool(EntityPlayer player) {
+        return RcmcItems.pieceTool != null
+            && (player.getHeldItemMainhand().getItem() == RcmcItems.pieceTool
+                || player.getHeldItemOffhand().getItem() == RcmcItems.pieceTool);
     }
 
     private static boolean holdingTool(EntityPlayer player) {

@@ -32,7 +32,14 @@ public class PacketBuildAdjust implements IMessage {
         CYCLE_TYPE,
         ADJUST_HEIGHT,
         ADJUST_BANK,
-        RESET
+        RESET,
+        /** Piece tool: move the selection through the prefab palette. Value is the number of
+         *  entries to move, signed. */
+        CYCLE_PIECE,
+        /** Piece tool: resize the selected prefab. Value is the number of steps, signed. */
+        ADJUST_PIECE_PARAMETER,
+        /** Piece tool: take the last appended piece back off. */
+        UNDO_PIECE
     }
 
     private Action action;
@@ -82,6 +89,11 @@ public class PacketBuildAdjust implements IMessage {
             // contents a client controls, and a huge value should not walk a setting to its limit
             // in a single message.
             switch (message.action) {
+                case CYCLE_PIECE:
+                case ADJUST_PIECE_PARAMETER:
+                case UNDO_PIECE:
+                    applyToPieceSession(message, player);
+                    return;
                 case CYCLE_COLOUR:
                     com.micatechnologies.minecraft.rcmc.item.ItemTrackEditor
                         .cycleSelectedColour(player, player.world);
@@ -120,6 +132,41 @@ public class PacketBuildAdjust implements IMessage {
             }
 
             RcmcNetwork.sendTo(new PacketBuildSessionSync(session), player);
+        }
+
+        /**
+         * The piece tool's half of the adjustments.
+         *
+         * <p>Split out rather than folded into the switch above because it touches a different
+         * session type entirely — the two tools share this packet, not their state, and a method
+         * that reached into both would be one edit away from a cycle on one tool quietly resetting
+         * the other.</p>
+         */
+        private static void applyToPieceSession(PacketBuildAdjust message, EntityPlayerMP player) {
+            com.micatechnologies.minecraft.rcmc.builder.PieceBuildSession session =
+                com.micatechnologies.minecraft.rcmc.builder.PieceBuildSession.of(
+                    player.getUniqueID());
+            switch (message.action) {
+                case UNDO_PIECE:
+                    // Reports and syncs on its own, since it is the same action the sneak gesture
+                    // performs and has to say the same things.
+                    com.micatechnologies.minecraft.rcmc.item.ItemPieceTool.undo(player, session);
+                    return;
+                case CYCLE_PIECE:
+                    // One entry per message. A client controls this value, and a palette that could
+                    // be spun by a thousand entries in one packet is a pointless thing to allow.
+                    session.cycleSelected(message.value >= 0.0D ? 1 : -1);
+                    break;
+                case ADJUST_PIECE_PARAMETER:
+                default:
+                    session.adjustParameter((int) Math.max(-4.0D, Math.min(4.0D, message.value)));
+                    break;
+            }
+            player.sendStatusMessage(new TextComponentString(TextFormatting.AQUA
+                + session.selectedEntry().displayName(session.selectedParameter())
+                + " — " + session.selectedEntry().describeParameter(session.selectedParameter())),
+                true);
+            com.micatechnologies.minecraft.rcmc.item.ItemPieceTool.pushSession(player, session);
         }
     }
 }

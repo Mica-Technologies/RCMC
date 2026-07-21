@@ -51,10 +51,17 @@ public final class TrackPreviewRenderer {
     private static final float[] WARNING_COLOR = {1.0F, 0.72F, 0.20F};
     private static final float PREVIEW_ALPHA = 0.55F;
 
+    /** The piece a click would append, drawn distinctly from the chain it would join. */
+    private static final float[] PENDING_COLOR = {1.0F, 1.0F, 1.0F};
+
     @SubscribeEvent
     public void onRenderWorldLast(RenderWorldLastEvent event) {
         Minecraft mc = Minecraft.getMinecraft();
         EntityPlayer player = mc.player;
+        if (isHoldingPieceTool(player)) {
+            renderPieceChain(mc, event.getPartialTicks());
+            return;
+        }
         if (player == null || !isHoldingTrackTool(player)) {
             return;
         }
@@ -121,6 +128,99 @@ public final class TrackPreviewRenderer {
         GlStateManager.enableLighting();
         GlStateManager.enableTexture2D();
         GlStateManager.popMatrix();
+    }
+
+    /**
+     * Draws the prefab chain, with the piece the next click would append picked out in white.
+     *
+     * <p>Both node lists come from the server, so this cannot show a piece that would land
+     * somewhere else — see {@code PacketPieceSessionSync}. The mesh is built over the chain and the
+     * pending piece together rather than as two separate sections, because a Catmull-Rom spline
+     * takes its tangents from its neighbours: previewing the pending piece in isolation would draw
+     * a curve subtly different from the one the commit produces, at exactly the join a builder is
+     * looking at.</p>
+     */
+    private static void renderPieceChain(Minecraft mc, float partialTicks) {
+        List<TrackNode> chain = ClientPieceSession.chain();
+        List<TrackNode> pending = ClientPieceSession.preview();
+        if (chain.isEmpty()) {
+            return;
+        }
+        List<TrackNode> combined = new ArrayList<>(chain);
+        combined.addAll(pending);
+
+        TrackSection preview = null;
+        if (combined.size() >= 2) {
+            try {
+                preview = new TrackSection(PREVIEW_SECTION_ID, combined, false, null);
+            }
+            catch (IllegalArgumentException e) {
+                preview = null;
+            }
+        }
+
+        double camX = interpolate(mc.getRenderViewEntity().prevPosX,
+            mc.getRenderViewEntity().posX, partialTicks);
+        double camY = interpolate(mc.getRenderViewEntity().prevPosY,
+            mc.getRenderViewEntity().posY, partialTicks);
+        double camZ = interpolate(mc.getRenderViewEntity().prevPosZ,
+            mc.getRenderViewEntity().posZ, partialTicks);
+
+        GlStateManager.pushMatrix();
+        GlStateManager.disableTexture2D();
+        GlStateManager.disableLighting();
+        GlStateManager.enableBlend();
+        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        GlStateManager.disableCull();
+        GlStateManager.disableDepth();
+
+        if (preview != null) {
+            drawMesh(preview, camX, camY, camZ, VALID_COLOR);
+        }
+        drawPieceMarkers(chain, pending, camX, camY, camZ);
+
+        GlStateManager.enableDepth();
+        GlStateManager.enableCull();
+        GlStateManager.disableBlend();
+        GlStateManager.enableLighting();
+        GlStateManager.enableTexture2D();
+        GlStateManager.popMatrix();
+    }
+
+    /** Chain nodes small and in the preview colour; the pending piece's nodes larger and white, so
+     *  what one more click adds is readable at a glance. */
+    private static void drawPieceMarkers(List<TrackNode> chain, List<TrackNode> pending,
+                                         double camX, double camY, double camZ) {
+        Tessellator tessellator = Tessellator.getInstance();
+        BufferBuilder buffer = tessellator.getBuffer();
+        buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_COLOR);
+        for (TrackNode node : chain) {
+            Vec3 p = node.position();
+            cube(buffer, p.x - camX, p.y - camY, p.z - camZ, 0.11D, VALID_COLOR);
+        }
+        for (TrackNode node : pending) {
+            Vec3 p = node.position();
+            cube(buffer, p.x - camX, p.y - camY, p.z - camZ, 0.16D, PENDING_COLOR);
+        }
+        tessellator.draw();
+    }
+
+    /** Track mesh for a provisional section, with no supports and no validator tinting. */
+    private static void drawMesh(TrackSection section, double camX, double camY, double camZ,
+                                 float[] tint) {
+        TrackMesh mesh = TrackMeshBuilder.build(section,
+            java.util.Collections.<com.micatechnologies.minecraft.rcmc.track.ElementSpan>emptyList(),
+            java.util.Collections.<double[]>emptyList());
+        Tessellator tessellator = Tessellator.getInstance();
+        BufferBuilder buffer = tessellator.getBuffer();
+        buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_COLOR);
+        for (MeshQuad quad : mesh.quads) {
+            vertex(buffer, quad.a, camX, camY, camZ, tint);
+            vertex(buffer, quad.b, camX, camY, camZ, tint);
+            vertex(buffer, quad.c, camX, camY, camZ, tint);
+            vertex(buffer, quad.d, camX, camY, camZ, tint);
+        }
+        tessellator.draw();
     }
 
     /**
@@ -213,6 +313,12 @@ public final class TrackPreviewRenderer {
         buffer.pos(x2, y2, z2).color(c[0], c[1], c[2], 0.85F).endVertex();
         buffer.pos(x3, y3, z3).color(c[0], c[1], c[2], 0.85F).endVertex();
         buffer.pos(x4, y4, z4).color(c[0], c[1], c[2], 0.85F).endVertex();
+    }
+
+    private static boolean isHoldingPieceTool(EntityPlayer player) {
+        return player != null && RcmcItems.pieceTool != null
+            && (player.getHeldItemMainhand().getItem() == RcmcItems.pieceTool
+                || player.getHeldItemOffhand().getItem() == RcmcItems.pieceTool);
     }
 
     private static boolean isHoldingTrackTool(EntityPlayer player) {

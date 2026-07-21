@@ -94,6 +94,22 @@ public final class BuildToolInput {
                 new PacketBuildAdjust(PacketBuildAdjust.Action.CYCLE_SELECTED_TYPE, 0.0D));
             return;
         }
+        // G means "change what the next click lays down" for the piece tool too; there the thing
+        // being changed is which prefab, not which segment type.
+        if (holdingPieceTool(player)) {
+            if (cycle) {
+                RcmcNetwork.sendToServer(
+                    new PacketBuildAdjust(PacketBuildAdjust.Action.CYCLE_PIECE, 1.0D));
+            }
+            if (reset) {
+                // R undoes a piece rather than resetting adjustments, because the piece tool's
+                // sneak+right-click-air undo does not reach a player who is flying — the sneak
+                // FLAG stays false while flying, and building is done flying.
+                RcmcNetwork.sendToServer(
+                    new PacketBuildAdjust(PacketBuildAdjust.Action.UNDO_PIECE, 0.0D));
+            }
+            return;
+        }
         if (!holdingTool(player)) {
             return;
         }
@@ -113,13 +129,24 @@ public final class BuildToolInput {
         }
         Minecraft mc = Minecraft.getMinecraft();
         EntityPlayer player = mc.player;
-        if (player == null || !holdingTool(player)) {
+        if (player == null || !(holdingTool(player) || holdingPieceTool(player))) {
             return;
         }
         boolean sneak = sneakKeyHeld(mc);
         boolean control = Keyboard.isKeyDown(Keyboard.KEY_LCONTROL)
             || Keyboard.isKeyDown(Keyboard.KEY_RCONTROL);
         if (!sneak && !control) {
+            return;
+        }
+        if (holdingPieceTool(player)) {
+            // Same two modifiers, same meanings one level up: shift changes the piece's size the
+            // way it changes the freeform tool's height, ctrl changes which piece the way it
+            // changes bank — the modal setting in each case.
+            event.setCanceled(true);
+            double direction = Math.signum(event.getDwheel());
+            RcmcNetwork.sendToServer(new PacketBuildAdjust(
+                control ? PacketBuildAdjust.Action.CYCLE_PIECE
+                    : PacketBuildAdjust.Action.ADJUST_PIECE_PARAMETER, direction));
             return;
         }
         // Cancelled so the hotbar does not also change — scrolling off the tool mid-adjustment
@@ -154,6 +181,12 @@ public final class BuildToolInput {
         return player != null && RcmcItems.trackEditor != null
             && (player.getHeldItemMainhand().getItem() == RcmcItems.trackEditor
                 || player.getHeldItemOffhand().getItem() == RcmcItems.trackEditor);
+    }
+
+    static boolean holdingPieceTool(EntityPlayer player) {
+        return player != null && RcmcItems.pieceTool != null
+            && (player.getHeldItemMainhand().getItem() == RcmcItems.pieceTool
+                || player.getHeldItemOffhand().getItem() == RcmcItems.pieceTool);
     }
 
     private static boolean holdingTool(EntityPlayer player) {
