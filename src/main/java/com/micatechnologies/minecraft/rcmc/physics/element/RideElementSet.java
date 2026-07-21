@@ -43,6 +43,24 @@ public final class RideElementSet implements TrainManager.ExternalAcceleration {
         return elements.remove(element);
     }
 
+    /**
+     * Removes every element anchored to {@code sectionId}, returning how many went.
+     *
+     * <p>Needed whenever a section is deleted. An element addresses track as
+     * {@code (sectionId, distance)}, so one left behind points at track that no longer exists — and
+     * if the id is later reallocated it would silently reattach to a different coaster.</p>
+     */
+    public int removeForSection(int sectionId) {
+        int before = elements.size();
+        java.util.Iterator<RideElement> it = elements.iterator();
+        while (it.hasNext()) {
+            if (it.next().sectionId() == sectionId) {
+                it.remove();
+            }
+        }
+        return before - elements.size();
+    }
+
     /** The first element (in insertion order) whose span contains {@code ref}, or {@code null}. */
     public RideElement find(TrackRef ref) {
         for (RideElement element : elements) {

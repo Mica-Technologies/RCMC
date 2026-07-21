@@ -194,7 +194,8 @@ public final class TrackRenderer {
         java.util.List<double[]> points = new java.util.ArrayList<>();
         for (com.micatechnologies.minecraft.rcmc.world.TrackSupports.Column column
             : com.micatechnologies.minecraft.rcmc.world.TrackSupports.columnsFor(section, world)) {
-            points.add(new double[] { column.x, column.z, column.bottomY, column.topY });
+            points.add(new double[] { column.x, column.z, column.bottomY, column.topY, column.attachX,
+                column.attachZ });
         }
         return points;
     }

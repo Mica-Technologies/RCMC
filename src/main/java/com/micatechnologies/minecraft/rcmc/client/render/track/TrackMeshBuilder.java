@@ -237,15 +237,57 @@ public final class TrackMeshBuilder {
         if (supports == null || supports.isEmpty()) {
             return;
         }
-        // Each entry is {x, z, bottomY, topY}, computed by TrackSupports so the rendered column and
-        // the collision box are the same object described once. They used to be computed here from
-        // a distance and a ground height, which meant the geometry existed only on the client —
-        // fine while supports were decorative, impossible once they had to be solid.
+        // Each entry is {x, z, bottomY, topY, attachX, attachZ}, computed by TrackSupports so the
+        // rendered column and the collision box are the same object described once. They used to be
+        // computed here from a distance and a ground height, which meant the geometry existed only
+        // on the client — fine while supports were decorative, impossible once they had to be solid.
+        float[] colour =
+            colourOf(section, com.micatechnologies.minecraft.rcmc.track.TrackPalette.Part.SUPPORT);
         for (double[] column : supports) {
-            buildColumn(column[0], column[1], column[2], column[3],
-                colourOf(section, com.micatechnologies.minecraft.rcmc.track.TrackPalette.Part.SUPPORT),
-                quads);
+            buildColumn(column[0], column[1], column[2], column[3], colour, quads);
+            // Banked and inverted track is met by a column standing beside it, so the arm is what
+            // actually reaches the rails. Without it the support stops short and reads as floating.
+            if (column.length >= 6
+                && Math.hypot(column[4] - column[0], column[5] - column[1]) > 1.0e-3D) {
+                buildArm(column[0], column[3], column[1], column[4], column[5], colour, quads);
+            }
         }
+    }
+
+    /**
+     * A square beam at height {@code y} running horizontally from the column to the track.
+     *
+     * <p>Drawn as a box rather than two quads because it is seen from every side once the track it
+     * holds is upside down — the same lesson the chain lift taught, where coplanar quads at
+     * identical coordinates shimmered against each other.</p>
+     */
+    private static void buildArm(double fromX, double y, double fromZ, double toX, double toZ,
+                                 float[] supportColour, List<MeshQuad> quads) {
+        double h = SUPPORT_HALF_WIDTH;
+        double minX = Math.min(fromX, toX) - h;
+        double maxX = Math.max(fromX, toX) + h;
+        double minZ = Math.min(fromZ, toZ) - h;
+        double maxZ = Math.max(fromZ, toZ) + h;
+        double minY = y - h;
+        double maxY = y + h;
+
+        float r = supportColour[0];
+        float g = supportColour[1];
+        float b = supportColour[2];
+        Vec3 a1 = new Vec3(minX, minY, minZ);
+        Vec3 b1 = new Vec3(maxX, minY, minZ);
+        Vec3 c1 = new Vec3(maxX, minY, maxZ);
+        Vec3 d1 = new Vec3(minX, minY, maxZ);
+        Vec3 a2 = new Vec3(minX, maxY, minZ);
+        Vec3 b2 = new Vec3(maxX, maxY, minZ);
+        Vec3 c2 = new Vec3(maxX, maxY, maxZ);
+        Vec3 d2 = new Vec3(minX, maxY, maxZ);
+        quads.add(new MeshQuad(a1, a2, b2, b1, r, g, b));
+        quads.add(new MeshQuad(b1, b2, c2, c1, r, g, b));
+        quads.add(new MeshQuad(c1, c2, d2, d1, r, g, b));
+        quads.add(new MeshQuad(d1, d2, a2, a1, r, g, b));
+        quads.add(new MeshQuad(d2, c2, b2, a2, r, g, b));
+        quads.add(new MeshQuad(a1, b1, c1, d1, r, g, b));
     }
 
     /** A square column between two heights at a fixed x/z. */

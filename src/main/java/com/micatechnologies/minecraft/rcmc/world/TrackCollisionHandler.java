@@ -53,6 +53,13 @@ public final class TrackCollisionHandler {
                 if (bounds.intersects(query)) {
                     event.getCollisionBoxesList().add(bounds);
                 }
+                // The arm reaching in to banked or inverted track is structure a player can stand
+                // on, same as the column. Omitting it would leave a walkable-looking beam that is
+                // not there.
+                AxisAlignedBB arm = column.armBounds();
+                if (arm != null && arm.intersects(query)) {
+                    event.getCollisionBoxesList().add(arm);
+                }
             }
         }
     }

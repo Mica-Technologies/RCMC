@@ -250,7 +250,8 @@ public final class TrackPreviewRenderer {
         for (com.micatechnologies.minecraft.rcmc.world.TrackSupports.Column column
             : com.micatechnologies.minecraft.rcmc.world.TrackSupports.computeUncached(
                 preview, net.minecraft.client.Minecraft.getMinecraft().world)) {
-            columns.add(new double[] { column.x, column.z, column.bottomY, column.topY });
+            columns.add(new double[] { column.x, column.z, column.bottomY, column.topY, column.attachX,
+                column.attachZ });
         }
         TrackMesh mesh = TrackMeshBuilder.build(preview,
             java.util.Collections.<com.micatechnologies.minecraft.rcmc.track.ElementSpan>emptyList(),

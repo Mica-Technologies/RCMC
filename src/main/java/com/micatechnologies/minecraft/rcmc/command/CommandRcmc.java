@@ -56,7 +56,7 @@ public class CommandRcmc extends CommandBase {
 
     @Override
     public String getUsage(ICommandSender sender) {
-        return "/rcmc <demo|train|clear|info|build|paint|rate|block>";
+        return "/rcmc <demo|train|clear|info|build|paint|rate|block|rmsection>";
     }
 
     @Override
@@ -69,7 +69,7 @@ public class CommandRcmc extends CommandBase {
                                           String[] args, BlockPos targetPos) {
         if (args.length == 1) {
             return getListOfStringsMatchingLastWord(args, "demo", "train", "clear", "info", "build",
-                "paint", "rate", "block");
+                "paint", "rate", "block", "rmsection");
         }
         if (args.length == 2 && "build".equalsIgnoreCase(args[0])) {
             return getListOfStringsMatchingLastWord(args, "bank", "circuit", "status", "cancel");
@@ -112,6 +112,9 @@ public class CommandRcmc extends CommandBase {
                 break;
             case "block":
                 block(sender, state, args);
+                break;
+            case "rmsection":
+                removeSection(sender, world, state, args);
                 break;
             default:
                 throw new CommandException(getUsage(sender));
@@ -459,6 +462,68 @@ public class CommandRcmc extends CommandBase {
         if (!stats.completedWithoutFault()) {
             reply(sender, TextFormatting.YELLOW, "  Train did not complete the circuit: "
                 + stats.finalStatus + " — the ratings above describe an incomplete run.");
+        }
+    }
+
+
+    /**
+     * {@code /rcmc rmsection <sectionId>} — deletes one section and everything anchored to it.
+     *
+     * <p>{@code /rcmc clear} wipes the whole world's track, which is far too blunt once a park has
+     * more than one coaster in it. Every other subcommand already works on a section id, so being
+     * unable to delete by one was a gap rather than a decision.</p>
+     *
+     * <p>Ride hardware and trains on the section go with it. Leaving either behind would strand
+     * them: an element addresses track by {@code (sectionId, distance)} and a train sits at a
+     * {@link TrackRef}, so both would point at a section that no longer exists — which is exactly
+     * the state that crashed a client when {@code /rcmc clear} first shipped without removing
+     * trains.</p>
+     */
+    private void removeSection(ICommandSender sender, World world, RcmcWorldState state,
+                               String[] args) throws CommandException {
+        if (args.length < 2) {
+            throw new CommandException("/rcmc rmsection <sectionId>");
+        }
+        int sectionId = parseInt(args[1]);
+        TrackSection section = state.network().section(sectionId);
+        if (section == null) {
+            throw new CommandException("No section #" + sectionId + " — try /rcmc info");
+        }
+
+        // Trains first, and each one told to the clients explicitly. A client that keeps a train
+        // whose section has gone will try to advance it and throw every tick.
+        int dimension = world.provider.getDimension();
+        List<Integer> doomed = new ArrayList<>();
+        for (java.util.Map.Entry<Integer, Train> entry : state.trains().asMap().entrySet()) {
+            Train train = entry.getValue();
+            if (train.reference() != null && train.reference().sectionId() == sectionId) {
+                doomed.add(entry.getKey());
+            }
+        }
+        for (Integer trainId : doomed) {
+            state.trains().remove(trainId);
+            RcmcNetwork.sendToAllIn(new PacketTrainRemove(trainId), dimension);
+        }
+        for (EntityCoasterCar car : world.getEntities(EntityCoasterCar.class, car -> true)) {
+            if (doomed.contains(car.trainId())) {
+                car.setDead();
+            }
+        }
+
+        int removedElements = state.elements().removeForSection(sectionId);
+        state.blocks().remove(sectionId);
+        state.network().removeSection(sectionId);
+        state.markTrackDirty(world);
+
+        RcmcNetwork.sendToAllIn(new PacketTrackSync(state.network()), dimension);
+        RcmcNetwork.sendToAllIn(new PacketElementSync(state.elements()), dimension);
+
+        reply(sender, TextFormatting.GREEN, "Removed section #" + sectionId + " — "
+            + String.format("%.1f", section.totalLength()) + " blocks, "
+            + section.nodes().size() + " nodes.");
+        if (!doomed.isEmpty() || removedElements > 0) {
+            reply(sender, TextFormatting.GRAY, "  Also removed " + doomed.size() + " train(s) and "
+                + removedElements + " ride element(s) that were anchored to it.");
         }
     }
 
