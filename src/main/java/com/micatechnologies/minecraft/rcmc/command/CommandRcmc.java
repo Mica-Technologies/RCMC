@@ -17,6 +17,9 @@ import com.micatechnologies.minecraft.rcmc.physics.element.StationPlatform;
 import com.micatechnologies.minecraft.rcmc.RcmcConfig;
 import com.micatechnologies.minecraft.rcmc.physics.Train;
 import com.micatechnologies.minecraft.rcmc.physics.TrainSpec;
+import com.micatechnologies.minecraft.rcmc.rating.RideRater;
+import com.micatechnologies.minecraft.rcmc.rating.RideRating;
+import com.micatechnologies.minecraft.rcmc.rating.RideStatistics;
 import com.micatechnologies.minecraft.rcmc.track.TrackRef;
 import com.micatechnologies.minecraft.rcmc.track.TrackSection;
 import com.micatechnologies.minecraft.rcmc.track.math.TrackFrame;
@@ -51,7 +54,7 @@ public class CommandRcmc extends CommandBase {
 
     @Override
     public String getUsage(ICommandSender sender) {
-        return "/rcmc <demo|train|clear|info|build|paint>";
+        return "/rcmc <demo|train|clear|info|build|paint|rate>";
     }
 
     @Override
@@ -64,7 +67,7 @@ public class CommandRcmc extends CommandBase {
                                           String[] args, BlockPos targetPos) {
         if (args.length == 1) {
             return getListOfStringsMatchingLastWord(args, "demo", "train", "clear", "info", "build",
-                "paint");
+                "paint", "rate");
         }
         if (args.length == 2 && "build".equalsIgnoreCase(args[0])) {
             return getListOfStringsMatchingLastWord(args, "bank", "circuit", "status", "cancel");
@@ -101,6 +104,9 @@ public class CommandRcmc extends CommandBase {
                 break;
             case "paint":
                 paint(sender, world, state, args);
+                break;
+            case "rate":
+                rate(sender, state, args);
                 break;
             default:
                 throw new CommandException(getUsage(sender));
@@ -367,6 +373,86 @@ public class CommandRcmc extends CommandBase {
                 + String.format("%.2f", train.velocity()) + " blocks/s, "
                 + train.status() + " @ " + train.reference());
         }
+    }
+
+    /**
+     * {@code /rcmc rate [sectionId]} — simulates a train round the section and reports its ratings.
+     *
+     * <p>This runs the ride, it does not inspect it. {@link RideRater} steps the same
+     * {@link PhysicsIntegrator} over the same geometry the live train uses, so the numbers describe
+     * what a rider would actually experience rather than what the layout looks like it should do.
+     * That also makes it a genuinely useful diagnostic: a coaster that stalls, or one whose lift
+     * never engages, shows up here as a fault rather than as a plausible-looking rating.</p>
+     *
+     * <p>Simulation is entirely offline — no entity is spawned and no state is touched — so it is
+     * safe to run on a circuit that already has a train on it.</p>
+     */
+    private void rate(ICommandSender sender, RcmcWorldState state, String[] args)
+        throws CommandException {
+        TrackSection section;
+        if (args.length > 1) {
+            int id = parseInt(args[1]);
+            section = state.network().section(id);
+            if (section == null) {
+                throw new CommandException("No section #" + id + " — try /rcmc info");
+            }
+        }
+        else {
+            // Rating with no argument should do the obvious thing on a park with one coaster in it.
+            if (state.network().sectionCount() != 1) {
+                throw new CommandException("Specify a section: /rcmc rate <sectionId>");
+            }
+            section = state.network().sections().iterator().next();
+        }
+
+        RideRater rater = RideRater.standard(
+            new PhysicsIntegrator(RcmcConfig.gravity, RcmcConfig.rollingResistance,
+                RcmcConfig.airDrag, RcmcConfig.maxSpeed),
+            RcmcConfig.gravity);
+        // Simulate once and derive the rating from that, rather than calling rate() — the run is
+        // what is expensive, and the statistics are wanted here in their own right.
+        RideStatistics stats = rater.simulate(state.network(), state.elements(),
+            new TrackRef(section.id(), 0.0D), TrainSpec.singleCar(), 0.0D);
+        RideRating rating = RideRating.from(stats);
+
+        reply(sender, TextFormatting.GOLD, "Ride rating — section #" + section.id());
+        reply(sender, TextFormatting.WHITE, "  Excitement " + score(rating.excitement)
+            + "  (" + rating.excitementVerdict + ")");
+        reply(sender, TextFormatting.WHITE, "  Intensity  " + score(rating.intensity)
+            + "  (" + rating.intensityVerdict + ")");
+        reply(sender, TextFormatting.WHITE, "  Nausea     " + score(rating.nausea)
+            + "  (" + rating.nauseaVerdict + ")");
+        reply(sender, TextFormatting.GRAY, "  " + String.format("%.1f", stats.totalLengthBlocks)
+            + " blocks, " + String.format("%.1f", stats.rideDurationSeconds) + "s, top speed "
+            + String.format("%.1f", stats.maxSpeedBlocksPerSecond) + " blocks/s, drop "
+            + String.format("%.1f", stats.maxDropHeightBlocks) + " blocks");
+        reply(sender, TextFormatting.GRAY, "  G: vert +"
+            + String.format("%.2f", stats.peakPositiveVerticalG) + " / "
+            + String.format("%.2f", stats.peakNegativeVerticalG) + ", lat "
+            + String.format("%.2f", stats.peakLateralG) + ", airtime "
+            + String.format("%.1f", stats.totalAirtimeSeconds) + "s, "
+            + stats.inversionCount + " inversions");
+
+        // The safety verdict is the part a builder most needs to see, so it is not folded into the
+        // numbers above: a ride can rate well and still be one that throws its riders out.
+        if (rating.safety.safe) {
+            reply(sender, TextFormatting.GREEN, "  Safety: passed");
+        }
+        else {
+            reply(sender, TextFormatting.RED, "  Safety: FAILED");
+            for (String violation : rating.safety.violations) {
+                reply(sender, TextFormatting.RED, "    - " + violation);
+            }
+        }
+        if (!stats.completedWithoutFault()) {
+            reply(sender, TextFormatting.YELLOW, "  Train did not complete the circuit: "
+                + stats.finalStatus + " — the ratings above describe an incomplete run.");
+        }
+    }
+
+    /** Ratings read as RCT-style two-decimal scores rather than raw doubles. */
+    private static String score(double value) {
+        return String.format("%.2f", value);
     }
 
     private static void reply(ICommandSender sender, TextFormatting colour, String message) {
