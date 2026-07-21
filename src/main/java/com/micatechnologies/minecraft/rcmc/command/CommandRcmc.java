@@ -56,7 +56,7 @@ public class CommandRcmc extends CommandBase {
 
     @Override
     public String getUsage(ICommandSender sender) {
-        return "/rcmc <demo|train|clear|info|build|paint|rate|block|rmsection>";
+        return "/rcmc <demo|train|clear|info|build|paint|rate|block|station|line|rmsection>";
     }
 
     @Override
@@ -69,7 +69,13 @@ public class CommandRcmc extends CommandBase {
                                           String[] args, BlockPos targetPos) {
         if (args.length == 1) {
             return getListOfStringsMatchingLastWord(args, "demo", "train", "clear", "info", "build",
-                "paint", "rate", "block", "rmsection");
+                "paint", "rate", "block", "station", "line", "rmsection");
+        }
+        if (args.length == 2 && "line".equalsIgnoreCase(args[0])) {
+            return getListOfStringsMatchingLastWord(args, "create", "list", "remove", "start", "stop");
+        }
+        if (args.length == 2 && "station".equalsIgnoreCase(args[0])) {
+            return getListOfStringsMatchingLastWord(args, "list", "remove");
         }
         if (args.length == 2 && "build".equalsIgnoreCase(args[0])) {
             return getListOfStringsMatchingLastWord(args, "bank", "circuit", "status", "cancel");
@@ -115,6 +121,12 @@ public class CommandRcmc extends CommandBase {
                 break;
             case "block":
                 block(sender, state, args);
+                break;
+            case "station":
+                station(sender, world, state, args);
+                break;
+            case "line":
+                line(sender, world, state, args);
                 break;
             case "rmsection":
                 removeSection(sender, world, state, args);
@@ -280,6 +292,185 @@ public class CommandRcmc extends CommandBase {
 
         reply(sender, TextFormatting.GREEN, "Spawned train #" + trainId + " — " + carCount
             + " cars on section " + sectionId + " at " + speed + " blocks/s.");
+    }
+
+    /**
+     * {@code /rcmc station <name>} — creates (or moves) a named transit station at the track
+     * point nearest the player. Also {@code list} and {@code remove <name>}.
+     */
+    private void station(ICommandSender sender, World world, RcmcWorldState state, String[] args)
+        throws CommandException {
+        if (args.length < 2) {
+            throw new CommandException("/rcmc station <name> | list | remove <name>");
+        }
+        com.micatechnologies.minecraft.rcmc.physics.transit.TransitSystem transit = state.transit();
+        switch (args[1].toLowerCase(java.util.Locale.ROOT)) {
+            case "list": {
+                if (transit.stations().isEmpty()) {
+                    reply(sender, TextFormatting.YELLOW, "No stations yet.");
+                    return;
+                }
+                for (com.micatechnologies.minecraft.rcmc.physics.transit.TransitStation s
+                    : transit.stations()) {
+                    reply(sender, TextFormatting.AQUA, s.name() + " — section "
+                        + s.stopPoint().sectionId() + " @ " + fmt(s.stopPoint().distance()));
+                }
+                return;
+            }
+            case "remove": {
+                if (args.length < 3) {
+                    throw new CommandException("/rcmc station remove <name>");
+                }
+                if (transit.removeStation(args[2]) == null) {
+                    throw new CommandException("No station named " + args[2]);
+                }
+                state.markTrackDirty(world);
+                reply(sender, TextFormatting.GREEN, "Removed station " + args[2] + ".");
+                return;
+            }
+            default: {
+                EntityPlayer player = getCommandSenderAsPlayer(sender);
+                com.micatechnologies.minecraft.rcmc.track.TrackPicker.Hit hit =
+                    com.micatechnologies.minecraft.rcmc.track.TrackPicker.pick(state.network(),
+                        new Vec3(player.posX, player.posY, player.posZ), 16.0D);
+                if (hit == null) {
+                    throw new CommandException("No track within 16 blocks — stand at the platform");
+                }
+                transit.addStation(new com.micatechnologies.minecraft.rcmc.physics.transit
+                    .TransitStation(args[1], hit.ref));
+                state.markTrackDirty(world);
+                reply(sender, TextFormatting.GREEN, "Station " + args[1] + " at section "
+                    + hit.ref.sectionId() + " @ " + fmt(hit.ref.distance())
+                    + " (trains stop with their lead car here).");
+            }
+        }
+    }
+
+    /** Default metro drive used by {@code /rcmc line start} until per-stock configs exist. */
+    private static com.micatechnologies.minecraft.rcmc.physics.transit.TransitStopController
+        metroController(double cruiseSpeed) {
+        com.micatechnologies.minecraft.rcmc.physics.transit.TrainDriver driver =
+            new com.micatechnologies.minecraft.rcmc.physics.transit.TrainDriver(
+                new com.micatechnologies.minecraft.rcmc.physics.transit.TractionProfile(
+                    1.2D, 24.0D, 22.0D),
+                1.2D, 2.0D, 1.5D, RcmcConstants.SECONDS_PER_TICK);
+        return new com.micatechnologies.minecraft.rcmc.physics.transit.TransitStopController(
+            driver, cruiseSpeed, 0.75D, 30, 100, 30);
+    }
+
+    /**
+     * {@code /rcmc line …} — create lines from stations, and enter/withdraw trains from
+     * service. See each branch for syntax.
+     */
+    private void line(ICommandSender sender, World world, RcmcWorldState state, String[] args)
+        throws CommandException {
+        if (args.length < 2) {
+            throw new CommandException(
+                "/rcmc line create <name> <loop|shuttle> <stationA> <stationB> [...] | list"
+                    + " | remove <name> | start <name> <trainId> [cruiseSpeed] | stop <trainId>");
+        }
+        com.micatechnologies.minecraft.rcmc.physics.transit.TransitSystem transit = state.transit();
+        switch (args[1].toLowerCase(java.util.Locale.ROOT)) {
+            case "create": {
+                if (args.length < 6) {
+                    throw new CommandException(
+                        "/rcmc line create <name> <loop|shuttle> <stationA> <stationB> [...]");
+                }
+                boolean loop;
+                if ("loop".equalsIgnoreCase(args[3])) {
+                    loop = true;
+                } else if ("shuttle".equalsIgnoreCase(args[3])) {
+                    loop = false;
+                } else {
+                    throw new CommandException("Line kind must be loop or shuttle, got " + args[3]);
+                }
+                java.util.List<com.micatechnologies.minecraft.rcmc.physics.transit.TransitStation>
+                    stops = new ArrayList<>();
+                for (int i = 4; i < args.length; i++) {
+                    com.micatechnologies.minecraft.rcmc.physics.transit.TransitStation s =
+                        transit.station(args[i]);
+                    if (s == null) {
+                        throw new CommandException("No station named " + args[i]
+                            + " — create it first with /rcmc station " + args[i]);
+                    }
+                    stops.add(s);
+                }
+                transit.addLine(new com.micatechnologies.minecraft.rcmc.physics.transit
+                    .TransitLine(args[2], stops, loop));
+                state.markTrackDirty(world);
+                reply(sender, TextFormatting.GREEN, "Line " + args[2] + " created — "
+                    + stops.size() + " stops, " + (loop ? "loop" : "shuttle") + ".");
+                return;
+            }
+            case "list": {
+                if (transit.lines().isEmpty()) {
+                    reply(sender, TextFormatting.YELLOW, "No lines yet.");
+                    return;
+                }
+                for (com.micatechnologies.minecraft.rcmc.physics.transit.TransitLine l
+                    : transit.lines()) {
+                    StringBuilder stops = new StringBuilder();
+                    for (com.micatechnologies.minecraft.rcmc.physics.transit.TransitStation s
+                        : l.stations()) {
+                        if (stops.length() > 0) {
+                            stops.append(" → ");
+                        }
+                        stops.append(s.name());
+                    }
+                    reply(sender, TextFormatting.AQUA, l.name() + " ("
+                        + (l.isLoop() ? "loop" : "shuttle") + "): " + stops);
+                }
+                return;
+            }
+            case "remove": {
+                if (args.length < 3) {
+                    throw new CommandException("/rcmc line remove <name>");
+                }
+                if (transit.removeLine(args[2]) == null) {
+                    throw new CommandException("No line named " + args[2]);
+                }
+                state.markTrackDirty(world);
+                reply(sender, TextFormatting.GREEN, "Removed line " + args[2] + ".");
+                return;
+            }
+            case "start": {
+                if (args.length < 4) {
+                    throw new CommandException("/rcmc line start <name> <trainId> [cruiseSpeed]");
+                }
+                int trainId = parseInt(args[3]);
+                Train train = state.trains().train(trainId);
+                if (train == null) {
+                    throw new CommandException("No train with id " + trainId);
+                }
+                double cruise = args.length > 4 ? parseDouble(args[4], 1.0D, 40.0D) : 15.0D;
+                try {
+                    com.micatechnologies.minecraft.rcmc.physics.transit.LineService service =
+                        transit.enterService(trainId, train, state.network(), args[2],
+                            metroController(cruise));
+                    reply(sender, TextFormatting.GREEN, "Train #" + trainId + " in service on "
+                        + service.line().name() + ", first stop "
+                        + service.line().station(service.currentStopIndex()).name()
+                        + " at " + fmt(cruise) + " blocks/s.");
+                }
+                catch (IllegalArgumentException e) {
+                    throw new CommandException(e.getMessage());
+                }
+                return;
+            }
+            case "stop": {
+                if (args.length < 3) {
+                    throw new CommandException("/rcmc line stop <trainId>");
+                }
+                int trainId = parseInt(args[2]);
+                if (transit.exitService(trainId) == null) {
+                    throw new CommandException("Train " + trainId + " is not in service");
+                }
+                reply(sender, TextFormatting.GREEN, "Train #" + trainId + " withdrawn from service.");
+                return;
+            }
+            default:
+                throw new CommandException("Unknown line subcommand " + args[1]);
+        }
     }
 
     /**

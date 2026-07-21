@@ -234,6 +234,12 @@ public class EntityCoasterCar extends Entity {
         if (this.isBeingRidden()) {
             return false;
         }
+        // A train in metro service boards through its doors: riders may only mount while the
+        // service has them open at a platform. Trains not in service board as always.
+        RcmcWorldState state = RcmcWorldState.of(this.world);
+        if (state != null && !state.transit().mayBoard(trainId())) {
+            return false;
+        }
         player.startRiding(this);
         return true;
     }

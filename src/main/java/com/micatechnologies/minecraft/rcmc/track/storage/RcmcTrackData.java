@@ -42,6 +42,13 @@ public class RcmcTrackData extends WorldSavedData {
     private com.micatechnologies.minecraft.rcmc.physics.element.RideElementSet elements =
         new com.micatechnologies.minecraft.rcmc.physics.element.RideElementSet();
 
+    /**
+     * Authored transit (stations, lines) on that network. Stored here for the same reason
+     * elements are: a station is a point on a section, meaningless without it.
+     */
+    private com.micatechnologies.minecraft.rcmc.physics.transit.TransitSystem transit =
+        new com.micatechnologies.minecraft.rcmc.physics.transit.TransitSystem();
+
     /** Required by {@link WorldSavedData}'s reflective instantiation on load. */
     public RcmcTrackData() {
         super(DATA_NAME);
@@ -76,6 +83,10 @@ public class RcmcTrackData extends WorldSavedData {
         return elements;
     }
 
+    public com.micatechnologies.minecraft.rcmc.physics.transit.TransitSystem transit() {
+        return transit;
+    }
+
     /**
      * Marks the network dirty so it is written on the next world save.
      *
@@ -90,6 +101,7 @@ public class RcmcTrackData extends WorldSavedData {
     public void readFromNBT(NBTTagCompound nbt) {
         this.network = TrackCodec.readNetwork(nbt);
         this.elements = ElementCodec.read(nbt);
+        this.transit = TransitCodec.read(nbt);
     }
 
     @Override
@@ -102,6 +114,7 @@ public class RcmcTrackData extends WorldSavedData {
         for (String key : elementTag.getKeySet()) {
             compound.setTag(key, elementTag.getTag(key));
         }
+        TransitCodec.write(transit, compound);
         return compound;
     }
 }

@@ -50,6 +50,16 @@ public final class RcmcWorldState {
      */
     private com.micatechnologies.minecraft.rcmc.physics.element.RideElementSet elements =
         new com.micatechnologies.minecraft.rcmc.physics.element.RideElementSet();
+
+    /**
+     * Transit: authored stations/lines (persisted with the track) and running services. Server
+     * truth, like {@link #elements} and for the same reason — a service's controller state (door
+     * timers, jerk limiter) would all need syncing for the client to predict it, for no visible
+     * gain over the periodic train corrections. The client's copy stays empty for now; M7's
+     * signage sync will change that for the authored part.
+     */
+    private com.micatechnologies.minecraft.rcmc.physics.transit.TransitSystem transit =
+        new com.micatechnologies.minecraft.rcmc.physics.transit.TransitSystem();
     private final boolean remote;
 
     private RcmcWorldState(TrackNetwork network, boolean remote) {
@@ -79,6 +89,7 @@ public final class RcmcWorldState {
             RcmcTrackData data = RcmcTrackData.get(world);
             created = new RcmcWorldState(data.network(), false);
             created.elements = data.elements();
+            created.transit = data.transit();
         }
         STATES.put(world, created);
         return created;
@@ -94,6 +105,10 @@ public final class RcmcWorldState {
 
     public com.micatechnologies.minecraft.rcmc.physics.element.RideElementSet elements() {
         return elements;
+    }
+
+    public com.micatechnologies.minecraft.rcmc.physics.transit.TransitSystem transit() {
+        return transit;
     }
 
     /**
@@ -231,6 +246,12 @@ public final class RcmcWorldState {
                         state.blocks.updateOccupancy(state.trains, state.network);
                         control = new com.micatechnologies.minecraft.rcmc.physics.block
                             .BlockSignaledElementSet(state.elements, state.blocks);
+                    }
+                    if (state.transit.hasServices()) {
+                        // Trains in metro service are driven by their LineService; everything
+                        // else falls through to the coaster control built above.
+                        state.transit.beginTick(state.trains, state.network);
+                        control = state.transit.composedWith(control);
                     }
                 }
                 state.trains.tick(state.network, control,
