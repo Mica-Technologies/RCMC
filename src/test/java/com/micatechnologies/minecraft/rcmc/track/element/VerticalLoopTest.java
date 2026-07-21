@@ -85,7 +85,18 @@ class VerticalLoopTest {
             total += node.position().distanceTo(previous);
             previous = node.position();
         }
-        assertEquals(Math.PI * Math.PI * topRadius, total, 0.01D);
+        // The in-plane path is exactly pi^2 * r, because the loop is integrated at unit speed. The
+        // nodes are that path pushed sideways for self-clearance (see VerticalLoop's javadoc), and
+        // that displacement adds a little length in quadrature — 0.068 blocks here, measured. So the
+        // real invariant is no longer equality: the path may exceed the formula slightly and must
+        // never fall short of it, since the offset can only add length.
+        double inPlane = Math.PI * Math.PI * topRadius;
+        assertTrue(total >= inPlane - 1e-6D,
+            "the path cannot be shorter than the in-plane loop it is derived from: "
+                + total + " < " + inPlane);
+        assertTrue(total <= inPlane + 0.10D,
+            "the clearance offset should add well under a tenth of a block, got "
+                + (total - inPlane));
     }
 
     @Test

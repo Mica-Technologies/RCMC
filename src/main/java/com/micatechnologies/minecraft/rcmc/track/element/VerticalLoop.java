@@ -38,12 +38,24 @@ import java.util.List;
  * formula. Position is therefore obtained the same way {@code ArcLengthTable} gets distance from a spline:
  * numerically, by composite midpoint-rule integration, cheap and run once at authoring time.</p>
  *
- * <p><b>The path stays in one plane</b> — spanned by the entry frame's {@code forward} and {@code up},
- * rotating about the fixed {@code right} axis — so, exactly as in {@link Curve} and {@link AirtimeHill},
- * every frame vector's orientation at any point on the loop is a closed-form rotation of the entry frame
- * by {@code phi(s)} about {@code right}; in particular {@code up} at the top of the loop
- * ({@code phi = pi}) comes out as {@code -entryUp} — upside down, as it should be — for free, with no
- * numerical transport needed.</p>
+ * <p><b>Why the loop is NOT planar, though its curvature profile is.</b> A planar loop that returns to
+ * its entry height after turning through {@code 2*pi} <em>must</em> cross itself. For {@code r=6} the
+ * crossing is at {@code (forward 9.0, up 1.1)}, where the track 15% of the way round meets the track 85%
+ * of the way round — the entry and exit legs pass through each other. This is not an artefact of the
+ * curvature profile: it is forced by the turning, and no choice of {@code kappa(s)} avoids it. Real
+ * vertical loops solve it the only way it can be solved, by leaving the plane — the entry and exit legs
+ * are offset sideways so they pass beside one another rather than through.</p>
+ *
+ * <p>So the in-plane path above is displaced along {@code right} by
+ * {@code LATERAL_SEPARATION * smoothstep(s/L)}. Smoothstep is not decoration: its derivative is zero at
+ * both ends, so the offset contributes nothing to the tangent at the entry or the exit. The element
+ * therefore still joins straight track without a kink, and the exit frame is still the closed-form
+ * rotation of the entry frame by {@code phi(L) = 2*pi} — that is, the entry frame itself, displaced.
+ * Between the ends the path has genuine torsion, which is simply what a real loop has.</p>
+ *
+ * <p>Orientation elsewhere on the loop is still a rotation of the entry frame by {@code phi(s)} about
+ * {@code right}; in particular {@code up} at the top ({@code phi = pi}) comes out as {@code -entryUp} —
+ * upside down, as it should be.</p>
  *
  * <p>Bank is held at {@code entryBankDegrees} throughout: banking, as an authored roll about
  * {@code forward}, is not the mechanism that inverts a rider through a loop — parallel transport of
@@ -53,6 +65,17 @@ import java.util.List;
 public final class VerticalLoop implements TrackElement {
 
     private static final int SEGMENTS_MIN = 16;
+
+    /**
+     * How far the exit leg is displaced sideways from the entry leg, in blocks.
+     *
+     * <p>Absolute rather than proportional to the radius, because the thing it has to clear is
+     * absolute: rendered track is {@code 2 * TIE_HALF_LENGTH_R = 1.4} blocks wide whatever the loop's
+     * size. Smoothstep delivers about 88% of this at the crossing point (it is ~6% of the way up at
+     * 15% round and ~94% at 85% round), so 2.6 leaves roughly 2.3 blocks between the legs — comfortably
+     * more than the 1.4 they occupy, with room for the car bodies that overhang them.</p>
+     */
+    private static final double LATERAL_SEPARATION = 2.6D;
 
     private final double topRadiusBlocks;
 
@@ -84,13 +107,17 @@ public final class VerticalLoop implements TrackElement {
         double ds = length / segments;
 
         List<TrackNode> nodes = new ArrayList<>(segments);
-        Vec3 pos = entryPos;
+        // `planar` walks the in-plane path; each node is that point pushed sideways. Keeping the two
+        // separate matters: the offset must not feed back into the integration, or the heading would
+        // start chasing its own displacement.
+        Vec3 planar = entryPos;
         for (int i = 1; i <= segments; i++) {
             double midS = (i - 0.5D) * ds;
             double midPhi = heading(midS, length);
             Vec3 dir = ElementGeometry.rotate(forward, right, midPhi);
-            pos = pos.add(dir.scale(ds));
-            nodes.add(new TrackNode(pos, context.entryBankDegrees, null));
+            planar = planar.add(dir.scale(ds));
+            Vec3 placed = planar.add(right.scale(lateralOffset(i * ds, length)));
+            nodes.add(new TrackNode(placed, context.entryBankDegrees, null));
         }
 
         double exitPhi = heading(length, length);
@@ -106,5 +133,19 @@ public final class VerticalLoop implements TrackElement {
      * the class javadoc for the derivation from the sine curvature profile. */
     private static double heading(double s, double length) {
         return Math.PI * (1.0D - Math.cos(Math.PI * s / length));
+    }
+
+    /**
+     * Sideways displacement at arc length {@code s}, easing from 0 at the entry to
+     * {@link #LATERAL_SEPARATION} at the exit.
+     *
+     * <p>Smoothstep {@code t*t*(3-2t)} has zero derivative at {@code t=0} and {@code t=1}, which is the
+     * whole reason it is used here rather than a straight ramp: a linear offset would tilt the tangent
+     * sideways at the entry and exit, putting a kink into the join with whatever track adjoins the
+     * loop.</p>
+     */
+    private static double lateralOffset(double s, double length) {
+        double t = s / length;
+        return LATERAL_SEPARATION * t * t * (3.0D - 2.0D * t);
     }
 }
