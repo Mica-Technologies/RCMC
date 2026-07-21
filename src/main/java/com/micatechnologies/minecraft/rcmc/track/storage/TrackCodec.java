@@ -36,13 +36,22 @@ public final class TrackCodec {
      * <ul>
      *   <li>1 — initial: sections with nodes (position, bank, style), closed flag, section style,
      *       and symmetric end joins.</li>
+     *   <li>2 — switches: throat end, ordered branch ends, selected branch index. A version-1
+     *       payload simply has no switch list, which reads back as a network with no switches —
+     *       no migration branch needed.</li>
      * </ul>
      */
-    public static final int DATA_VERSION = 1;
+    public static final int DATA_VERSION = 2;
 
     private static final String KEY_VERSION = "DataVersion";
     private static final String KEY_SECTIONS = "Sections";
     private static final String KEY_JOINS = "Joins";
+    private static final String KEY_SWITCHES = "Switches";
+
+    private static final String KEY_THROAT_SECTION = "ThroatSection";
+    private static final String KEY_THROAT_END = "ThroatEnd";
+    private static final String KEY_BRANCHES = "Branches";
+    private static final String KEY_SELECTED = "Selected";
 
     private static final String KEY_ID = "Id";
     private static final String KEY_NODES = "Nodes";
@@ -92,6 +101,24 @@ public final class TrackCodec {
         }
         root.setTag(KEY_JOINS, joinList);
 
+        NBTTagList switchList = new NBTTagList();
+        for (TrackNetwork.TrackSwitch sw : network.switches()) {
+            NBTTagCompound tag = new NBTTagCompound();
+            tag.setInteger(KEY_THROAT_SECTION, sw.throat().sectionId);
+            tag.setString(KEY_THROAT_END, sw.throat().end.name());
+            NBTTagList branchList = new NBTTagList();
+            for (TrackNetwork.SectionEnd branch : sw.branches()) {
+                NBTTagCompound branchTag = new NBTTagCompound();
+                branchTag.setInteger(KEY_FROM_SECTION, branch.sectionId);
+                branchTag.setString(KEY_FROM_END, branch.end.name());
+                branchList.appendTag(branchTag);
+            }
+            tag.setTag(KEY_BRANCHES, branchList);
+            tag.setInteger(KEY_SELECTED, sw.selectedIndex());
+            switchList.appendTag(tag);
+        }
+        root.setTag(KEY_SWITCHES, switchList);
+
         return root;
     }
 
@@ -140,6 +167,30 @@ public final class TrackCodec {
             // whole world load; skip it and keep the rest of the park.
             if (network.section(from.sectionId) != null && network.section(to.sectionId) != null) {
                 network.connect(from, to);
+            }
+        }
+
+        NBTTagList switchList = root.getTagList(KEY_SWITCHES, 10);
+        for (int i = 0; i < switchList.tagCount(); i++) {
+            NBTTagCompound tag = switchList.getCompoundTagAt(i);
+            TrackNetwork.SectionEnd throat = new TrackNetwork.SectionEnd(
+                tag.getInteger(KEY_THROAT_SECTION), TrackNetwork.End.valueOf(tag.getString(KEY_THROAT_END)));
+            NBTTagList branchList = tag.getTagList(KEY_BRANCHES, 10);
+            List<TrackNetwork.SectionEnd> branches = new ArrayList<>(branchList.tagCount());
+            boolean allPresent = network.section(throat.sectionId) != null;
+            for (int j = 0; j < branchList.tagCount(); j++) {
+                NBTTagCompound branchTag = branchList.getCompoundTagAt(j);
+                TrackNetwork.SectionEnd branch = new TrackNetwork.SectionEnd(
+                    branchTag.getInteger(KEY_FROM_SECTION),
+                    TrackNetwork.End.valueOf(branchTag.getString(KEY_FROM_END)));
+                allPresent &= network.section(branch.sectionId) != null;
+                branches.add(branch);
+            }
+            // Same policy as a dangling join: skip rather than abort the whole world load.
+            if (allPresent) {
+                network.addSwitch(throat, branches);
+                network.setSwitchSelection(throat, Math.max(0,
+                    Math.min(tag.getInteger(KEY_SELECTED), branches.size() - 1)));
             }
         }
 

@@ -78,6 +78,12 @@ public class PacketTrackSync implements IMessage {
                 // to notice that a client and server disagree about the track.
                 local.connect(join.getKey(), join.getValue());
             }
+            for (TrackNetwork.TrackSwitch sw : incoming.switches()) {
+                // Selection included: a client predicting a train through a switch the server
+                // lined the other way would rubber-band exactly like mismatched geometry.
+                local.addSwitch(sw.throat(), sw.branches());
+                local.setSwitchSelection(sw.throat(), sw.selectedIndex());
+            }
         }
     }
 }

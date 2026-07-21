@@ -60,6 +60,25 @@ public final class TrainDriver {
      */
     private static final double ROLLBACK_SPEED = 0.5D;
 
+    /**
+     * The stopping curve is planned against this fraction of the service brake, though the full
+     * rate remains available once braking engages. Same reasoning as {@code BlockSystem}'s
+     * identical factor: commands are evaluated once per tick and, here, additionally ramped by
+     * the jerk limiter, so the actually-applied brake lags the curve's demand — near the curve's
+     * tail, where {@code dv/ds} diverges, that lag compounds into real overshoot. Planning
+     * against 70% keeps 30% of the brake in reserve to absorb it.
+     */
+    private static final double BRAKE_PLANNING_FACTOR = 0.7D;
+
+    /**
+     * When catching the stopping curve from below, the target is this fraction of the curve
+     * rather than the curve itself. Charging the curve at full traction arrives on it at maximum
+     * closing rate exactly where the jerk-limited swing to full brake is slowest to come — the
+     * measured result was metres of overshoot. Riding 70% of the curve needs only half the
+     * planned deceleration, leaving the rest as margin for that swing.
+     */
+    private static final double CATCH_UP_FRACTION = 0.7D;
+
     private final TractionProfile traction;
     private final double serviceBrakeDeceleration;
     private final double creepSpeed;
@@ -119,14 +138,16 @@ public final class TrainDriver {
         double targetSpeed = Math.abs(targetLineSpeed);
         double speed = Math.abs(velocity);
         if (remainingToStop != NO_STOP) {
-            double curveSpeed = Math.sqrt(
-                2.0D * serviceBrakeDeceleration * Math.max(0.0D, remainingToStop));
+            double curveSpeed = Math.sqrt(2.0D * serviceBrakeDeceleration * BRAKE_PLANNING_FACTOR
+                * Math.max(0.0D, remainingToStop));
             boolean insideBrakingZone = curveSpeed < targetSpeed;
             targetSpeed = Math.min(targetSpeed, curveSpeed);
             if (insideBrakingZone && targetSpeed > speed) {
-                // Catching the curve from below (stopped short, or released into the platform
-                // slow): power up to walking pace only, never charge the curve at full traction.
-                targetSpeed = Math.min(targetSpeed, Math.max(speed, creepSpeed));
+                // Catching the curve from below (stopped short, released into the platform slow,
+                // accelerating out of a nearby stop): ride below it, floored at creep so the
+                // final metres still finish — see CATCH_UP_FRACTION.
+                targetSpeed = Math.min(targetSpeed,
+                    Math.max(creepSpeed, CATCH_UP_FRACTION * curveSpeed));
             }
         }
 

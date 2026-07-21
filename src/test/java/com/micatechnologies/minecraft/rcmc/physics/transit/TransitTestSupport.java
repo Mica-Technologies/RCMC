@@ -69,11 +69,12 @@ final class TransitTestSupport {
         return acceleration;
     }
 
-    /** Advances a train under a full stop controller for one tick. Travel direction from line speed sign. */
+    /** Advances a train under a full stop controller for one tick, travelling along +X, unsignalled. */
     static double tickWithController(Train train, TrackNetwork network,
                                      TransitStopController controller, double stopDistance) {
-        double remaining = signedRemaining(train, stopDistance, controller.lineSpeed());
-        double acceleration = controller.acceleration(train.velocity(), remaining);
+        double remaining = stopDistance - train.reference().distance();
+        double acceleration = controller.acceleration(
+            train.velocity(), 1.0D, remaining, TrainDriver.NO_STOP);
         train.setHeld(controller.isHolding(train.velocity()));
         train.tick(network, acceleration, 4, TICK);
         return acceleration;

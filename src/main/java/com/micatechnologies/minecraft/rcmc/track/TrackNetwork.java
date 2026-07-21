@@ -60,6 +60,56 @@ public final class TrackNetwork {
     }
 
     /**
+     * A switch (turnout): one section end — the <b>throat</b> — leading to a choice of two or
+     * more branch ends, with a selection saying which branch is currently lined.
+     *
+     * <p>Traversal through the throat follows the selected branch. Traversal arriving <em>at</em>
+     * the switch from the selected branch passes through to the throat; arriving from a
+     * non-selected branch — a trailing move against the points — is treated as a dead end. Real
+     * turnouts either derail such a move or are damaged by it; stopping the train and surfacing
+     * the fault (exactly like running off unconnected track) is the honest, safe rendering of
+     * that, and it is what forces a metro layout's signalling to actually line switches rather
+     * than trains teleporting through them. Run-through behaviour, if ever wanted, is a policy
+     * change confined to {@link #effectiveLink}.</p>
+     *
+     * <p>Selection is part of network state, synced and saved with it — a client predicting a
+     * train through a switch the server lined differently would rubber-band, the same reason the
+     * geometry itself is synced.</p>
+     */
+    public static final class TrackSwitch {
+
+        private final SectionEnd throat;
+        private final java.util.List<SectionEnd> branches;
+        private int selected;
+
+        TrackSwitch(SectionEnd throat, java.util.List<SectionEnd> branches) {
+            this.throat = throat;
+            this.branches = Collections.unmodifiableList(new java.util.ArrayList<>(branches));
+        }
+
+        public SectionEnd throat() {
+            return throat;
+        }
+
+        public java.util.List<SectionEnd> branches() {
+            return branches;
+        }
+
+        public int selectedIndex() {
+            return selected;
+        }
+
+        public SectionEnd selectedBranch() {
+            return branches.get(selected);
+        }
+
+        @Override
+        public String toString() {
+            return "TrackSwitch{" + throat + " -> " + branches + ", lined=" + selectedBranch() + '}';
+        }
+    }
+
+    /**
      * Result of moving along the network.
      *
      * <p>{@link #reversed} matters and is easy to overlook: when two sections were built toward
@@ -106,6 +156,12 @@ public final class TrackNetwork {
     private final Map<Integer, TrackSection> sections = new LinkedHashMap<>();
     private final Map<SectionEnd, SectionEnd> joins = new HashMap<>();
 
+    /** Switches keyed by throat end. Iteration order is insertion order, so saves are stable. */
+    private final Map<SectionEnd, TrackSwitch> switches = new LinkedHashMap<>();
+
+    /** Reverse index: every branch end of every switch -> its throat. Kept in lockstep with {@link #switches}. */
+    private final Map<SectionEnd, SectionEnd> branchToThroat = new HashMap<>();
+
     private int nextSectionId = 1;
 
     /** Allocates an id no existing section uses. */
@@ -134,12 +190,27 @@ public final class TrackNetwork {
         sections.put(section.id(), section);
     }
 
-    /** Removes a section and every join touching it. */
+    /** Removes a section and every join and switch touching it. */
     public TrackSection removeSection(int sectionId) {
         TrackSection removed = sections.remove(sectionId);
         if (removed != null) {
             disconnect(new SectionEnd(sectionId, End.START));
             disconnect(new SectionEnd(sectionId, End.END));
+            // A switch missing any of its ends is no longer a meaningful choice; drop it whole
+            // rather than leave a branch list pointing at nothing.
+            java.util.List<SectionEnd> throatsToDrop = new java.util.ArrayList<>();
+            for (TrackSwitch sw : switches.values()) {
+                boolean touches = sw.throat().sectionId == sectionId;
+                for (SectionEnd branch : sw.branches()) {
+                    touches |= branch.sectionId == sectionId;
+                }
+                if (touches) {
+                    throatsToDrop.add(sw.throat());
+                }
+            }
+            for (SectionEnd throat : throatsToDrop) {
+                removeSwitch(throat);
+            }
         }
         return removed;
     }
@@ -187,6 +258,10 @@ public final class TrackNetwork {
         }
         if (a.equals(b)) {
             throw new IllegalArgumentException("cannot join an end to itself: " + a);
+        }
+        if (isSwitched(a) || isSwitched(b)) {
+            throw new IllegalArgumentException(
+                "cannot join an end that belongs to a switch — remove the switch first");
         }
         TrackSection sectionA = sections.get(a.sectionId);
         TrackSection sectionB = sections.get(b.sectionId);
@@ -261,6 +336,118 @@ public final class TrackNetwork {
     }
 
     /**
+     * Adds a switch: {@code throat} leading to a choice of {@code branches}, initially lined to
+     * the first. Every involved end must be free — not plainly joined and not already part of
+     * another switch — and every branch must meet the throat within {@link #MAX_JOIN_GAP},
+     * exactly as {@link #connect} demands of a join, and for the same teleport reason.
+     */
+    public void addSwitch(SectionEnd throat, java.util.List<SectionEnd> branches) {
+        if (throat == null || branches == null || branches.size() < 2) {
+            throw new IllegalArgumentException("a switch needs a throat and at least two branches");
+        }
+        java.util.Set<SectionEnd> distinct = new java.util.HashSet<>(branches);
+        if (distinct.size() != branches.size() || distinct.contains(throat)) {
+            throw new IllegalArgumentException("switch ends must be distinct, and no branch may be the throat");
+        }
+        java.util.List<SectionEnd> all = new java.util.ArrayList<>(branches);
+        all.add(throat);
+        for (SectionEnd end : all) {
+            TrackSection section = sections.get(end.sectionId);
+            if (section == null) {
+                throw new IllegalArgumentException("section " + end.sectionId + " must exist before switching");
+            }
+            if (section.isClosed()) {
+                throw new IllegalArgumentException("a closed circuit has no ends to switch: " + end);
+            }
+            if (joins.containsKey(end) || isSwitched(end)) {
+                throw new IllegalArgumentException(end + " is already joined or switched — an end can only lead one place");
+            }
+        }
+        for (SectionEnd branch : branches) {
+            JoinAlignment alignment = alignmentOf(throat, branch);
+            if (alignment.positionGap > MAX_JOIN_GAP) {
+                throw new IllegalArgumentException(
+                    "cannot switch " + throat + " to " + branch + ": endpoints are "
+                        + String.format("%.2f", alignment.positionGap) + " blocks apart (limit "
+                        + MAX_JOIN_GAP + ")");
+            }
+        }
+        TrackSwitch added = new TrackSwitch(throat, branches);
+        switches.put(throat, added);
+        for (SectionEnd branch : added.branches()) {
+            branchToThroat.put(branch, throat);
+        }
+    }
+
+    /** The switch whose throat is {@code throat}, or {@code null}. */
+    public TrackSwitch switchAt(SectionEnd throat) {
+        return switches.get(throat);
+    }
+
+    /** The switch that {@code end} participates in — as throat or as a branch — or {@code null}. */
+    public TrackSwitch switchInvolving(SectionEnd end) {
+        TrackSwitch asThroat = switches.get(end);
+        if (asThroat != null) {
+            return asThroat;
+        }
+        SectionEnd throat = branchToThroat.get(end);
+        return throat == null ? null : switches.get(throat);
+    }
+
+    public Collection<TrackSwitch> switches() {
+        return Collections.unmodifiableCollection(switches.values());
+    }
+
+    /** Lines the switch at {@code throat} to branch {@code branchIndex}. */
+    public void setSwitchSelection(SectionEnd throat, int branchIndex) {
+        TrackSwitch sw = switches.get(throat);
+        if (sw == null) {
+            throw new IllegalArgumentException("no switch at " + throat);
+        }
+        if (branchIndex < 0 || branchIndex >= sw.branches().size()) {
+            throw new IllegalArgumentException(
+                "branch index " + branchIndex + " out of range for " + sw);
+        }
+        sw.selected = branchIndex;
+    }
+
+    /** Removes the switch at {@code throat}, if any. */
+    public void removeSwitch(SectionEnd throat) {
+        TrackSwitch removed = switches.remove(throat);
+        if (removed != null) {
+            for (SectionEnd branch : removed.branches()) {
+                branchToThroat.remove(branch);
+            }
+        }
+    }
+
+    private boolean isSwitched(SectionEnd end) {
+        return switches.containsKey(end) || branchToThroat.containsKey(end);
+    }
+
+    /**
+     * Where travel leaving through {@code end} arrives, honouring both plain joins and switches
+     * — the traversal-facing generalisation of {@link #joinedTo}. {@code null} means travel out
+     * of that end dead-ends: nothing attached, or a trailing move against a switch's points (see
+     * {@link TrackSwitch}).
+     */
+    public SectionEnd linkedTo(SectionEnd end) {
+        SectionEnd joined = joins.get(end);
+        if (joined != null) {
+            return joined;
+        }
+        TrackSwitch asThroat = switches.get(end);
+        if (asThroat != null) {
+            return asThroat.selectedBranch();
+        }
+        SectionEnd throat = branchToThroat.get(end);
+        if (throat != null && switches.get(throat).selectedBranch().equals(end)) {
+            return throat;
+        }
+        return null;
+    }
+
+    /**
      * Moves {@code delta} blocks along the network from {@code from}, crossing joins as needed.
      *
      * <p>A closed circuit never leaves its section — it wraps. An open section that runs out of
@@ -299,7 +486,7 @@ public final class TrackNetwork {
             boolean offTheEnd = target > length;
             double overshoot = offTheEnd ? target - length : -target;
             SectionEnd leaving = new SectionEnd(currentId, offTheEnd ? End.END : End.START);
-            SectionEnd arriving = joins.get(leaving);
+            SectionEnd arriving = linkedTo(leaving);
 
             if (arriving == null) {
                 return new Traversal(
@@ -343,11 +530,14 @@ public final class TrackNetwork {
     public void clear() {
         sections.clear();
         joins.clear();
+        switches.clear();
+        branchToThroat.clear();
         nextSectionId = 1;
     }
 
     @Override
     public String toString() {
-        return "TrackNetwork{sections=" + sections.size() + ", joins=" + (joins.size() / 2) + '}';
+        return "TrackNetwork{sections=" + sections.size() + ", joins=" + (joins.size() / 2)
+            + ", switches=" + switches.size() + '}';
     }
 }

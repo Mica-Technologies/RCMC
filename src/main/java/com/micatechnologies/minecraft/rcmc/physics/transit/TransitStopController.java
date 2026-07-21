@@ -65,7 +65,7 @@ public final class TransitStopController {
     private static final double BERTH_SPEED_EPSILON = 0.05D;
 
     private final TrainDriver driver;
-    private final double lineSpeed;
+    private final double cruiseSpeed;
     private final double berthTolerance;
     private final int doorOpenTicks;
     private final int dwellTicks;
@@ -78,9 +78,10 @@ public final class TransitStopController {
     /**
      * @param driver         the speed-control law; owned by this controller from here on — do not
      *                       also tick it directly, the jerk limiter advances per call
-     * @param lineSpeed      signed cruise speed between stations, blocks/s; its sign is the
-     *                       direction of travel and must match the caller's
-     *                       {@code remainingToStop} convention. Must be nonzero.
+     * @param cruiseSpeed    cruise speed magnitude between stations, blocks/s — must be positive.
+     *                       Direction is supplied per tick to {@link #acceleration}, because it
+     *                       genuinely changes over a service: at terminus reversal, and whenever
+     *                       the track's distance axis flips across an END-to-END join.
      * @param berthTolerance how far from the stop point a train may come to rest and still count
      *                       as berthed, blocks — must be positive. Half a car door's width is a
      *                       sensible order of magnitude.
@@ -88,13 +89,13 @@ public final class TransitStopController {
      * @param dwellTicks     ticks the doors stay open for boarding — must be {@code >= 0}
      * @param doorCloseTicks ticks the doors take to close — must be {@code >= 0}
      */
-    public TransitStopController(TrainDriver driver, double lineSpeed, double berthTolerance,
+    public TransitStopController(TrainDriver driver, double cruiseSpeed, double berthTolerance,
                                  int doorOpenTicks, int dwellTicks, int doorCloseTicks) {
         if (driver == null) {
             throw new IllegalArgumentException("driver is required");
         }
-        if (lineSpeed == 0.0D) {
-            throw new IllegalArgumentException("lineSpeed must be nonzero — its sign is the direction of travel");
+        if (cruiseSpeed <= 0.0D) {
+            throw new IllegalArgumentException("cruiseSpeed must be positive, got " + cruiseSpeed);
         }
         if (berthTolerance <= 0.0D) {
             throw new IllegalArgumentException("berthTolerance must be positive, got " + berthTolerance);
@@ -103,7 +104,7 @@ public final class TransitStopController {
             throw new IllegalArgumentException("door and dwell tick counts must be >= 0");
         }
         this.driver = driver;
-        this.lineSpeed = lineSpeed;
+        this.cruiseSpeed = cruiseSpeed;
         this.berthTolerance = berthTolerance;
         this.doorOpenTicks = doorOpenTicks;
         this.dwellTicks = dwellTicks;
@@ -114,15 +115,26 @@ public final class TransitStopController {
      * The along-track acceleration to command this tick, blocks/s². Call exactly once per game
      * tick — phase timers and the driver's jerk limiter both advance per call.
      *
-     * @param velocity        the train's current signed velocity, blocks/s
-     * @param remainingToStop distance to the current stop point along the direction of travel,
-     *                        blocks; see the class javadoc for who computes this and when it
-     *                        switches to the next stop
+     * <p>The two distance limits are deliberately separate inputs, because they mean different
+     * things: {@code stationRemaining} is where the train should <em>berth and open its doors</em>;
+     * {@code authorityRemaining} is how far signalling <em>permits</em> it to move at all (M4's
+     * movement authority — pass {@link TrainDriver#NO_STOP} when unsignalled). The driver brakes
+     * against whichever limit is nearer, but berthing tests the station distance alone: a train
+     * held at a red signal short of the platform stops there, at rest, doors shut, phase still
+     * {@link Phase#APPROACHING} — and proceeds when the authority extends. Folding the two into
+     * one number would open the doors in the tunnel.</p>
+     *
+     * @param velocity           the train's current signed velocity, blocks/s
+     * @param direction          direction of travel along the current section's distance axis,
+     *                           {@code +1} or {@code -1}; both distances are measured along it
+     * @param stationRemaining   distance to the current stop point, blocks
+     * @param authorityRemaining distance the train is permitted to travel, blocks
      */
-    public double acceleration(double velocity, double remainingToStop) {
+    public double acceleration(double velocity, double direction,
+                               double stationRemaining, double authorityRemaining) {
         switch (phase) {
             case APPROACHING:
-                if (Math.abs(velocity) <= BERTH_SPEED_EPSILON && remainingToStop <= berthTolerance) {
+                if (Math.abs(velocity) <= BERTH_SPEED_EPSILON && stationRemaining <= berthTolerance) {
                     phase = Phase.DOORS_OPENING;
                     phaseTicksRemaining = doorOpenTicks;
                     // The train is at rest and staying that way; a stale braking command must not
@@ -130,7 +142,9 @@ public final class TransitStopController {
                     driver.resetCommand();
                     return advanceDoorPhase();
                 }
-                return driver.acceleration(velocity, lineSpeed, remainingToStop);
+                double signedCruise = (direction >= 0.0D ? 1.0D : -1.0D) * cruiseSpeed;
+                return driver.acceleration(velocity, signedCruise,
+                    Math.min(stationRemaining, authorityRemaining));
             case DOORS_OPENING:
             case BOARDING:
             case DOORS_CLOSING:
@@ -198,8 +212,8 @@ public final class TransitStopController {
         return stopsServed;
     }
 
-    public double lineSpeed() {
-        return lineSpeed;
+    public double cruiseSpeed() {
+        return cruiseSpeed;
     }
 
     public double berthTolerance() {
