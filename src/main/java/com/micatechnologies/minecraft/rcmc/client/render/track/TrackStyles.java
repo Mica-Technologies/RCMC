@@ -61,7 +61,7 @@ final class TrackStyles {
     }
 
     private static TrackStyles transit(Catenary catenary) {
-        // Heavier everything, sized to sit under the ~3.8-wide, ~5.45-tall metro stock: 2.8 blocks
+        // Heavier everything, sized to sit under the ~3.8-wide, ~5.95-tall metro stock: 2.8 blocks
         // between railheads, long ties, a chunky spine, and visibly heavier rail. Widened from 2.0
         // when the stock was scaled up — the body must still read as overhanging its track, which
         // is what makes rolling stock look like rolling stock.

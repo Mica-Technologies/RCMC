@@ -35,13 +35,17 @@ final class MetroCarModel {
     private static final float RAIL_TOP = 0.05F;
 
     // --- Underframe and floor: high-floor stock riding above its trucks. -----------------------
-    // Raised half a block and thickened, 2026-07-21: real metro stock carries a deep underframe of
+    // Raised a full block and thickened, 2026-07-21: real metro stock carries a deep underframe of
     // traction gear, air tanks and cabling between the trucks, and the earlier slab read as the car
     // resting straight on its wheels. Everything in the saloon is measured from FLOOR_TOP, so
     // raising it here carries the whole interior up with it and leaves the clear height unchanged.
+    //
+    // A FULL block rather than the half first tried, because block tops are integers: at 1.5 a
+    // platform could only ever land half a block off the car floor, and boarding a train should not
+    // involve a step. At 2.0 the platform surface and the saloon floor are exactly level.
     private static final float SKIRT_HALF_WIDTH = 1.62F;
     private static final float SKIRT_BOTTOM = RAIL_TOP + 0.22F;
-    private static final float FLOOR_TOP = 1.50F;
+    private static final float FLOOR_TOP = 2.00F;
 
     /** Depth of the floor slab itself, under the saloon and over the underframe. */
     private static final float FLOOR_SLAB = 0.35F;
@@ -54,10 +58,10 @@ final class MetroCarModel {
     // which is the measurement that actually matters here.
     private static final float BODY_HALF_WIDTH = 1.90F;
     private static final float WALL_THICKNESS = 0.10F;
-    private static final float WINDOW_SILL = 2.55F;
-    private static final float WINDOW_HEAD = 4.65F;
-    private static final float ROOF_BASE = 5.25F;
-    private static final float ROOF_TOP = 5.45F;
+    private static final float WINDOW_SILL = 3.05F;
+    private static final float WINDOW_HEAD = 5.15F;
+    private static final float ROOF_BASE = 5.75F;
+    private static final float ROOF_TOP = 5.95F;
 
     /** Clear interior height: floor to ceiling. Asserted by {@code MetroCarScaleTest}. */
     static final float INTERIOR_HEIGHT = ROOF_BASE - FLOOR_TOP;

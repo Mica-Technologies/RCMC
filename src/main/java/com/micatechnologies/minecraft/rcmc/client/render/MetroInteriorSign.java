@@ -30,10 +30,10 @@ import net.minecraft.world.World;
 public final class MetroInteriorSign {
 
     /** Height of the sign's underside above the car floor datum, in blocks. */
-    private static final double PANEL_BOTTOM = 4.55D;
+    private static final double PANEL_BOTTOM = 5.05D;
 
-    /** Height of the sign's top — just under the roof interior at 5.25. */
-    private static final double PANEL_TOP = 5.18D;
+    /** Height of the sign's top — just under the roof interior at 5.75. */
+    private static final double PANEL_TOP = 5.68D;
 
     private static final double PANEL_HALF_THICKNESS = 0.03D;
 

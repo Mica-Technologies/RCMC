@@ -29,7 +29,7 @@ public final class CarSeating {
     public static final double BENCH_HALF_SEPARATION = 1.525D;
 
     /** Seat height above the car's track-frame origin, in blocks. Metro floors are high. */
-    public static final double METRO_SEAT_HEIGHT = 1.95D;
+    public static final double METRO_SEAT_HEIGHT = 2.45D;
 
     /** Half the car body's width — nothing inside it may sit outside this. */
     public static final double METRO_BODY_HALF_WIDTH = 1.90D;
@@ -42,16 +42,18 @@ public final class CarSeating {
      * "4.95" in test files is what this replaces, and every one of them would have had to be found
      * and edited when the underframe was raised.</p>
      */
-    public static final double METRO_ROOF_HEIGHT = 5.45D;
+    public static final double METRO_ROOF_HEIGHT = 5.95D;
 
     /**
      * Height of the saloon floor above the car's frame origin, in blocks.
      *
-     * <p>Mirrors {@code MetroCarModel.FLOOR_TOP}. Lives here because the floor is not only drawn —
+     * <p>A whole number on purpose: block tops are integers, so a floor at any fraction of a block
+     * guarantees a step at every platform edge. Mirrors {@code MetroCarModel.FLOOR_TOP}. Lives here
+     * because the floor is not only drawn —
      * {@code EntityCoasterCar.getCollisionBoundingBox} needs it to leave an open car something to
      * stand on, and that is common-side code which must not reach into a client renderer.</p>
      */
-    public static final double METRO_FLOOR_HEIGHT = 1.50D;
+    public static final double METRO_FLOOR_HEIGHT = 2.00D;
 
     /** Seat height for a coaster car — riders sit much closer to the rails. */
     public static final double COASTER_SEAT_HEIGHT = 0.31D;

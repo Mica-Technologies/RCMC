@@ -51,10 +51,18 @@ public final class TrackStyleIds {
      * catenary — a tunnel has no room above the train, which is the whole reason the style exists.
      * Still comfortably clear of the car roof.
      */
-    public static final double DEFAULT_TUNNEL_WIRE_HEIGHT = 6.5D;
+    public static final double DEFAULT_TUNNEL_WIRE_HEIGHT = 7.0D;
 
-    /** Bounds on an authored wire height. Below the minimum a pantograph would foul the roof. */
-    public static final double MIN_CONTACT_WIRE_HEIGHT = 6.0D;
+    /**
+     * Bounds on an authored wire height.
+     *
+     * <p>The minimum is set by the stock, not by taste: a metro roof stands at
+     * {@code CarSeating.METRO_ROOF_HEIGHT} and its pantograph base sits higher again, so a wire
+     * much under 7 would pass through the hardware meant to collect from it. Raised from 6 when
+     * the underframe went up a full block — the clearance is checked by a test for exactly this
+     * reason.</p>
+     */
+    public static final double MIN_CONTACT_WIRE_HEIGHT = 7.0D;
     public static final double MAX_CONTACT_WIRE_HEIGHT = 15.0D;
 
     private TrackStyleIds() {

@@ -114,9 +114,13 @@ class TrackStyleWireHeightTest {
         // Measured against the stock's own height rather than a copy of it, so raising the car —
         // as the underframe change did — makes this test object rather than quietly pass.
         double roof = com.micatechnologies.minecraft.rcmc.physics.CarSeating.METRO_ROOF_HEIGHT;
-        assertTrue(TrackStyleIds.MIN_CONTACT_WIRE_HEIGHT > roof,
-            "the minimum wire height must clear the car roof");
-        assertTrue(TrackStyleIds.DEFAULT_TUNNEL_WIRE_HEIGHT > roof,
-            "even the tunnel conductor must clear the car roof");
+        // Clearing the roof is not enough: the pantograph base stands proud of it, and a wire
+        // between the two would pass through the very hardware meant to collect from it. Mirrors
+        // MetroCarModel.PANTO_BASE_TOP.
+        double pantographBase = roof + 0.18D;
+        assertTrue(TrackStyleIds.MIN_CONTACT_WIRE_HEIGHT > pantographBase,
+            "the minimum wire height must clear the raised pantograph, not just the roof");
+        assertTrue(TrackStyleIds.DEFAULT_TUNNEL_WIRE_HEIGHT > pantographBase,
+            "even the tunnel conductor must clear the raised pantograph");
     }
 }

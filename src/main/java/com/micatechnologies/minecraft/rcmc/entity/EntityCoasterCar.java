@@ -133,7 +133,7 @@ public class EntityCoasterCar extends Entity {
         // Metro cars are much larger than the default coaster box; size the entity to match once
         // the spec is known (idempotent — setSize is a no-op when unchanged).
         if (train.spec().carStyle() == TrainSpec.CarStyle.METRO) {
-            setSize(3.8F, 5.45F);
+            setSize(3.8F, 5.95F);
         }
 
         // Motion is reported rather than integrated: several vanilla systems (knockback, the
