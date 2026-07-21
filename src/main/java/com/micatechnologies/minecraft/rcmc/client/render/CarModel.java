@@ -64,10 +64,12 @@ final class CarModel {
     private static final float COUPLING_TOP = CHASSIS_TOP - 0.02F;
     private static final float COUPLING_BOTTOM = CHASSIS_BOTTOM + 0.02F;
 
+    /**
+     * The chassis and bogies are NOT paintable, deliberately. They are the running gear rather
+     * than the bodywork, and every real coaster leaves them dark — letting them be recoloured
+     * would mostly produce trains that read as toys.
+     */
     private static final float[] CHASSIS_COLOR = {0.22F, 0.22F, 0.24F};
-    private static final float[] BODY_COLOR = {0.72F, 0.16F, 0.14F};
-    private static final float[] BODY_TRIM_COLOR = {0.90F, 0.62F, 0.16F};
-    private static final float[] SEAT_COLOR = {0.16F, 0.17F, 0.21F};
     private static final float[] BOGIE_COLOR = {0.30F, 0.31F, 0.34F};
 
     private CarModel() {
@@ -85,14 +87,15 @@ final class CarModel {
      * @param drawCoupling whether to draw the rear coupling bar
      */
     static void emit(BufferBuilder buffer, float length, int seatRows, float couplingGap,
-                     boolean drawCoupling) {
+                     boolean drawCoupling, float[] bodyColour, float[] trimColour,
+                     float[] seatColour) {
         float halfLength = length * 0.5F;
 
         box(buffer, -CHASSIS_HALF_WIDTH, CHASSIS_BOTTOM, -halfLength,
             CHASSIS_HALF_WIDTH, CHASSIS_TOP, halfLength, CHASSIS_COLOR);
 
-        emitBody(buffer, halfLength);
-        emitSeats(buffer, halfLength, Math.max(1, seatRows));
+        emitBody(buffer, halfLength, bodyColour, trimColour);
+        emitSeats(buffer, halfLength, Math.max(1, seatRows), seatColour);
 
         // Bogies sit inboard of the ends, where the pivot points actually are on a real car — at
         // the very ends they read as skids rather than as wheel assemblies.
@@ -109,7 +112,8 @@ final class CarModel {
     }
 
     /** Floor, two side walls, and a tapered nose and tail. Open on top so riders are visible. */
-    private static void emitBody(BufferBuilder buffer, float halfLength) {
+    private static void emitBody(BufferBuilder buffer, float halfLength,
+                                 float[] bodyColour, float[] trimColour) {
         // A properly thick floor slab, not a sheet — the rails run just beneath it and a thin one
         // let them show through.
         box(buffer, -BODY_HALF_WIDTH, BODY_FLOOR, -halfLength,
@@ -117,22 +121,23 @@ final class CarModel {
 
         // Side walls, inset at the nose so the front narrows.
         box(buffer, BODY_HALF_WIDTH - BODY_WALL, BODY_FLOOR, -halfLength,
-            BODY_HALF_WIDTH, BODY_TOP, halfLength - NOSE_TAPER, BODY_COLOR);
+            BODY_HALF_WIDTH, BODY_TOP, halfLength - NOSE_TAPER, bodyColour);
         box(buffer, -BODY_HALF_WIDTH, BODY_FLOOR, -halfLength,
-            -BODY_HALF_WIDTH + BODY_WALL, BODY_TOP, halfLength - NOSE_TAPER, BODY_COLOR);
+            -BODY_HALF_WIDTH + BODY_WALL, BODY_TOP, halfLength - NOSE_TAPER, bodyColour);
 
         // Tapered nose: narrower, and carried a little lower, which is what makes the leading end
         // read as the front rather than just as "the other end".
         box(buffer, -BODY_HALF_WIDTH + NOSE_TAPER, BODY_FLOOR, halfLength - NOSE_TAPER,
-            BODY_HALF_WIDTH - NOSE_TAPER, BODY_TOP - 0.10F, halfLength, BODY_TRIM_COLOR);
+            BODY_HALF_WIDTH - NOSE_TAPER, BODY_TOP - 0.10F, halfLength, trimColour);
 
         // Rear bulkhead, closing the tub off behind the last row.
         box(buffer, -BODY_HALF_WIDTH, BODY_FLOOR, -halfLength,
-            BODY_HALF_WIDTH, BODY_TOP - 0.06F, -halfLength + BODY_WALL, BODY_COLOR);
+            BODY_HALF_WIDTH, BODY_TOP - 0.06F, -halfLength + BODY_WALL, bodyColour);
     }
 
     /** Rows of seat bases and backs, evenly spread along the tub. */
-    private static void emitSeats(BufferBuilder buffer, float halfLength, int rows) {
+    private static void emitSeats(BufferBuilder buffer, float halfLength, int rows,
+                                  float[] seatColour) {
         float usable = halfLength * 2.0F - NOSE_TAPER - BODY_WALL;
         float rowPitch = usable / rows;
         float firstCentre = halfLength - NOSE_TAPER - rowPitch * 0.5F;
@@ -142,12 +147,12 @@ final class CarModel {
             float inner = BODY_HALF_WIDTH - BODY_WALL;
 
             box(buffer, -inner, BODY_FLOOR_TOP, centre - rowPitch * 0.30F,
-                inner, BODY_FLOOR_TOP + SEAT_BASE_HEIGHT, centre + rowPitch * 0.30F, SEAT_COLOR);
+                inner, BODY_FLOOR_TOP + SEAT_BASE_HEIGHT, centre + rowPitch * 0.30F, seatColour);
 
             // Back sits at the rear of its own row, so a rider occupies the space in front of it.
             float backAt = centre - rowPitch * 0.30F;
             box(buffer, -inner, BODY_FLOOR_TOP, backAt - SEAT_BACK_THICKNESS,
-                inner, BODY_FLOOR_TOP + SEAT_BACK_HEIGHT, backAt, SEAT_COLOR);
+                inner, BODY_FLOOR_TOP + SEAT_BACK_HEIGHT, backAt, seatColour);
         }
     }
 

@@ -51,7 +51,7 @@ public class CommandRcmc extends CommandBase {
 
     @Override
     public String getUsage(ICommandSender sender) {
-        return "/rcmc <demo|train|clear|info|build>";
+        return "/rcmc <demo|train|clear|info|build|paint>";
     }
 
     @Override
@@ -63,7 +63,8 @@ public class CommandRcmc extends CommandBase {
     public List<String> getTabCompletions(MinecraftServer server, ICommandSender sender,
                                           String[] args, BlockPos targetPos) {
         if (args.length == 1) {
-            return getListOfStringsMatchingLastWord(args, "demo", "train", "clear", "info", "build");
+            return getListOfStringsMatchingLastWord(args, "demo", "train", "clear", "info", "build",
+                "paint");
         }
         if (args.length == 2 && "build".equalsIgnoreCase(args[0])) {
             return getListOfStringsMatchingLastWord(args, "bank", "circuit", "status", "cancel");
@@ -97,6 +98,9 @@ public class CommandRcmc extends CommandBase {
                 break;
             case "build":
                 build(sender, args);
+                break;
+            case "paint":
+                paint(sender, world, state, args);
                 break;
             default:
                 throw new CommandException(getUsage(sender));
@@ -143,6 +147,55 @@ public class CommandRcmc extends CommandBase {
             RcmcNetwork.sendTo(new com.micatechnologies.minecraft.rcmc.net.PacketBuildSessionSync(session),
                 (net.minecraft.entity.player.EntityPlayerMP) player);
         }
+    }
+
+    /**
+     * {@code /rcmc paint <trainId> <body|trim|seats> <colour>} — repaints a train.
+     *
+     * <p>A command rather than a wand because a train is not a thing you point at reliably while it
+     * is moving, and painting one is a setup action rather than a building gesture. Track has the
+     * editor wand precisely because track holds still.</p>
+     */
+    private void paint(ICommandSender sender, World world, RcmcWorldState state, String[] args)
+        throws CommandException {
+        if (args.length < 4) {
+            throw new CommandException("/rcmc paint <trainId> <body|trim|seats> <colour>");
+        }
+        int trainId = parseInt(args[1]);
+        Train train = state.trains().train(trainId);
+        if (train == null) {
+            throw new CommandException("No train with id " + trainId);
+        }
+
+        TrainSpec.Part part;
+        try {
+            part = TrainSpec.Part.valueOf(args[2].toUpperCase(java.util.Locale.ROOT));
+        }
+        catch (IllegalArgumentException e) {
+            throw new CommandException("Part must be body, trim or seats");
+        }
+
+        com.micatechnologies.minecraft.rcmc.track.TrackPalette.Colour colour =
+            com.micatechnologies.minecraft.rcmc.track.TrackPalette.Colour.byName(args[3], null);
+        if (colour == null) {
+            throw new CommandException("Unknown colour. Try: "
+                + java.util.Arrays.toString(
+                    com.micatechnologies.minecraft.rcmc.track.TrackPalette.Colour.values()));
+        }
+
+        // A train's spec is immutable, so repainting means replacing the train — carrying its
+        // position and speed across so a running ride does not restart because someone changed
+        // the paint.
+        Train repainted = new Train(train.spec().withColour(part, colour.ordinal()),
+            new PhysicsIntegrator(RcmcConfig.gravity, RcmcConfig.rollingResistance,
+                RcmcConfig.airDrag, RcmcConfig.maxSpeed),
+            train.reference(), train.velocity());
+        state.trains().add(trainId, repainted);
+        RcmcNetwork.sendToAllIn(new PacketTrainSync(trainId, repainted),
+            world.provider.getDimension());
+
+        reply(sender, TextFormatting.GREEN, "Train " + trainId + " "
+            + part.name().toLowerCase(java.util.Locale.ROOT) + " -> " + colour.label());
     }
 
     private static String fmt(double blocks) {

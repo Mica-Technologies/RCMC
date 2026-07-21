@@ -97,6 +97,24 @@ public class RenderCoasterCar extends Render<EntityCoasterCar> {
     }
 
     /**
+     * Resolves a train's stored colour ordinal into an actual colour.
+     *
+     * <p>The spec keeps ordinals rather than the colour enum so {@code physics} need not depend on
+     * {@code track} — see {@code TrainSpec}'s field javadoc. The renderer is the right place to
+     * undo that indirection, because it is the only thing that needs a colour at all.</p>
+     */
+    private static float[] colourOf(TrainSpec spec, TrainSpec.Part part, int fallbackOrdinal) {
+        com.micatechnologies.minecraft.rcmc.track.TrackPalette.Colour[] all =
+            com.micatechnologies.minecraft.rcmc.track.TrackPalette.Colour.values();
+        int ordinal = spec == null ? fallbackOrdinal : spec.colourOf(part);
+        // Clamped rather than trusted: an ordinal from an older save, or a colour since removed,
+        // should paint the car something rather than throw inside the render loop.
+        com.micatechnologies.minecraft.rcmc.track.TrackPalette.Colour colour =
+            all[Math.max(0, Math.min(all.length - 1, ordinal))];
+        return new float[] { colour.red(), colour.green(), colour.blue() };
+    }
+
+    /**
      * The car's orientation blended between last tick's and this tick's, by {@code partialTicks}.
      *
      * <p>Position is already interpolated for us — {@code RenderManager} passes {@code x/y/z}
@@ -137,11 +155,12 @@ public class RenderCoasterCar extends Render<EntityCoasterCar> {
         float couplingGap = 0.5F;
         int seatRows = 2;
         boolean drawCoupling = true;
+        TrainSpec spec = null;
 
         RcmcWorldState state = RcmcWorldState.of(entity.world);
         Train train = state == null ? null : state.trains().train(entity.trainId());
         if (train != null) {
-            TrainSpec spec = train.spec();
+            spec = train.spec();
             length = (float) spec.carLength();
             couplingGap = (float) spec.couplingGap();
             // Two riders abreast, so rows are half the seat count.
@@ -153,7 +172,10 @@ public class RenderCoasterCar extends Render<EntityCoasterCar> {
         Tessellator tessellator = Tessellator.getInstance();
         BufferBuilder buffer = tessellator.getBuffer();
         buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_COLOR);
-        CarModel.emit(buffer, length, seatRows, couplingGap, drawCoupling);
+        CarModel.emit(buffer, length, seatRows, couplingGap, drawCoupling,
+            colourOf(spec, TrainSpec.Part.BODY, 3),
+            colourOf(spec, TrainSpec.Part.TRIM, 4),
+            colourOf(spec, TrainSpec.Part.SEATS, 1));
         tessellator.draw();
     }
 }

@@ -9,10 +9,35 @@ package com.micatechnologies.minecraft.rcmc.physics;
  */
 public final class TrainSpec {
 
+    /**
+     * The parts of a car that can be coloured independently.
+     *
+     * <p>Mirrors {@code TrackPalette.Part} in intent but is deliberately its own enum: a train and a
+     * track are painted separately in every park worth looking at, and sharing one enum would imply
+     * a relationship that does not exist.</p>
+     */
+    public enum Part {
+        BODY,
+        TRIM,
+        SEATS
+    }
+
     private final int carCount;
     private final double carLength;
     private final double couplingGap;
     private final int seatsPerCar;
+
+    /**
+     * Paint, as ordinals into {@code TrackPalette.Colour}.
+     *
+     * <p>Stored as ordinals rather than the enum itself so this class stays in {@code physics},
+     * which must not depend on {@code track}. That is a slightly awkward indirection and it is the
+     * price of the layering: physics knows how a train moves, not what colour it is, and only the
+     * renderer needs to resolve these back to actual colours.</p>
+     */
+    private final int bodyColour;
+    private final int trimColour;
+    private final int seatColour;
 
     /**
      * @param carCount    number of cars, at least 1
@@ -23,6 +48,15 @@ public final class TrainSpec {
      * @param seatsPerCar riders per car
      */
     public TrainSpec(int carCount, double carLength, double couplingGap, int seatsPerCar) {
+        this(carCount, carLength, couplingGap, seatsPerCar, 3, 4, 1);
+    }
+
+    /**
+     * @param bodyColour ordinal into {@code TrackPalette.Colour}; see the field javadoc for why
+     *                   this is an int rather than the enum
+     */
+    public TrainSpec(int carCount, double carLength, double couplingGap, int seatsPerCar,
+                     int bodyColour, int trimColour, int seatColour) {
         if (carCount < 1) {
             throw new IllegalArgumentException("carCount must be >= 1, got " + carCount);
         }
@@ -36,6 +70,41 @@ public final class TrainSpec {
         this.carLength = carLength;
         this.couplingGap = couplingGap;
         this.seatsPerCar = seatsPerCar;
+        this.bodyColour = bodyColour;
+        this.trimColour = trimColour;
+        this.seatColour = seatColour;
+    }
+
+    public int bodyColour() {
+        return bodyColour;
+    }
+
+    public int trimColour() {
+        return trimColour;
+    }
+
+    public int seatColour() {
+        return seatColour;
+    }
+
+    public int colourOf(Part part) {
+        switch (part) {
+            case TRIM:
+                return trimColour;
+            case SEATS:
+                return seatColour;
+            case BODY:
+            default:
+                return bodyColour;
+        }
+    }
+
+    /** A copy with one part repainted. Immutable like the rest of the spec. */
+    public TrainSpec withColour(Part part, int colour) {
+        return new TrainSpec(carCount, carLength, couplingGap, seatsPerCar,
+            part == Part.BODY ? colour : bodyColour,
+            part == Part.TRIM ? colour : trimColour,
+            part == Part.SEATS ? colour : seatColour);
     }
 
     /** A single car, roughly the size of a standard coaster car. */

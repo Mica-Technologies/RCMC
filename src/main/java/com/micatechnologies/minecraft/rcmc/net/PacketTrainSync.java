@@ -35,6 +35,9 @@ public class PacketTrainSync implements IMessage {
     private float carLength;
     private float couplingGap;
     private int seatsPerCar;
+    private int bodyColour;
+    private int trimColour;
+    private int seatColour;
     private int sectionId;
     private double distance;
     private double velocity;
@@ -50,6 +53,9 @@ public class PacketTrainSync implements IMessage {
         this.carLength = (float) spec.carLength();
         this.couplingGap = (float) spec.couplingGap();
         this.seatsPerCar = spec.seatsPerCar();
+        this.bodyColour = spec.bodyColour();
+        this.trimColour = spec.trimColour();
+        this.seatColour = spec.seatColour();
         this.sectionId = train.reference().sectionId();
         this.distance = train.reference().distance();
         this.velocity = train.velocity();
@@ -62,6 +68,9 @@ public class PacketTrainSync implements IMessage {
         carLength = buf.readFloat();
         couplingGap = buf.readFloat();
         seatsPerCar = buf.readInt();
+        bodyColour = buf.readInt();
+        trimColour = buf.readInt();
+        seatColour = buf.readInt();
         sectionId = buf.readInt();
         // Doubles, not floats: distance is what the client's integrator continues from, and float
         // rounding here would inject a position error on every correction rather than removing one.
@@ -76,6 +85,9 @@ public class PacketTrainSync implements IMessage {
         buf.writeFloat(carLength);
         buf.writeFloat(couplingGap);
         buf.writeInt(seatsPerCar);
+        buf.writeInt(bodyColour);
+        buf.writeInt(trimColour);
+        buf.writeInt(seatColour);
         buf.writeInt(sectionId);
         buf.writeDouble(distance);
         buf.writeDouble(velocity);
@@ -107,7 +119,8 @@ public class PacketTrainSync implements IMessage {
                 // is why RcmcConfig documents the physics category as server-authoritative.
                 manager.add(message.trainId, new Train(
                     new TrainSpec(message.carCount, message.carLength, message.couplingGap,
-                        message.seatsPerCar),
+                        message.seatsPerCar, message.bodyColour, message.trimColour,
+                        message.seatColour),
                     new PhysicsIntegrator(RcmcConfig.gravity, RcmcConfig.rollingResistance,
                         RcmcConfig.airDrag, RcmcConfig.maxSpeed),
                     ref, message.velocity));
