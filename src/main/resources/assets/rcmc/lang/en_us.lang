@@ -4,6 +4,7 @@ item.rcmc.track_tool.name=Track Builder
 tile.rcmc.track_support.name=Track Support
 tile.rcmc.station_sign.name=Station Line Map
 tile.rcmc.arrival_board.name=Arrival Board
+entity.coaster_car.name=Ride Car
 key.categories.rcmc=Rails & Coasters
 key.rcmc.cycle_segment=Cycle Track Segment Type
 key.rcmc.reset_adjustments=Reset Bank and Height

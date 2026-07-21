@@ -40,24 +40,35 @@ final class SignPanels {
     }
 
     /**
-     * Draws {@code lines} top-to-bottom on both faces of a panel, centred horizontally.
+     * Draws {@code lines} top-to-bottom on both faces of a panel, centred horizontally, at
+     * full brightness — these are lit displays, and a lightmap-darkened board at night would
+     * be exactly backwards.
+     *
+     * <p>The transform is vanilla {@code TileEntitySignRenderer}'s: {@code scale(s, -s, s)}.
+     * Only the y axis flips (the font draws y-down); glyph order runs along {@code +x}, which
+     * reads left-to-right for a viewer on the {@code +z} side of the plane. The first cut used
+     * {@code (-s, -s, s)} — a 180° rotation in disguise — which floated the text upside-down
+     * above the panel, where it looked exactly like no text at all.</p>
      *
      * @param yTop     world-space height of the first line's top
      * @param scale    world units per font pixel (font lines are 10px tall)
      * @param zFace    face offset from the panel centre plane
-     * @param colours  per-line ARGB-less RGB ints (0xRRGGBB), parallel to {@code lines}
+     * @param colours  per-line RGB ints (0xRRGGBB), parallel to {@code lines}
      */
     static void drawLines(FontRenderer font, String[] lines, int[] colours,
                           double yTop, float scale, double zFace) {
+        float lastBrightnessX = net.minecraft.client.renderer.OpenGlHelper.lastBrightnessX;
+        float lastBrightnessY = net.minecraft.client.renderer.OpenGlHelper.lastBrightnessY;
+        net.minecraft.client.renderer.OpenGlHelper.setLightmapTextureCoords(
+            net.minecraft.client.renderer.OpenGlHelper.lightmapTexUnit, 240.0F, 240.0F);
+        GlStateManager.disableLighting();
         for (int face = 0; face < 2; face++) {
             GlStateManager.pushMatrix();
             if (face == 1) {
                 GlStateManager.rotate(180.0F, 0.0F, 1.0F, 0.0F);
             }
             GlStateManager.translate(0.0D, yTop, zFace);
-            // Negative x/y: the font draws y-down and would mirror horizontally otherwise.
-            GlStateManager.scale(-scale, -scale, scale);
-            GlStateManager.disableLighting();
+            GlStateManager.scale(scale, -scale, scale);
             for (int i = 0; i < lines.length; i++) {
                 String line = lines[i];
                 if (line == null || line.isEmpty()) {
@@ -66,9 +77,12 @@ final class SignPanels {
                 font.drawString(line, -font.getStringWidth(line) / 2, i * 10,
                     0xFF000000 | colours[i]);
             }
-            GlStateManager.enableLighting();
             GlStateManager.popMatrix();
         }
+        GlStateManager.enableLighting();
+        net.minecraft.client.renderer.OpenGlHelper.setLightmapTextureCoords(
+            net.minecraft.client.renderer.OpenGlHelper.lightmapTexUnit,
+            lastBrightnessX, lastBrightnessY);
     }
 
     private static void box(BufferBuilder buffer, double x1, double y1, double z1,

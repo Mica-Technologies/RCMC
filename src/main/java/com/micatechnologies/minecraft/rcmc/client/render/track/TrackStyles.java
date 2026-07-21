@@ -31,7 +31,8 @@ final class TrackStyles {
     }
 
     /** The classic coaster look — current dimensions, unchanged, unelectrified. */
-    static final TrackStyles COASTER = new TrackStyles(0.55D, 0.70D, 0.08D, 0.12D, Catenary.NONE);
+    static final TrackStyles COASTER =
+        new TrackStyles(0.55D, 0.70D, 0.08D, 0.12D, 0.05D, 0.05D, Catenary.NONE);
 
     /** Shared transit cross-section; the three electrified variants differ only in catenary. */
     private static final TrackStyles TRANSIT = transit(Catenary.NONE);
@@ -43,19 +44,26 @@ final class TrackStyles {
     final double tieHalfLength;
     final double spineHalfWidth;
     final double spineHalfHeight;
+    final double railHalfWidth;
+    final double railHalfHeight;
     final Catenary catenary;
 
     private TrackStyles(double halfGauge, double tieHalfLength, double spineHalfWidth,
-                        double spineHalfHeight, Catenary catenary) {
+                        double spineHalfHeight, double railHalfWidth, double railHalfHeight,
+                        Catenary catenary) {
         this.halfGauge = halfGauge;
         this.tieHalfLength = tieHalfLength;
         this.spineHalfWidth = spineHalfWidth;
         this.spineHalfHeight = spineHalfHeight;
+        this.railHalfWidth = railHalfWidth;
+        this.railHalfHeight = railHalfHeight;
         this.catenary = catenary;
     }
 
     private static TrackStyles transit(Catenary catenary) {
-        return new TrackStyles(0.80D, 1.05D, 0.14D, 0.12D, catenary);
+        // Heavier everything, sized to sit under the taller (~3.55-block) metro stock: 2 blocks
+        // between railheads, long ties, a chunky spine, and visibly heavier rail.
+        return new TrackStyles(1.00D, 1.40D, 0.20D, 0.16D, 0.09D, 0.07D, catenary);
     }
 
     /** Resolves a section's style id. Unknown or {@code null} ids fall back to the coaster look

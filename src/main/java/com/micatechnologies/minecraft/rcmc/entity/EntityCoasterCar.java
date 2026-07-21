@@ -131,7 +131,7 @@ public class EntityCoasterCar extends Entity {
         // Metro cars are much larger than the default coaster box; size the entity to match once
         // the spec is known (idempotent — setSize is a no-op when unchanged).
         if (train.spec().carStyle() == com.micatechnologies.minecraft.rcmc.physics.TrainSpec.CarStyle.METRO) {
-            setSize(3.0F, 2.75F);
+            setSize(3.0F, 3.55F);
         }
 
         // Motion is reported rather than integrated: several vanilla systems (knockback, the

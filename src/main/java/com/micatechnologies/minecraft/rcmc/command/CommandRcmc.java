@@ -2,6 +2,7 @@ package com.micatechnologies.minecraft.rcmc.command;
 
 import com.micatechnologies.minecraft.rcmc.builder.TrackBuildSession;
 import com.micatechnologies.minecraft.rcmc.debug.DemoCoaster;
+import com.micatechnologies.minecraft.rcmc.debug.DemoMetro;
 import com.micatechnologies.minecraft.rcmc.net.PacketElementSync;
 import com.micatechnologies.minecraft.rcmc.net.PacketTrackSync;
 import com.micatechnologies.minecraft.rcmc.net.PacketTrainRemove;
@@ -68,8 +69,8 @@ public class CommandRcmc extends CommandBase {
     public List<String> getTabCompletions(MinecraftServer server, ICommandSender sender,
                                           String[] args, BlockPos targetPos) {
         if (args.length == 1) {
-            return getListOfStringsMatchingLastWord(args, "demo", "train", "clear", "info", "build",
-                "paint", "style", "rate", "block", "station", "line", "rmsection");
+            return getListOfStringsMatchingLastWord(args, "demo", "metrodemo", "train", "clear",
+                "info", "build", "paint", "style", "rate", "block", "station", "line", "rmsection");
         }
         if (args.length == 3 && "style".equalsIgnoreCase(args[0])) {
             return getListOfStringsMatchingLastWord(args,
@@ -105,6 +106,9 @@ public class CommandRcmc extends CommandBase {
         switch (args[0].toLowerCase(java.util.Locale.ROOT)) {
             case "demo":
                 buildDemo(sender, world, state, args);
+                break;
+            case "metrodemo":
+                buildMetroDemo(sender, world, state);
                 break;
             case "train":
                 spawnTrain(sender, world, state, args);
@@ -300,6 +304,44 @@ public class CommandRcmc extends CommandBase {
 
         reply(sender, TextFormatting.GREEN, "Spawned train #" + trainId + " — " + carCount
             + " cars on section " + sectionId + " at " + speed + " blocks/s.");
+    }
+
+    /**
+     * {@code /rcmc metrodemo} — builds a complete, ready-to-run metro line at the player: flat
+     * catenary-styled alignment, three named stations, and a registered line. One command from
+     * bare terrain to "spawn a train and start service".
+     */
+    private void buildMetroDemo(ICommandSender sender, World world, RcmcWorldState state)
+        throws CommandException {
+        EntityPlayer player = getCommandSenderAsPlayer(sender);
+        int id = state.network().allocateSectionId();
+        DemoMetro.Result demo = DemoMetro.build(id,
+            new Vec3(player.posX, player.posY, player.posZ));
+        state.network().addSection(demo.section);
+
+        com.micatechnologies.minecraft.rcmc.physics.transit.TransitSystem transit = state.transit();
+        java.util.List<com.micatechnologies.minecraft.rcmc.physics.transit.TransitStation> stops =
+            new ArrayList<>();
+        for (int i = 0; i < demo.stationNames.length; i++) {
+            com.micatechnologies.minecraft.rcmc.physics.transit.TransitStation station =
+                new com.micatechnologies.minecraft.rcmc.physics.transit.TransitStation(
+                    demo.stationNames[i], new TrackRef(id, demo.stationDistances[i]));
+            transit.addStation(station);
+            stops.add(station);
+        }
+        transit.addLine(new com.micatechnologies.minecraft.rcmc.physics.transit.TransitLine(
+            "Metro", stops, false));
+
+        state.markTrackDirty(world);
+        broadcastTrack(world, state);
+        RcmcNetwork.sendToAllIn(new com.micatechnologies.minecraft.rcmc.net.PacketTransitSync(transit),
+            world.provider.getDimension());
+
+        reply(sender, TextFormatting.GREEN, "Built metro demo #" + id + " — "
+            + fmt(demo.section.totalLength()) + " blocks, stations "
+            + String.join(", ", demo.stationNames) + ", line 'Metro'.");
+        reply(sender, TextFormatting.GRAY, "Run /rcmc train " + id
+            + " 3 0 metro, then /rcmc line start Metro <trainId> to begin service.");
     }
 
     /**

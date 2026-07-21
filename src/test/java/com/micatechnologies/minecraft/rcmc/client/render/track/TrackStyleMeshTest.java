@@ -51,12 +51,14 @@ class TrackStyleMeshTest {
     @Test
     @DisplayName("catenary poles raise the mesh to mast height, portals likewise with more steel")
     void catenaryReachesMastHeight() {
+        // The contact wire runs 6 blocks up with masts above it — the project owner's world
+        // scale; see TrackMeshBuilder's catenary constants.
         TrackMesh poles = TrackMeshBuilder.build(straight(TrackStyleIds.TRANSIT_CATENARY));
-        assertTrue(poles.maxY > TRACK_Y + 4.5D,
+        assertTrue(poles.maxY > TRACK_Y + 7.0D,
             "expected masts and wires overhead, mesh reaches " + (poles.maxY - TRACK_Y));
 
         TrackMesh portals = TrackMeshBuilder.build(straight(TrackStyleIds.TRANSIT_PORTAL));
-        assertTrue(portals.maxY > TRACK_Y + 4.5D);
+        assertTrue(portals.maxY > TRACK_Y + 7.0D);
         assertTrue(portals.quads.size() > TrackMeshBuilder.build(
                 straight(TrackStyleIds.TRANSIT)).quads.size(),
             "electrification must add geometry");
@@ -67,8 +69,8 @@ class TrackStyleMeshTest {
     void tunnelStyleBuildsARigidBar() {
         TrackMesh tunnel = TrackMeshBuilder.build(straight(TrackStyleIds.TRANSIT_TUNNEL));
         double overhead = tunnel.maxY - TRACK_Y;
-        assertTrue(overhead > 2.5D, "expected an overhead bar, mesh reaches " + overhead);
-        assertTrue(overhead < 4.0D, "a tunnel bar must stay below mast height, reached " + overhead);
+        assertTrue(overhead > 4.0D, "expected an overhead bar clear of the car roof, mesh reaches " + overhead);
+        assertTrue(overhead < 6.0D, "a tunnel bar must stay below mast height, reached " + overhead);
     }
 
     @Test

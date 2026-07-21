@@ -64,6 +64,20 @@ public final class TransitStopController {
      */
     private static final double BERTH_SPEED_EPSILON = 0.05D;
 
+    /**
+     * Speed below which an APPROACHING train reports {@link #isHolding} — deliberately much
+     * larger than {@link #BERTH_SPEED_EPSILON}, and the gap is the whole point. Holding intent
+     * is evaluated once per tick from the tick's <em>starting</em> velocity, but one tick of
+     * service braking removes up to {@code brake · tickSeconds} (0.06 blocks/s at the default
+     * 1.2 blocks/s²) — more than the distance between the old 0.05 threshold and {@code Train}'s
+     * 0.02 stall latch. A train finishing its stop could therefore read "not held" at 0.08,
+     * brake through 0.02 mid-tick, and latch VALLEYED at its own platform — found live at the
+     * demo line's terminus, at the exact stop point, on the first real session. The threshold
+     * must exceed the largest one-tick speed change with margin; physically it is also simply
+     * true — a slow train under active ATO approach control is never stalled, it has motors.
+     */
+    private static final double HOLDING_SPEED = 0.5D;
+
     private final TrainDriver driver;
     private final double cruiseSpeed;
     private final double berthTolerance;
@@ -195,7 +209,7 @@ public final class TransitStopController {
         if (phase != Phase.APPROACHING) {
             return true;
         }
-        return Math.abs(velocity) <= BERTH_SPEED_EPSILON;
+        return Math.abs(velocity) <= HOLDING_SPEED;
     }
 
     /** True while passengers can pass through the doorway — the {@link Phase#BOARDING} phase. */

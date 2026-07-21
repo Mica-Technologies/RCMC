@@ -24,13 +24,36 @@ import net.minecraft.tileentity.TileEntity;
  * per-facing model variants) — the renderer rotates by it, exactly as the car renderer orients
  * by a frame instead of entity yaw.</p>
  */
-public abstract class TileTransitSignBase extends TileEntity {
+public abstract class TileTransitSignBase extends TileEntity
+    implements net.minecraft.util.ITickable {
 
     /** How far away a station may be and still count as "this platform's station". */
     private static final double LINK_RANGE = 48.0D;
 
+    /** How often an unlinked sign retries its link, in ticks. */
+    private static final int RELINK_INTERVAL = 40;
+
     private String stationName = "";
     private float facingDegrees;
+    private int relinkCountdown;
+
+    /**
+     * An unlinked sign keeps trying to link itself. This is what makes a sign placed by
+     * {@code /setblock} (which never fires {@code onBlockPlacedBy}), or placed before its
+     * station existed, come alive on its own instead of needing a ritual right-click — the
+     * signs' whole design is "resolve from the live registry", and the link should be no
+     * exception. Linked signs do nothing here; the retry is server-side and cheap.
+     */
+    @Override
+    public void update() {
+        if (world == null || world.isRemote || isLinked()) {
+            return;
+        }
+        if (++relinkCountdown >= RELINK_INTERVAL) {
+            relinkCountdown = 0;
+            linkToNearestStation();
+        }
+    }
 
     /**
      * Binds to the nearest station (by its stop point's world position) within range, or to
@@ -58,8 +81,12 @@ public abstract class TileTransitSignBase extends TileEntity {
                 nearest = station.name();
             }
         }
-        this.stationName = nearest;
-        pushUpdate();
+        // Only announce a change — the periodic relink retry must not mark the world dirty
+        // and respam watching clients every interval while there is still nothing to find.
+        if (!nearest.equals(stationName)) {
+            this.stationName = nearest;
+            pushUpdate();
+        }
     }
 
     public String stationName() {

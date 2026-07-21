@@ -72,28 +72,15 @@ public final class TrackMeshBuilder {
     private static final int MAX_RINGS = 8000;
 
     // ---- cross-section, in blocks, in the frame's local (right, up) plane ----
-    // Gauge, tie length and spine size come from the section's TrackStyles; only the
+    // Gauge, tie length, rail and spine sizes all come from the section's TrackStyles; only the
     // style-independent pieces remain constants here.
-
-    private static final double RAIL_HALF_WIDTH = 0.05D;
-    private static final double RAIL_HALF_HEIGHT = 0.05D;
 
     private static final double SPINE_CENTER_U = -0.35D;
 
-    /**
-     * Ties span vertically from the underside of the rails down to the top of the spine, bridging
-     * them into one structure.
-     *
-     * <p>They used to be thin plates floating at {@code u = -0.05}, leaving a visible gap of open
-     * air between the rails and the spine below — the track read as two unrelated ribbons rather
-     * than as a single piece of steelwork. Deriving the extent from the rail and spine geometry
-     * rather than hard-coding it means the gap cannot reopen if either is retuned (which is also
-     * why it is computed per style rather than stored: transit spines differ).</p>
-     *
-     * <p>Real box-spine coaster track is built exactly this way: the running rails are carried on
-     * webbing off a central spine, and the webbing is what you see between the ties.</p>
-     */
-    private static final double TIE_TOP_U = -RAIL_HALF_HEIGHT;
+    // Ties span vertically from the underside of the rails down to the top of the spine,
+    // bridging them into one structure — see tieProfile, which derives the extent from the
+    // style's rail and spine geometry so the gap between them cannot reopen if either is
+    // retuned. Real box-spine coaster track is built exactly this way.
 
     /** Chain link spacing along the lift, in blocks. Close enough to read as links, not a stripe. */
     private static final double CHAIN_LINK_SPACING = 0.5D;
@@ -477,7 +464,7 @@ public final class TrackMeshBuilder {
     }
 
     private static ProfileEdge[] railProfile(TrackStyles style, int side) {
-        return rectangle(side * style.halfGauge, 0.0D, RAIL_HALF_WIDTH, RAIL_HALF_HEIGHT);
+        return rectangle(side * style.halfGauge, 0.0D, style.railHalfWidth, style.railHalfHeight);
     }
 
     private static ProfileEdge[] spineProfile(TrackStyles style) {
@@ -485,9 +472,10 @@ public final class TrackMeshBuilder {
     }
 
     private static ProfileEdge[] tieProfile(TrackStyles style) {
+        double tieTop = -style.railHalfHeight;
         double tieBottom = SPINE_CENTER_U + style.spineHalfHeight;
-        double centre = (TIE_TOP_U + tieBottom) * 0.5D;
-        double halfHeight = Math.abs(TIE_TOP_U - tieBottom) * 0.5D;
+        double centre = (tieTop + tieBottom) * 0.5D;
+        double halfHeight = Math.abs(tieTop - tieBottom) * 0.5D;
         return rectangle(0.0D, centre, style.tieHalfLength, halfHeight);
     }
 
@@ -588,11 +576,13 @@ public final class TrackMeshBuilder {
     }
 
     // ---- catenary ----
-    // Heights are frame-local u above the railheads, sizes chosen so a metro car (roof ~2.75)
-    // clears the contact wire with a pantograph's worth of daylight. All of this is dressing:
-    // nothing reads it back, and the "requires power" gameplay hook remains deliberately unbuilt.
+    // Heights are frame-local u above the railheads. The contact wire runs a full 6 blocks up —
+    // per the project owner's read of world scale — with the metro car's raised pantograph
+    // (MetroCarModel, roof ~3.55, shoe 5.85) closing the gap; the two files are one measurement
+    // in two places. All of this is dressing: nothing reads it back, and the "requires power"
+    // gameplay hook remains deliberately unbuilt.
 
-    private static final double CONTACT_WIRE_U = 3.4D;
+    private static final double CONTACT_WIRE_U = 6.0D;
     private static final double CONTACT_WIRE_HALF = 0.03D;
 
     /** Messenger height above the contact wire: at the mast, and at midspan (the sag). */
@@ -600,7 +590,7 @@ public final class TrackMeshBuilder {
     private static final double MESSENGER_AT_MIDSPAN = 0.15D;
 
     private static final double MAST_SPACING = 24.0D;
-    private static final double MAST_TOP_U = 4.7D;
+    private static final double MAST_TOP_U = 7.4D;
     private static final double MAST_BOTTOM_U = -0.45D;
     private static final double MAST_HALF_WIDTH = 0.09D;
 
@@ -610,8 +600,9 @@ public final class TrackMeshBuilder {
     private static final double MESSENGER_SAMPLE_STEP = 1.5D;
     private static final double DROPPER_SPACING = 6.0D;
 
-    /** Rigid overhead rail (tunnel style) runs lower — tunnels have no room for sag. */
-    private static final double RIGID_BAR_U = 2.9D;
+    /** Rigid overhead rail (tunnel style) runs lower — tunnels have no room for sag — but still
+     *  clear of the 3.55-block car roof. */
+    private static final double RIGID_BAR_U = 4.6D;
 
     private static final float[] MAST_COLOR = { 0.36F, 0.37F, 0.40F };
     private static final float[] CONTACT_COLOR = { 0.48F, 0.33F, 0.24F };
@@ -680,25 +671,39 @@ public final class TrackMeshBuilder {
         double postCentreU = (MAST_TOP_U + MAST_BOTTOM_U) * 0.5D;
         double postHalfU = (MAST_TOP_U - MAST_BOTTOM_U) * 0.5D;
 
+        // Height of the member that actually carries the wires at this mast: the bracket arm
+        // sits exactly at the messenger's mast-end height, so the sag span visibly lands ON it
+        // rather than peaking in mid-air beside the mast — the first cut floated the arm halfway
+        // between the two wires, touching neither, which read as disconnected hardware from any
+        // distance.
+        double carrierU = CONTACT_WIRE_U + MESSENGER_AT_MAST;
+
         if (style.catenary == TrackStyles.Catenary.PORTALS) {
             for (int side = -1; side <= 1; side += 2) {
                 box(worldPoint(frame, side * offset, postCentreU),
                     frame.forward.scale(MAST_HALF_WIDTH), frame.right.scale(MAST_HALF_WIDTH),
                     frame.up.scale(postHalfU), MAST_COLOR, out);
             }
-            // The portal beam spans post to post above the wires.
-            box(worldPoint(frame, 0.0D, MAST_TOP_U - 0.1D),
+            // The portal beam spans post to post, carrying the messenger.
+            box(worldPoint(frame, 0.0D, carrierU),
                 frame.forward.scale(MAST_HALF_WIDTH), frame.right.scale(offset + MAST_HALF_WIDTH),
                 frame.up.scale(MAST_HALF_WIDTH), MAST_COLOR, out);
         } else {
             box(worldPoint(frame, offset, postCentreU),
                 frame.forward.scale(MAST_HALF_WIDTH), frame.right.scale(MAST_HALF_WIDTH),
                 frame.up.scale(postHalfU), MAST_COLOR, out);
-            // Bracket arm from the mast out over the centreline, at registration height.
-            box(worldPoint(frame, offset * 0.5D, CONTACT_WIRE_U + MESSENGER_AT_MAST * 0.5D),
+            // Bracket arm from the mast out over the centreline, at messenger height.
+            box(worldPoint(frame, offset * 0.5D, carrierU),
                 frame.forward.scale(0.06D), frame.right.scale(offset * 0.5D + MAST_HALF_WIDTH),
                 frame.up.scale(0.06D), MAST_COLOR, out);
         }
+
+        // Registration drop: the vertical link tying the contact wire up to its carrier, so the
+        // wire visibly hangs from hardware at every mast.
+        double dropHalf = (carrierU - CONTACT_WIRE_U) * 0.5D;
+        box(worldPoint(frame, 0.0D, CONTACT_WIRE_U + dropHalf),
+            frame.forward.scale(0.04D), frame.right.scale(0.04D),
+            frame.up.scale(dropHalf), MAST_COLOR, out);
     }
 
     /**

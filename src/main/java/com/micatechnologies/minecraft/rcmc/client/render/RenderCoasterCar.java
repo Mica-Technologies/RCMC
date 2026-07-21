@@ -173,7 +173,8 @@ public class RenderCoasterCar extends Render<EntityCoasterCar> {
         BufferBuilder buffer = tessellator.getBuffer();
         buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_COLOR);
         if (spec != null && spec.carStyle() == TrainSpec.CarStyle.METRO) {
-            MetroCarModel.emit(buffer, length, drawCoupling,
+            // Pantographs on alternate cars, like a real EMU consist.
+            MetroCarModel.emit(buffer, length, drawCoupling, entity.carIndex() % 2 == 0,
                 colourOf(spec, TrainSpec.Part.BODY, 3),
                 colourOf(spec, TrainSpec.Part.TRIM, 4),
                 colourOf(spec, TrainSpec.Part.SEATS, 1));

@@ -6,8 +6,8 @@
   },
   "elements": [
     {
-      "from": [ 6.5, 12, 6.5 ],
-      "to": [ 9.5, 16, 9.5 ],
+      "from": [ 7.35, 12, 7.35 ],
+      "to": [ 8.65, 16, 8.65 ],
       "faces": {
         "down":  { "texture": "#steel" },
         "up":    { "texture": "#steel", "cullface": "up" },

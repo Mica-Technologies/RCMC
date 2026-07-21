@@ -40,12 +40,25 @@ final class MetroCarModel {
     private static final float FLOOR_TOP = 1.00F;
 
     // --- Body shell. ---------------------------------------------------------------------------
+    // Heights sized against the real thing at 1 block ≈ 1 m: metro car bodies run ~3.5 m over
+    // the rails. The first cut stood 2.75 and read as a toy next to full-height platforms —
+    // exactly the mistake the 3-block width was chosen to avoid.
     private static final float BODY_HALF_WIDTH = 1.50F;
     private static final float WALL_THICKNESS = 0.10F;
-    private static final float WINDOW_SILL = 1.65F;
-    private static final float WINDOW_HEAD = 2.30F;
-    private static final float ROOF_BASE = 2.60F;
-    private static final float ROOF_TOP = 2.75F;
+    private static final float WINDOW_SILL = 1.85F;
+    private static final float WINDOW_HEAD = 2.95F;
+    private static final float ROOF_BASE = 3.35F;
+    private static final float ROOF_TOP = 3.55F;
+
+    // --- Pantograph: a simple raised frame reaching from the roof to just under the contact
+    // wire (6.0 over the rails, per TrackMeshBuilder's catenary heights — the two are one
+    // measurement in two places, like the seat heights). Drawn on alternate cars.
+    private static final float PANTO_BASE_TOP = ROOF_TOP + 0.18F;
+
+    /** Contact wire runs at 6.0 with a 0.03 half-height; the shoe stops a hair under its
+     *  underside so the two read as touching without z-fighting. */
+    private static final float PANTO_SHOE_U = 5.93F;
+    private static final float PANTO_HALF_SPAN = 0.85F;
 
     /** Window pillars, roughly one per body panel. */
     private static final float PILLAR_WIDTH = 0.15F;
@@ -82,11 +95,14 @@ final class MetroCarModel {
     /**
      * Emits one metro car.
      *
-     * @param bogieSpacing {@code TrainSpec.carLength} — bogie-centre distance in blocks; the
-     *                     body is derived longer, see the class javadoc
-     * @param drawCoupling whether to draw the rear coupler bar (not the last car)
+     * @param bogieSpacing   {@code TrainSpec.carLength} — bogie-centre distance in blocks; the
+     *                       body is derived longer, see the class javadoc
+     * @param drawCoupling   whether to draw the rear coupler bar (not the last car)
+     * @param drawPantograph whether this car carries a pantograph — alternate cars, like a real
+     *                       EMU consist
      */
     static void emit(BufferBuilder buffer, float bogieSpacing, boolean drawCoupling,
+                     boolean drawPantograph,
                      float[] bodyColour, float[] trimColour, float[] seatColour) {
         float bodyLength = bogieSpacing / TRUCK_CENTRE_RATIO;
         float half = bodyLength * 0.5F;
@@ -115,6 +131,10 @@ final class MetroCarModel {
         float truckAt = bogieSpacing * 0.5F;
         emitTruck(buffer, truckAt);
         emitTruck(buffer, -truckAt);
+
+        if (drawPantograph) {
+            emitPantograph(buffer);
+        }
 
         if (drawCoupling) {
             box(buffer, -COUPLER_HALF_WIDTH, COUPLER_BOTTOM, -half - GAP_CLEARANCE,
@@ -181,6 +201,23 @@ final class MetroCarModel {
             box(buffer, inner - 0.08F, SEAT_TOP, run[0], inner, SEAT_BACK_TOP, run[1], seatColour);
             box(buffer, -inner, SEAT_TOP, run[0], -inner + 0.08F, SEAT_BACK_TOP, run[1], seatColour);
         }
+    }
+
+    /**
+     * A raised pantograph, simplified to placeholder boxes: base frame on the roof, two slanted
+     * arms approximated as stacked struts, and a contact shoe bar riding just under the wire.
+     */
+    private static void emitPantograph(BufferBuilder buffer) {
+        // Base frame across the roof centre.
+        box(buffer, -0.7F, ROOF_TOP, -0.55F, 0.7F, PANTO_BASE_TOP, 0.55F, TRUCK_COLOR);
+        // Lower and upper arm struts, narrowing with height.
+        float armMidU = (PANTO_BASE_TOP + PANTO_SHOE_U) * 0.5F;
+        box(buffer, -0.09F, PANTO_BASE_TOP, -0.30F, 0.09F, armMidU, -0.14F, TRUCK_COLOR);
+        box(buffer, -0.09F, PANTO_BASE_TOP, 0.14F, 0.09F, armMidU, 0.30F, TRUCK_COLOR);
+        box(buffer, -0.07F, armMidU, -0.10F, 0.07F, PANTO_SHOE_U - 0.06F, 0.10F, TRUCK_COLOR);
+        // The shoe: a wide bar across the direction of travel, kissing the wire height.
+        box(buffer, -PANTO_HALF_SPAN, PANTO_SHOE_U - 0.06F, -0.10F,
+            PANTO_HALF_SPAN, PANTO_SHOE_U, 0.10F, UNDERFRAME_COLOR);
     }
 
     private static void emitTruck(BufferBuilder buffer, float atZ) {
