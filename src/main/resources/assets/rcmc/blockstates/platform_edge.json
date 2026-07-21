@@ -1,0 +1,9 @@
+{
+  "_comment": "The model draws its warning strip on the +z (south) face, and FACING points at the track, so each variant rotates south onto the facing direction.",
+  "variants": {
+    "facing=south": { "model": "rcmc:platform_edge" },
+    "facing=west":  { "model": "rcmc:platform_edge", "y": 90 },
+    "facing=north": { "model": "rcmc:platform_edge", "y": 180 },
+    "facing=east":  { "model": "rcmc:platform_edge", "y": 270 }
+  }
+}

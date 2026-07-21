@@ -110,6 +110,15 @@ public final class TransitSystem {
         return signalsByLine.get(key(lineName));
     }
 
+    /**
+     * Every line's installed signalling, keyed by the same normalised name {@link #line} uses —
+     * what the codec writes. Keyed rather than a bare collection because a {@link LineSignals}
+     * does not know which line it belongs to; the association lives here and nowhere else.
+     */
+    public Map<String, LineSignals> signals() {
+        return Collections.unmodifiableMap(signalsByLine);
+    }
+
     /** Every line that stops at a station of this name — what a sign linked to it renders. */
     public java.util.List<TransitLine> linesServing(String stationName) {
         java.util.List<TransitLine> serving = new java.util.ArrayList<>();
@@ -136,13 +145,17 @@ public final class TransitSystem {
         for (TransitLine line : incoming.lines()) {
             addLine(line);
         }
+        // Signals come across too: a client never simulates them, but this method's contract is
+        // "the authored content, wholesale", and a copy that silently dropped a field would be a
+        // trap for the next caller — the save path already round-trips them.
+        signalsByLine.putAll(incoming.signals());
     }
 
     /** Wire-format snapshots of every running service, for {@code PacketServiceSync}. */
     public java.util.List<ServiceSnapshot> serviceSnapshots() {
         java.util.List<ServiceSnapshot> snapshots = new java.util.ArrayList<>(services.size());
-        for (LineService service : services.values()) {
-            snapshots.add(ServiceSnapshot.of(service));
+        for (Map.Entry<Integer, LineService> entry : services.entrySet()) {
+            snapshots.add(ServiceSnapshot.of(entry.getKey(), entry.getValue()));
         }
         return snapshots;
     }

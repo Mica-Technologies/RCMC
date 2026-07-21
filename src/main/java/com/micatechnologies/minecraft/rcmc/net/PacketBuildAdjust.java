@@ -39,7 +39,13 @@ public class PacketBuildAdjust implements IMessage {
         /** Piece tool: resize the selected prefab. Value is the number of steps, signed. */
         ADJUST_PIECE_PARAMETER,
         /** Piece tool: take the last appended piece back off. */
-        UNDO_PIECE
+        UNDO_PIECE,
+        /** Transit tool: move to the next authoring mode. */
+        CYCLE_TRANSIT_MODE,
+        /** Transit tool: create the line or switch currently being assembled. */
+        COMMIT_TRANSIT,
+        /** Transit tool: loop or shuttle, for the line being assembled. */
+        TOGGLE_LINE_KIND
     }
 
     private Action action;
@@ -93,6 +99,16 @@ public class PacketBuildAdjust implements IMessage {
                 case ADJUST_PIECE_PARAMETER:
                 case UNDO_PIECE:
                     applyToPieceSession(message, player);
+                    return;
+                case CYCLE_TRANSIT_MODE:
+                    com.micatechnologies.minecraft.rcmc.item.ItemTransitTool.cycleMode(player);
+                    return;
+                case COMMIT_TRANSIT:
+                    com.micatechnologies.minecraft.rcmc.item.ItemTransitTool
+                        .commit(player, player.world);
+                    return;
+                case TOGGLE_LINE_KIND:
+                    com.micatechnologies.minecraft.rcmc.item.ItemTransitTool.toggleLineKind(player);
                     return;
                 case CYCLE_COLOUR:
                     com.micatechnologies.minecraft.rcmc.item.ItemTrackEditor

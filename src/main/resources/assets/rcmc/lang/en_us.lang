@@ -2,6 +2,8 @@ itemGroup.rcmc=Rails & Coasters
 
 item.rcmc.track_tool.name=Track Builder
 tile.rcmc.track_support.name=Track Support
+tile.rcmc.platform.name=Station Platform
+tile.rcmc.platform_edge.name=Platform Edge
 tile.rcmc.station_sign.name=Station Line Map
 tile.rcmc.arrival_board.name=Arrival Board
 entity.coaster_car.name=Ride Car
@@ -12,3 +14,8 @@ item.rcmc.track_editor.name=Track Editor
 key.rcmc.cycle_colour=Cycle Track Colour
 key.rcmc.cycle_paint_part=Cycle Painted Part
 item.rcmc.piece_tool.name=Coaster Piece Builder
+item.rcmc.transit_tool.name=Transit Builder
+
+subtitles.rcmc.subtitle.metro_door_chime=Doors closing
+subtitles.rcmc.subtitle.metro_door_close=Doors close
+subtitles.rcmc.subtitle.metro_brake_release=Brakes release

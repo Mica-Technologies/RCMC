@@ -76,6 +76,24 @@ public final class BuildToolInput {
         boolean paintPart = CYCLE_PAINT_PART.isPressed();
         EntityPlayer player = Minecraft.getMinecraft().player;
 
+        // The transit tool takes the same three keys and gives them its own meanings: G picks
+        // what a click authors, C commits the line or switch being assembled, V is loop/shuttle.
+        // It returns early for the same reason the piece tool does — one item, one meaning per key.
+        if (holdingTransitTool(player)) {
+            if (cycle) {
+                RcmcNetwork.sendToServer(
+                    new PacketBuildAdjust(PacketBuildAdjust.Action.CYCLE_TRANSIT_MODE, 0.0D));
+            }
+            if (colour) {
+                RcmcNetwork.sendToServer(
+                    new PacketBuildAdjust(PacketBuildAdjust.Action.COMMIT_TRANSIT, 0.0D));
+            }
+            if (paintPart) {
+                RcmcNetwork.sendToServer(
+                    new PacketBuildAdjust(PacketBuildAdjust.Action.TOGGLE_LINE_KIND, 0.0D));
+            }
+            return;
+        }
         // Painting is an editor-only action; the build tool has no section selected to paint.
         if (holdingEditor(player)) {
             if (colour) {
@@ -182,6 +200,12 @@ public final class BuildToolInput {
      */
     private static boolean sneakKeyHeld(Minecraft mc) {
         return mc.gameSettings != null && mc.gameSettings.keyBindSneak.isKeyDown();
+    }
+
+    private static boolean holdingTransitTool(EntityPlayer player) {
+        return player != null && RcmcItems.transitTool != null
+            && (player.getHeldItemMainhand().getItem() == RcmcItems.transitTool
+                || player.getHeldItemOffhand().getItem() == RcmcItems.transitTool);
     }
 
     private static boolean holdingEditor(EntityPlayer player) {

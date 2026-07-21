@@ -36,6 +36,30 @@ public class RenderArrivalBoard extends TileEntitySpecialRenderer<TileArrivalBoa
     /** Nearest trains shown per direction, matching the reference mock. */
     private static final int ROWS_PER_DIRECTION = 2;
 
+    /**
+     * Screen size, in blocks. A real concourse board is a big panel read from across a platform,
+     * and the first cut was under a block wide — legible only with your nose against it, which is
+     * not what a board is for. 3.2 × 1.5 hanging from its ceiling mount reads from down the
+     * platform. Drawn on both faces, like every real one.
+     *
+     * <p>{@code TileArrivalBoard.getRenderBoundingBox} must contain these; a screen this much
+     * larger than its own block gets culled otherwise.</p>
+     */
+    private static final double PANEL_HALF_WIDTH = 1.6D;
+    private static final double PANEL_HEIGHT = 1.5D;
+
+    /** Top of the screen, just under the ceiling mount so the stub still meets it. */
+    private static final double PANEL_TOP = 0.97D;
+
+    private static final double PANEL_HALF_THICKNESS = 0.06D;
+
+    /**
+     * World units per font pixel, sized so the tallest layout — a station name, then two direction
+     * groups of a label and {@link #ROWS_PER_DIRECTION} rows each — fits the panel height. Font
+     * lines are 10px, so the pitch is {@code 10 × scale}.
+     */
+    private static final float TEXT_SCALE = 0.018F;
+
     @Override
     public void render(TileArrivalBoard board, double x, double y, double z,
                        float partialTicks, int destroyStage, float alpha) {
@@ -43,7 +67,8 @@ public class RenderArrivalBoard extends TileEntitySpecialRenderer<TileArrivalBoa
         GlStateManager.translate(x + 0.5D, y, z + 0.5D);
         GlStateManager.rotate(-board.facingDegrees(), 0.0F, 1.0F, 0.0F);
 
-        SignPanels.drawPanel(0.44D, 0.38D, 0.97D, 0.045D, 0.05F, 0.05F, 0.06F);
+        SignPanels.drawPanel(PANEL_HALF_WIDTH, PANEL_TOP - PANEL_HEIGHT, PANEL_TOP,
+            PANEL_HALF_THICKNESS, 0.05F, 0.05F, 0.06F);
 
         List<String> lines = new ArrayList<>();
         buildRows(board, lines);
@@ -53,7 +78,8 @@ public class RenderArrivalBoard extends TileEntitySpecialRenderer<TileArrivalBoa
             colours[i] = text[i].startsWith(" ") || Character.isDigit(text[i].charAt(0))
                 ? AMBER : (i == 0 ? MUTED_COLOUR : AMBER);
         }
-        SignPanels.drawLines(getFontRenderer(), text, colours, 0.93D, 0.0075F, 0.05D);
+        SignPanels.drawLines(getFontRenderer(), text, colours, PANEL_TOP - 0.08D, TEXT_SCALE,
+            PANEL_HALF_THICKNESS + 0.005D);
 
         GlStateManager.popMatrix();
     }

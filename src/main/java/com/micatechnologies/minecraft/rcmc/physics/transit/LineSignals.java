@@ -162,6 +162,10 @@ public final class LineSignals {
         return margin;
     }
 
+    public double horizon() {
+        return horizon;
+    }
+
     @Override
     public String toString() {
         return "LineSignals{" + blocks.size() + " blocks, occupied=" + occupancy.size() + '}';

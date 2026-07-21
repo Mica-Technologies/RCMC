@@ -14,6 +14,7 @@ public final class RcmcItems {
     public static ItemTrackTool trackTool;
     public static ItemTrackEditor trackEditor;
     public static ItemPieceTool pieceTool;
+    public static ItemTransitTool transitTool;
 
     private RcmcItems() {
         throw new AssertionError("No instances.");
@@ -23,5 +24,6 @@ public final class RcmcItems {
         trackTool = RcmcRegistry.addItem(new ItemTrackTool());
         trackEditor = RcmcRegistry.addItem(new ItemTrackEditor());
         pieceTool = RcmcRegistry.addItem(new ItemPieceTool());
+        transitTool = RcmcRegistry.addItem(new ItemTransitTool());
     }
 }

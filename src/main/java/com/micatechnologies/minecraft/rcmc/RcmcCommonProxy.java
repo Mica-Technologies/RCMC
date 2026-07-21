@@ -21,4 +21,10 @@ public class RcmcCommonProxy implements RcmcProxy {
     @Override
     public void postInit(FMLPostInitializationEvent event) {
     }
+
+    /** No local player exists on a server. */
+    @Override
+    public boolean isLocalPlayerAboard(int trainId) {
+        return false;
+    }
 }

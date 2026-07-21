@@ -106,6 +106,13 @@ public class Rcmc {
         event.getRegistry().registerAll(RcmcRegistry.getItems().toArray(new Item[0]));
     }
 
+    @SubscribeEvent
+    public void registerSounds(RegistryEvent.Register<net.minecraft.util.SoundEvent> event) {
+        event.getRegistry().registerAll(
+            com.micatechnologies.minecraft.rcmc.sound.RcmcSounds.all()
+                .toArray(new net.minecraft.util.SoundEvent[0]));
+    }
+
     @EventHandler
     public void init(FMLInitializationEvent event) {
         proxy.init(event);

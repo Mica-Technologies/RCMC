@@ -48,6 +48,68 @@ class TransitStopControllerTest {
     }
 
     @Test
+    @DisplayName("the doors travel from shut to open and back, not snapping between the two")
+    void doorFractionSweepsBothWays() {
+        TrackNetwork flat = flatNetwork(1000.0D);
+        TransitStopController controller = controller();
+        Train train = new Train(TrainSpec.singleCar(), realistic(), new TrackRef(1, 400.0D), 0.0D);
+
+        assertEquals(0.0D, controller.doorFraction(), 1e-9D,
+            "an approaching train has its doors shut");
+
+        java.util.List<Double> opening = new java.util.ArrayList<>();
+        java.util.List<Double> closing = new java.util.ArrayList<>();
+        int guard = 0;
+        TransitStopController.Phase last = controller.phase();
+        while (controller.stopsServed() == 0 && guard++ < 2000) {
+            tickWithController(train, flat, controller, 400.0D);
+            if (controller.phase() == TransitStopController.Phase.DOORS_OPENING) {
+                opening.add(controller.doorFraction());
+            }
+            if (controller.phase() == TransitStopController.Phase.DOORS_CLOSING) {
+                closing.add(controller.doorFraction());
+            }
+            last = controller.phase();
+        }
+
+        assertTrue(opening.size() > 2, "expected several ticks of the doors opening");
+        assertTrue(closing.size() > 2, "expected several ticks of the doors closing");
+        // The animation exists only if the value passes through the middle rather than jumping.
+        assertTrue(opening.stream().anyMatch(f -> f > 0.2D && f < 0.8D),
+            "the doors must be caught part-open while opening, or there is no animation to see");
+        assertTrue(closing.stream().anyMatch(f -> f > 0.2D && f < 0.8D),
+            "the doors must be caught part-open while closing");
+        for (int i = 1; i < opening.size(); i++) {
+            assertTrue(opening.get(i) >= opening.get(i - 1) - 1e-9D,
+                "the doors must not slide backwards while opening");
+        }
+        for (int i = 1; i < closing.size(); i++) {
+            assertTrue(closing.get(i) <= closing.get(i - 1) + 1e-9D,
+                "the doors must not slide back open while closing");
+        }
+        assertEquals(TransitStopController.Phase.APPROACHING, last);
+    }
+
+    @Test
+    @DisplayName("the doors are fully open exactly while passengers may board")
+    void fullyOpenWhileBoarding() {
+        TrackNetwork flat = flatNetwork(1000.0D);
+        TransitStopController controller = controller();
+        Train train = new Train(TrainSpec.singleCar(), realistic(), new TrackRef(1, 400.0D), 0.0D);
+
+        int guard = 0;
+        while (controller.stopsServed() == 0 && guard++ < 2000) {
+            tickWithController(train, flat, controller, 400.0D);
+            // The boarding gate and the drawn doors must never disagree: a door drawn shut that
+            // admits a rider, or one drawn open that refuses, is the bug this pairing prevents.
+            if (controller.doorsOpen()) {
+                assertEquals(1.0D, controller.doorFraction(), 1e-9D,
+                    "boarding is only allowed once the leaves are fully back");
+            }
+        }
+    }
+
+    @Test
     @DisplayName("the door cycle runs open, boarding, close for exactly the configured tick counts")
     void doorCycleTimingIsExact() {
         TrackNetwork flat = flatNetwork(1000.0D);

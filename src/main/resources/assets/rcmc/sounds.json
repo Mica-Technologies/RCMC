@@ -1,0 +1,17 @@
+{
+  "metro_door_chime": {
+    "category": "neutral",
+    "subtitle": "rcmc.subtitle.metro_door_chime",
+    "sounds": [ { "name": "rcmc:metro_door_chime", "stream": false } ]
+  },
+  "metro_door_close": {
+    "category": "neutral",
+    "subtitle": "rcmc.subtitle.metro_door_close",
+    "sounds": [ { "name": "rcmc:metro_door_close", "stream": false } ]
+  },
+  "metro_brake_release": {
+    "category": "neutral",
+    "subtitle": "rcmc.subtitle.metro_brake_release",
+    "sounds": [ { "name": "rcmc:metro_brake_release", "stream": false } ]
+  }
+}

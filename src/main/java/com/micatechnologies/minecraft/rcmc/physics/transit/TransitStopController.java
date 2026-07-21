@@ -217,8 +217,41 @@ public final class TransitStopController {
         return phase == Phase.BOARDING;
     }
 
+    /**
+     * How far the doors are physically open, {@code 0} shut to {@code 1} fully open.
+     *
+     * <p>Distinct from {@link #doorsOpen}, which is the narrower question "may a passenger walk
+     * through right now" and stays false while the leaves are still travelling. This is what the
+     * renderer animates against, and it is computed here rather than guessed on the client because
+     * the tick counts that drive it live here: a client easing a boolean would have to invent the
+     * opening and closing ramps, and would drift out of step with the real cycle.</p>
+     */
+    public double doorFraction() {
+        switch (phase) {
+            case DOORS_OPENING:
+                return doorOpenTicks == 0 ? 1.0D
+                    : 1.0D - (double) phaseTicksRemaining / doorOpenTicks;
+            case BOARDING:
+                return 1.0D;
+            case DOORS_CLOSING:
+                return doorCloseTicks == 0 ? 0.0D
+                    : (double) phaseTicksRemaining / doorCloseTicks;
+            case APPROACHING:
+            default:
+                return 0.0D;
+        }
+    }
+
     public Phase phase() {
         return phase;
+    }
+
+    /**
+     * Ticks left in the current phase — what an observer needs to schedule something a fixed lead
+     * time before the phase ends, such as a door chime that must finish before the leaves move.
+     */
+    public int phaseTicksRemaining() {
+        return phaseTicksRemaining;
     }
 
     /** How many complete stop cycles (berth through doors-closed) this controller has served. */

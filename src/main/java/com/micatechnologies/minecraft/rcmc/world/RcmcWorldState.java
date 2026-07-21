@@ -60,6 +60,11 @@ public final class RcmcWorldState {
      */
     private com.micatechnologies.minecraft.rcmc.physics.transit.TransitSystem transit =
         new com.micatechnologies.minecraft.rcmc.physics.transit.TransitSystem();
+
+    /** Watches door phases and plays the metro sounds; server-side, decoration only. */
+    private final com.micatechnologies.minecraft.rcmc.sound.TransitSounds transitSounds =
+        new com.micatechnologies.minecraft.rcmc.sound.TransitSounds();
+
     private final boolean remote;
 
     private RcmcWorldState(TrackNetwork network, boolean remote) {
@@ -213,6 +218,7 @@ public final class RcmcWorldState {
             java.util.UUID id = event.player.getUniqueID();
             com.micatechnologies.minecraft.rcmc.builder.TrackBuildSession.clear(id);
             com.micatechnologies.minecraft.rcmc.builder.PieceBuildSession.clear(id);
+            com.micatechnologies.minecraft.rcmc.builder.TransitBuildSession.clear(id);
         }
 
         /** New arrivals need the track before any train state can mean anything. */
@@ -275,6 +281,14 @@ public final class RcmcWorldState {
                 }
                 state.trains.tick(state.network, control,
                     RcmcConfig.physicsSubSteps, RcmcConstants.SECONDS_PER_TICK);
+
+                // After the tick, so the phases the sounds react to are this tick's. Server only;
+                // the client hears what the server broadcasts rather than deciding for itself,
+                // which keeps a chime from firing twice on an integrated server.
+                if (!event.world.isRemote) {
+                    state.transitSounds.tick(event.world, state.transit, state.trains,
+                        state.network);
+                }
             }
             catch (RuntimeException e) {
                 // A geometry or traversal fault must not take the world tick down with it. Log

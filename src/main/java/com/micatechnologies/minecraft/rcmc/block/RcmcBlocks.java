@@ -13,6 +13,8 @@ import net.minecraft.item.ItemBlock;
 public final class RcmcBlocks {
 
     public static BlockTrackSupport trackSupport;
+    public static BlockPlatform platform;
+    public static BlockPlatformEdge platformEdge;
     public static com.micatechnologies.minecraft.rcmc.block.sign.BlockStationSign stationSign;
     public static com.micatechnologies.minecraft.rcmc.block.sign.BlockArrivalBoard arrivalBoard;
 
@@ -22,6 +24,8 @@ public final class RcmcBlocks {
 
     public static void init() {
         trackSupport = RcmcRegistry.addBlock(new BlockTrackSupport());
+        platform = RcmcRegistry.addBlock(new BlockPlatform());
+        platformEdge = RcmcRegistry.addBlock(new BlockPlatformEdge());
         stationSign = RcmcRegistry.addBlock(
             new com.micatechnologies.minecraft.rcmc.block.sign.BlockStationSign());
         arrivalBoard = RcmcRegistry.addBlock(
@@ -31,6 +35,10 @@ public final class RcmcBlocks {
         // Forge matches them by name when binding models.
         RcmcRegistry.addItem(new ItemBlock(trackSupport)
             .setRegistryName(RcmcConstants.MOD_NAMESPACE, BlockTrackSupport.NAME));
+        RcmcRegistry.addItem(new ItemBlock(platform)
+            .setRegistryName(RcmcConstants.MOD_NAMESPACE, BlockPlatform.NAME));
+        RcmcRegistry.addItem(new ItemBlock(platformEdge)
+            .setRegistryName(RcmcConstants.MOD_NAMESPACE, BlockPlatformEdge.NAME));
         RcmcRegistry.addItem(new ItemBlock(stationSign).setRegistryName(
             RcmcConstants.MOD_NAMESPACE,
             com.micatechnologies.minecraft.rcmc.block.sign.BlockStationSign.NAME));

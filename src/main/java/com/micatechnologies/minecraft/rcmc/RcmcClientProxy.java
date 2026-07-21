@@ -38,6 +38,9 @@ public class RcmcClientProxy extends RcmcCommonProxy {
         // ride visibly steps at the correction rate rather than the frame rate.
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new ClientTrainTicker());
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new RiderCamera());
+        // Redraws the ridden train when vanilla's per-render-chunk entity loop skips it.
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(
+            new com.micatechnologies.minecraft.rcmc.client.render.RiddenTrainRenderer());
         // Draws the track itself — see TrackRenderer's javadoc for why this is a
         // RenderWorldLastEvent listener rather than a TileEntitySpecialRenderer.
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new TrackRenderer());
@@ -71,6 +74,11 @@ public class RcmcClientProxy extends RcmcCommonProxy {
         bindModel(tool);
         bindModel(com.micatechnologies.minecraft.rcmc.item.RcmcItems.trackEditor);
         bindModel(com.micatechnologies.minecraft.rcmc.item.RcmcItems.pieceTool);
+        bindModel(com.micatechnologies.minecraft.rcmc.item.RcmcItems.transitTool);
+        bindModel(net.minecraft.item.Item.getItemFromBlock(
+            com.micatechnologies.minecraft.rcmc.block.RcmcBlocks.platform));
+        bindModel(net.minecraft.item.Item.getItemFromBlock(
+            com.micatechnologies.minecraft.rcmc.block.RcmcBlocks.platformEdge));
         bindModel(net.minecraft.item.Item.getItemFromBlock(
             com.micatechnologies.minecraft.rcmc.block.RcmcBlocks.trackSupport));
         bindModel(net.minecraft.item.Item.getItemFromBlock(
@@ -93,5 +101,15 @@ public class RcmcClientProxy extends RcmcCommonProxy {
     @Override
     public void postInit(FMLPostInitializationEvent event) {
         super.postInit(event);
+    }
+
+    @Override
+    public boolean isLocalPlayerAboard(int trainId) {
+        net.minecraft.entity.player.EntityPlayer player =
+            net.minecraft.client.Minecraft.getMinecraft().player;
+        net.minecraft.entity.Entity vehicle = player == null ? null : player.getRidingEntity();
+        return vehicle instanceof com.micatechnologies.minecraft.rcmc.entity.EntityCoasterCar
+            && ((com.micatechnologies.minecraft.rcmc.entity.EntityCoasterCar) vehicle).trainId()
+                == trainId;
     }
 }

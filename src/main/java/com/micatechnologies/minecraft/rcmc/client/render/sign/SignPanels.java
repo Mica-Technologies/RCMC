@@ -11,18 +11,21 @@ import org.lwjgl.opengl.GL11;
  * Shared drawing for the transit sign renderers: a flat-shaded panel box, and text laid onto
  * both of its faces.
  *
+ * <p>Public because the metro car's interior destination sign draws the same way from
+ * {@code client.render} — one panel-and-text implementation for every display in the mod.</p>
+ *
  * <p>Text is deliberately drawn on <em>both</em> faces. Real platform signage is double-sided,
  * and it also makes the renderer forgiving of facing conventions — a sign placed "backwards"
  * still reads. Each line is an optionally-coloured string, centred; the caller owns layout
  * (which lines, what colours), this owns the GL ceremony.</p>
  */
-final class SignPanels {
+public final class SignPanels {
 
     private SignPanels() {
     }
 
     /** A solid panel box centred on x=0, spanning the given extents, in the local frame. */
-    static void drawPanel(double halfWidth, double yBottom, double yTop, double halfThickness,
+    public static void drawPanel(double halfWidth, double yBottom, double yTop, double halfThickness,
                           float r, float g, float b) {
         GlStateManager.disableTexture2D();
         GlStateManager.disableLighting();
@@ -55,7 +58,7 @@ final class SignPanels {
      * @param zFace    face offset from the panel centre plane
      * @param colours  per-line RGB ints (0xRRGGBB), parallel to {@code lines}
      */
-    static void drawLines(FontRenderer font, String[] lines, int[] colours,
+    public static void drawLines(FontRenderer font, String[] lines, int[] colours,
                           double yTop, float scale, double zFace) {
         float lastBrightnessX = net.minecraft.client.renderer.OpenGlHelper.lastBrightnessX;
         float lastBrightnessY = net.minecraft.client.renderer.OpenGlHelper.lastBrightnessY;

@@ -53,24 +53,37 @@ class TrackStyleMeshTest {
     void catenaryReachesMastHeight() {
         // The contact wire runs 6 blocks up with masts above it — the project owner's world
         // scale; see TrackMeshBuilder's catenary constants.
+        // Measured against the style's own declared wire height rather than a hard-coded number,
+        // so raising the default does not require editing this test — the requirement is "masts and
+        // wires stand above the contact wire", not "the mesh reaches 7".
+        double wire = TrackStyleIds.DEFAULT_CONTACT_WIRE_HEIGHT;
         TrackMesh poles = TrackMeshBuilder.build(straight(TrackStyleIds.TRANSIT_CATENARY));
-        assertTrue(poles.maxY > TRACK_Y + 7.0D,
-            "expected masts and wires overhead, mesh reaches " + (poles.maxY - TRACK_Y));
+        assertTrue(poles.maxY > TRACK_Y + wire,
+            "expected masts and wires above the contact wire, mesh reaches " + (poles.maxY - TRACK_Y));
 
         TrackMesh portals = TrackMeshBuilder.build(straight(TrackStyleIds.TRANSIT_PORTAL));
-        assertTrue(portals.maxY > TRACK_Y + 7.0D);
+        assertTrue(portals.maxY > TRACK_Y + wire);
         assertTrue(portals.quads.size() > TrackMeshBuilder.build(
                 straight(TrackStyleIds.TRANSIT)).quads.size(),
             "electrification must add geometry");
     }
+
+    /** Metro car roof height — what the wires must clear. Single source: {@link CarSeating}. */
+    private static final double METRO_ROOF_HEIGHT =
+        com.micatechnologies.minecraft.rcmc.physics.CarSeating.METRO_ROOF_HEIGHT;
 
     @Test
     @DisplayName("the tunnel style builds a low rigid bar and no masts")
     void tunnelStyleBuildsARigidBar() {
         TrackMesh tunnel = TrackMeshBuilder.build(straight(TrackStyleIds.TRANSIT_TUNNEL));
         double overhead = tunnel.maxY - TRACK_Y;
-        assertTrue(overhead > 4.0D, "expected an overhead bar clear of the car roof, mesh reaches " + overhead);
-        assertTrue(overhead < 6.0D, "a tunnel bar must stay below mast height, reached " + overhead);
+        // The two requirements a tunnel conductor actually has, stated against the car it must
+        // clear and the open-air catenary it must undercut — not against fixed numbers, which is
+        // what made this test object to the wire being raised rather than to anything being wrong.
+        assertTrue(overhead > METRO_ROOF_HEIGHT,
+            "expected an overhead bar clear of the car roof, mesh reaches " + overhead);
+        assertTrue(overhead < TrackStyleIds.DEFAULT_CONTACT_WIRE_HEIGHT,
+            "a tunnel bar must hang below open-air catenary, reached " + overhead);
     }
 
     @Test
@@ -89,5 +102,7 @@ class TrackStyleMeshTest {
         assertNull(TrackStyleIds.resolve(null));
         assertEquals(TrackStyleIds.TRANSIT_CATENARY, TrackStyleIds.resolve("Transit-Catenary"));
         assertThrows(IllegalArgumentException.class, () -> TrackStyleIds.resolve("monorail"));
+        // A per-section wire height rides on the id; see TrackStyleWireHeightTest for the rest.
+        assertEquals("transit-catenary-12", TrackStyleIds.resolve("transit-catenary-12"));
     }
 }

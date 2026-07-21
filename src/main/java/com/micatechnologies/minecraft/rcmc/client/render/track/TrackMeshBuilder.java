@@ -1,6 +1,7 @@
 package com.micatechnologies.minecraft.rcmc.client.render.track;
 
 import com.micatechnologies.minecraft.rcmc.track.TrackSection;
+import com.micatechnologies.minecraft.rcmc.track.TrackStyleIds;
 import com.micatechnologies.minecraft.rcmc.track.math.TrackFrame;
 import com.micatechnologies.minecraft.rcmc.track.math.Vec3;
 import java.util.ArrayList;
@@ -576,13 +577,13 @@ public final class TrackMeshBuilder {
     }
 
     // ---- catenary ----
-    // Heights are frame-local u above the railheads. The contact wire runs a full 6 blocks up —
-    // per the project owner's read of world scale — with the metro car's raised pantograph
-    // (MetroCarModel, roof ~3.55, shoe 5.85) closing the gap; the two files are one measurement
-    // in two places. All of this is dressing: nothing reads it back, and the "requires power"
-    // gameplay hook remains deliberately unbuilt.
+    // Heights are frame-local u above the railheads, and every one of them derives from the
+    // section's own contact-wire height (default 10, authored per section — see TrackStyleIds).
+    // The metro car's pantograph derives its reach from the same number rather than carrying a
+    // constant of its own, so the wire and the thing that touches it can no longer drift apart.
+    // All of this is dressing: nothing reads it back, and the "requires power" gameplay hook
+    // remains deliberately unbuilt.
 
-    private static final double CONTACT_WIRE_U = 6.0D;
     private static final double CONTACT_WIRE_HALF = 0.03D;
 
     /** Messenger height above the contact wire: at the mast, and at midspan (the sag). */
@@ -590,8 +591,10 @@ public final class TrackMeshBuilder {
     private static final double MESSENGER_AT_MIDSPAN = 0.15D;
 
     private static final double MAST_SPACING = 24.0D;
-    private static final double MAST_TOP_U = 7.4D;
     private static final double MAST_BOTTOM_U = -0.45D;
+
+    /** How far a mast stands proud of the carrier it holds. */
+    private static final double MAST_ABOVE_CARRIER = 0.4D;
     private static final double MAST_HALF_WIDTH = 0.09D;
 
     /** How far outside the gauge a mast stands. */
@@ -600,9 +603,15 @@ public final class TrackMeshBuilder {
     private static final double MESSENGER_SAMPLE_STEP = 1.5D;
     private static final double DROPPER_SPACING = 6.0D;
 
-    /** Rigid overhead rail (tunnel style) runs lower — tunnels have no room for sag — but still
-     *  clear of the 3.55-block car roof. */
-    private static final double RIGID_BAR_U = 4.6D;
+    /**
+     * Every catenary height derives from the section's own contact-wire height — masts, messenger,
+     * registration drops and the tunnel conductor alike — so raising the wire raises the hardware
+     * with it. The height itself is authored per section on the style id
+     * ({@code transit-catenary-12}); see {@link TrackStyleIds#contactWireHeight}.
+     */
+    private static double wireHeightOf(TrackSection section) {
+        return TrackStyleIds.contactWireHeight(section.styleId());
+    }
 
     private static final float[] MAST_COLOR = { 0.36F, 0.37F, 0.40F };
     private static final float[] CONTACT_COLOR = { 0.48F, 0.33F, 0.24F };
@@ -631,20 +640,24 @@ public final class TrackMeshBuilder {
             return;
         }
         boolean capEnds = !section.isClosed();
+        double wireU = wireHeightOf(section);
+        if (wireU <= 0.0D) {
+            return;
+        }
 
         if (style.catenary == TrackStyles.Catenary.TUNNEL) {
-            sweepTube(section, rings, rectangle(0.0D, RIGID_BAR_U, 0.07D, 0.10D),
+            sweepTube(section, rings, rectangle(0.0D, wireU, 0.07D, 0.10D),
                 RIGID_COLOR, capEnds, out);
             for (double s = 0.0D; s < total; s += DROPPER_SPACING) {
                 TrackFrame frame = section.frameAtDistance(s);
-                box(worldPoint(frame, 0.0D, RIGID_BAR_U + 0.16D),
+                box(worldPoint(frame, 0.0D, wireU + 0.16D),
                     frame.forward.scale(0.05D), frame.right.scale(0.05D),
                     frame.up.scale(0.10D), RIGID_COLOR, out);
             }
             return;
         }
 
-        sweepTube(section, rings, rectangle(0.0D, CONTACT_WIRE_U,
+        sweepTube(section, rings, rectangle(0.0D, wireU,
             CONTACT_WIRE_HALF, CONTACT_WIRE_HALF), CONTACT_COLOR, capEnds, out);
 
         // Mast positions: every MAST_SPACING, plus an anchor at the far end of an open run so
@@ -657,26 +670,27 @@ public final class TrackMeshBuilder {
         masts.add(total);
 
         for (int i = 0; i < masts.size() - (section.isClosed() ? 1 : 0); i++) {
-            buildMast(section, masts.get(i), style, out);
+            buildMast(section, masts.get(i), style, wireU, out);
         }
         for (int i = 0; i < masts.size() - 1; i++) {
-            buildMessengerSpan(section, masts.get(i), masts.get(i + 1), out);
+            buildMessengerSpan(section, masts.get(i), masts.get(i + 1), wireU, out);
         }
     }
 
     private static void buildMast(TrackSection section, double s, TrackStyles style,
-                                  List<MeshQuad> out) {
+                                  double wireU, List<MeshQuad> out) {
         TrackFrame frame = section.frameAtDistance(s);
         double offset = style.halfGauge + MAST_CLEARANCE;
-        double postCentreU = (MAST_TOP_U + MAST_BOTTOM_U) * 0.5D;
-        double postHalfU = (MAST_TOP_U - MAST_BOTTOM_U) * 0.5D;
+        double mastTopU = wireU + MESSENGER_AT_MAST + MAST_ABOVE_CARRIER;
+        double postCentreU = (mastTopU + MAST_BOTTOM_U) * 0.5D;
+        double postHalfU = (mastTopU - MAST_BOTTOM_U) * 0.5D;
 
         // Height of the member that actually carries the wires at this mast: the bracket arm
         // sits exactly at the messenger's mast-end height, so the sag span visibly lands ON it
         // rather than peaking in mid-air beside the mast — the first cut floated the arm halfway
         // between the two wires, touching neither, which read as disconnected hardware from any
         // distance.
-        double carrierU = CONTACT_WIRE_U + MESSENGER_AT_MAST;
+        double carrierU = wireU + MESSENGER_AT_MAST;
 
         if (style.catenary == TrackStyles.Catenary.PORTALS) {
             for (int side = -1; side <= 1; side += 2) {
@@ -700,8 +714,8 @@ public final class TrackMeshBuilder {
 
         // Registration drop: the vertical link tying the contact wire up to its carrier, so the
         // wire visibly hangs from hardware at every mast.
-        double dropHalf = (carrierU - CONTACT_WIRE_U) * 0.5D;
-        box(worldPoint(frame, 0.0D, CONTACT_WIRE_U + dropHalf),
+        double dropHalf = (carrierU - wireU) * 0.5D;
+        box(worldPoint(frame, 0.0D, wireU + dropHalf),
             frame.forward.scale(0.04D), frame.right.scale(0.04D),
             frame.up.scale(dropHalf), MAST_COLOR, out);
     }
@@ -713,7 +727,7 @@ public final class TrackMeshBuilder {
      * like the chain links and for the same z-fighting reason.
      */
     private static void buildMessengerSpan(TrackSection section, double s0, double s1,
-                                           List<MeshQuad> out) {
+                                           double wireU, List<MeshQuad> out) {
         double span = s1 - s0;
         if (span < 1.0e-3D) {
             return;
@@ -725,7 +739,7 @@ public final class TrackMeshBuilder {
             double rise = MESSENGER_AT_MIDSPAN
                 + (MESSENGER_AT_MAST - MESSENGER_AT_MIDSPAN) * (2.0D * t - 1.0D) * (2.0D * t - 1.0D);
             TrackFrame frame = section.frameAtDistance(s);
-            Vec3 point = worldPoint(frame, 0.0D, CONTACT_WIRE_U + rise);
+            Vec3 point = worldPoint(frame, 0.0D, wireU + rise);
             if (previous != null) {
                 Vec3 half = point.subtract(previous).scale(0.5D);
                 box(previous.add(half), half, previousFrame.right.scale(0.025D),
@@ -742,7 +756,7 @@ public final class TrackMeshBuilder {
             double rise = MESSENGER_AT_MIDSPAN
                 + (MESSENGER_AT_MAST - MESSENGER_AT_MIDSPAN) * (2.0D * t - 1.0D) * (2.0D * t - 1.0D);
             TrackFrame frame = section.frameAtDistance(s);
-            box(worldPoint(frame, 0.0D, CONTACT_WIRE_U + rise * 0.5D),
+            box(worldPoint(frame, 0.0D, wireU + rise * 0.5D),
                 frame.forward.scale(0.02D), frame.right.scale(0.02D),
                 frame.up.scale(rise * 0.5D), MESSENGER_COLOR, out);
         }

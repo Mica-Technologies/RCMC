@@ -6,17 +6,24 @@ package com.micatechnologies.minecraft.rcmc.physics.transit;
  * board derives "N stops away" from it with {@link ArrivalEstimator}, so no controller state,
  * position, or timing ever needs syncing.
  *
+ * <p>The train id rides along so a snapshot can be matched to a specific train rather than only to
+ * a line: an arrival board on a platform cares which <em>line</em> is coming, but the destination
+ * sign inside a car has to find its own service among several running on the same line.</p>
+ *
  * <p>Immutable, pure Java.</p>
  */
 public final class ServiceSnapshot {
 
+    private final int trainId;
     private final String lineName;
     private final int serviceDirection;
     private final int nextStopIndex;
     private final boolean atPlatform;
+    private final boolean doorsOpen;
+    private final double doorFraction;
 
-    public ServiceSnapshot(String lineName, int serviceDirection, int nextStopIndex,
-                           boolean atPlatform) {
+    public ServiceSnapshot(int trainId, String lineName, int serviceDirection, int nextStopIndex,
+                           boolean atPlatform, boolean doorsOpen, double doorFraction) {
         if (lineName == null || lineName.isEmpty()) {
             throw new IllegalArgumentException("lineName is required");
         }
@@ -26,17 +33,26 @@ public final class ServiceSnapshot {
         if (nextStopIndex < 0) {
             throw new IllegalArgumentException("nextStopIndex must be >= 0, got " + nextStopIndex);
         }
+        this.trainId = trainId;
         this.lineName = lineName;
         this.serviceDirection = serviceDirection;
         this.nextStopIndex = nextStopIndex;
         this.atPlatform = atPlatform;
+        this.doorsOpen = doorsOpen;
+        this.doorFraction = Math.max(0.0D, Math.min(1.0D, doorFraction));
     }
 
     /** Snapshot of a live service. */
-    public static ServiceSnapshot of(LineService service) {
-        return new ServiceSnapshot(service.line().name(), service.serviceDirection(),
+    public static ServiceSnapshot of(int trainId, LineService service) {
+        return new ServiceSnapshot(trainId, service.line().name(), service.serviceDirection(),
             service.currentStopIndex(),
-            service.controller().phase() != TransitStopController.Phase.APPROACHING);
+            service.controller().phase() != TransitStopController.Phase.APPROACHING,
+            service.controller().doorsOpen(), service.controller().doorFraction());
+    }
+
+    /** The train running this service — how an in-car sign finds its own. */
+    public int trainId() {
+        return trainId;
     }
 
     public String lineName() {
@@ -56,9 +72,23 @@ public final class ServiceSnapshot {
         return atPlatform;
     }
 
+    /**
+     * True only while the doors are actually open — the narrower window inside {@link #atPlatform},
+     * which also covers the doors opening and closing. This is what the car model draws and what
+     * decides whether a rider may walk aboard, so the two can never disagree.
+     */
+    public boolean doorsOpen() {
+        return doorsOpen;
+    }
+
+    /** How far the leaves have travelled, 0 shut to 1 open — what the car model animates. */
+    public double doorFraction() {
+        return doorFraction;
+    }
+
     @Override
     public String toString() {
-        return "ServiceSnapshot{" + lineName + " dir=" + serviceDirection
+        return "ServiceSnapshot{train " + trainId + " on " + lineName + " dir=" + serviceDirection
             + " nextStop=" + nextStopIndex + '}';
     }
 }

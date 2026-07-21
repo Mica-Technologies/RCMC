@@ -18,12 +18,15 @@ import com.micatechnologies.minecraft.rcmc.physics.element.ChainLift;
 import com.micatechnologies.minecraft.rcmc.physics.element.RideElementSet;
 import com.micatechnologies.minecraft.rcmc.physics.element.StationPlatform;
 import com.micatechnologies.minecraft.rcmc.RcmcConfig;
+import com.micatechnologies.minecraft.rcmc.block.RcmcBlocks;
+import com.micatechnologies.minecraft.rcmc.physics.CarSeating;
 import com.micatechnologies.minecraft.rcmc.physics.Train;
 import com.micatechnologies.minecraft.rcmc.physics.TrainSpec;
 import com.micatechnologies.minecraft.rcmc.rating.RideRater;
 import com.micatechnologies.minecraft.rcmc.rating.RideRating;
 import com.micatechnologies.minecraft.rcmc.rating.RideStatistics;
 import com.micatechnologies.minecraft.rcmc.track.TrackRef;
+import com.micatechnologies.minecraft.rcmc.track.TrackNetwork;
 import com.micatechnologies.minecraft.rcmc.track.TrackSection;
 import com.micatechnologies.minecraft.rcmc.track.math.TrackFrame;
 import com.micatechnologies.minecraft.rcmc.track.math.Vec3;
@@ -35,6 +38,7 @@ import net.minecraft.command.CommandException;
 import net.minecraft.command.ICommandSender;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.text.TextComponentString;
 import net.minecraft.util.text.TextFormatting;
@@ -57,7 +61,8 @@ public class CommandRcmc extends CommandBase {
 
     @Override
     public String getUsage(ICommandSender sender) {
-        return "/rcmc <demo|train|clear|info|build|paint|style|rate|block|station|line|rmsection>";
+        return "/rcmc <demo|metrodemo|train|clear|info|build|paint|style|rate|block|station|line"
+            + "|switch|platform|rmsection>";
     }
 
     @Override
@@ -70,7 +75,8 @@ public class CommandRcmc extends CommandBase {
                                           String[] args, BlockPos targetPos) {
         if (args.length == 1) {
             return getListOfStringsMatchingLastWord(args, "demo", "metrodemo", "train", "clear",
-                "info", "build", "paint", "style", "rate", "block", "station", "line", "rmsection");
+                "info", "build", "paint", "style", "rate", "block", "station", "line", "switch",
+                "platform", "rmsection");
         }
         if (args.length == 3 && "style".equalsIgnoreCase(args[0])) {
             return getListOfStringsMatchingLastWord(args,
@@ -78,7 +84,17 @@ public class CommandRcmc extends CommandBase {
                     .toArray(new String[0]));
         }
         if (args.length == 2 && "line".equalsIgnoreCase(args[0])) {
-            return getListOfStringsMatchingLastWord(args, "create", "list", "remove", "start", "stop");
+            return getListOfStringsMatchingLastWord(args, "create", "list", "remove", "start",
+                "stop", "signals");
+        }
+        if (args.length == 5 && "platform".equalsIgnoreCase(args[0])) {
+            return getListOfStringsMatchingLastWord(args, "left", "right", "both");
+        }
+        if (args.length == 2 && "switch".equalsIgnoreCase(args[0])) {
+            return getListOfStringsMatchingLastWord(args, "create", "list", "throw", "remove");
+        }
+        if ("switch".equalsIgnoreCase(args[0]) && args.length >= 4 && args.length % 2 == 1) {
+            return getListOfStringsMatchingLastWord(args, "start", "end");
         }
         if (args.length == 2 && "station".equalsIgnoreCase(args[0])) {
             return getListOfStringsMatchingLastWord(args, "list", "remove");
@@ -139,6 +155,12 @@ public class CommandRcmc extends CommandBase {
                 break;
             case "line":
                 line(sender, world, state, args);
+                break;
+            case "switch":
+                trackSwitch(sender, world, state, args);
+                break;
+            case "platform":
+                platform(sender, world, state, args);
                 break;
             case "rmsection":
                 removeSection(sender, world, state, args);
@@ -355,7 +377,7 @@ public class CommandRcmc extends CommandBase {
         if (args.length < 3) {
             throw new CommandException("/rcmc style <sectionId> <"
                 + String.join("|", com.micatechnologies.minecraft.rcmc.track.TrackStyleIds.COMMAND_CHOICES)
-                + ">");
+                + "> [wireHeight]");
         }
         int sectionId = parseInt(args[1]);
         TrackSection section = state.network().section(sectionId);
@@ -365,6 +387,14 @@ public class CommandRcmc extends CommandBase {
         String styleId;
         try {
             styleId = com.micatechnologies.minecraft.rcmc.track.TrackStyleIds.resolve(args[2]);
+            if (args.length > 3 && styleId != null) {
+                // An optional height rides on the style id itself; see TrackStyleIds.resolve for
+                // why the suffix beats adding a field to every section.
+                styleId = com.micatechnologies.minecraft.rcmc.track.TrackStyleIds.withWireHeight(
+                    styleId, parseDouble(args[3],
+                        com.micatechnologies.minecraft.rcmc.track.TrackStyleIds.MIN_CONTACT_WIRE_HEIGHT,
+                        com.micatechnologies.minecraft.rcmc.track.TrackStyleIds.MAX_CONTACT_WIRE_HEIGHT));
+            }
         }
         catch (IllegalArgumentException e) {
             throw new CommandException(e.getMessage());
@@ -374,8 +404,265 @@ public class CommandRcmc extends CommandBase {
         state.network().replaceSection(section.withStyle(styleId));
         state.markTrackDirty(world);
         broadcastTrack(world, state);
+        double wire = com.micatechnologies.minecraft.rcmc.track.TrackStyleIds
+            .contactWireHeight(styleId);
         reply(sender, TextFormatting.GREEN, "Section " + sectionId + " style -> "
-            + (styleId == null ? "coaster" : styleId));
+            + (styleId == null ? "coaster" : styleId)
+            + (wire > 0.0D ? ", contact wire at " + fmt(wire) + " blocks" : ""));
+    }
+
+    /**
+     * {@code /rcmc platform <station> [length] [width] [left|right|both]} — builds a station
+     * platform beside a station's stop point, at exactly the height of a metro car's floor.
+     *
+     * <p><b>Why a command and not just "place the blocks yourself".</b> The floor of a metro car
+     * sits {@code CarSeating.METRO_FLOOR_HEIGHT} above the track and a player's step height is
+     * 0.6, so a platform even one block out is the difference between walking aboard and jumping
+     * at a doorway. Getting that right by hand means counting blocks against a track that is a
+     * spline and may be climbing or banking as it passes. The geometry is already known here, so
+     * the sensible thing is to lay it out from the geometry.</p>
+     *
+     * <p>The platform follows the alignment, so it curves with it. Blocks are only placed into
+     * air or replaceable terrain — this fills a station out, it does not bulldoze what a builder
+     * has already put there.</p>
+     */
+    private void platform(ICommandSender sender, World world, RcmcWorldState state, String[] args)
+        throws CommandException {
+        if (args.length < 2) {
+            throw new CommandException(
+                "/rcmc platform <station> [length] [width] [left|right|both]");
+        }
+        com.micatechnologies.minecraft.rcmc.physics.transit.TransitStation station =
+            state.transit().station(args[1]);
+        if (station == null) {
+            throw new CommandException("No station named " + args[1] + " — try /rcmc station list");
+        }
+        TrackSection section = state.network().section(station.stopPoint().sectionId());
+        if (section == null) {
+            throw new CommandException("Station " + station.name() + " is on section #"
+                + station.stopPoint().sectionId() + ", which no longer exists");
+        }
+        double length = args.length > 2 ? parseDouble(args[2], 4.0D, 200.0D) : 40.0D;
+        int width = args.length > 3 ? parseInt(args[3], 1, 12) : 4;
+        String sideArg = args.length > 4 ? args[4].toLowerCase(java.util.Locale.ROOT) : "both";
+        boolean left = "left".equals(sideArg) || "both".equals(sideArg);
+        boolean right = "right".equals(sideArg) || "both".equals(sideArg);
+        if (!left && !right) {
+            throw new CommandException("Side must be left, right or both — got " + args[4]);
+        }
+
+        // Centred on the stop point, which is where the LEAD car berths — so the platform runs
+        // back along the train rather than starting at its nose.
+        double stop = station.stopPoint().distance();
+        double from = Math.max(0.0D, stop - length * 0.75D);
+        double to = Math.min(section.totalLength(), stop + length * 0.25D);
+
+        java.util.Set<BlockPos> placed = new java.util.HashSet<>();
+        int blocks = 0;
+        for (double s = from; s <= to; s += 0.5D) {
+            TrackFrame frame = section.frameAtDistance(s);
+            // Horizontal projection of the frame's right axis: a platform is level even where the
+            // track it serves is banked, because passengers stand on it.
+            double rx = frame.right.x;
+            double rz = frame.right.z;
+            double rl = Math.sqrt(rx * rx + rz * rz);
+            if (rl < 1.0e-6D) {
+                continue;
+            }
+            rx /= rl;
+            rz /= rl;
+            // Derived from the car floor rather than assumed: a platform block's top face is at
+            // surfaceY + 1, and the floor it must meet is frame.y + METRO_FLOOR_HEIGHT. Reading
+            // that constant means raising the underframe — as happened when it went from 1.0 to
+            // 1.5 — moves platforms with it instead of silently un-levelling every station.
+            //
+            // Rounded, because block tops are integers and the floor need not be: the residual is
+            // at most half a block, inside a player's 0.6 step height either way. Flooring could
+            // leave a 0.9 step at the doorway, which is the exact problem platforms exist to fix.
+            int surfaceY = (int) Math.round(
+                frame.position.y + CarSeating.METRO_FLOOR_HEIGHT - 1.0D);
+            for (int sign = -1; sign <= 1; sign += 2) {
+                if (sign < 0 && !left) {
+                    continue;
+                }
+                if (sign > 0 && !right) {
+                    continue;
+                }
+                for (int i = 0; i < width; i++) {
+                    double d = PLATFORM_INNER_OFFSET + i;
+                    BlockPos pos = new BlockPos(
+                        Math.floor(frame.position.x + rx * d * sign),
+                        surfaceY,
+                        Math.floor(frame.position.z + rz * d * sign));
+                    if (!placed.add(pos)) {
+                        continue;
+                    }
+                    if (!world.getBlockState(pos).getBlock().isReplaceable(world, pos)
+                        && !world.isAirBlock(pos)) {
+                        continue;
+                    }
+                    if (i == 0) {
+                        // The edge course carries the warning strip, facing the track it serves.
+                        EnumFacing facing = EnumFacing.getFacingFromVector(
+                            (float) (-rx * sign), 0.0F, (float) (-rz * sign));
+                        world.setBlockState(pos, RcmcBlocks.platformEdge.getDefaultState()
+                            .withProperty(net.minecraft.block.BlockHorizontal.FACING, facing), 2);
+                    } else {
+                        world.setBlockState(pos, RcmcBlocks.platform.getDefaultState(), 2);
+                    }
+                    blocks++;
+                }
+            }
+        }
+
+        reply(sender, TextFormatting.GREEN, "Platform built at " + station.name() + " — "
+            + blocks + " blocks, " + fmt(to - from) + " blocks long, " + width + " wide.");
+        double step = Math.abs(CarSeating.METRO_FLOOR_HEIGHT
+            - Math.round(CarSeating.METRO_FLOOR_HEIGHT));
+        reply(sender, TextFormatting.GRAY, step < 0.05D
+            ? "  Its surface is level with a metro car's floor, so you can walk straight aboard."
+            : "  Its surface sits " + fmt(step) + " blocks off the car floor — a short step, well"
+                + " inside what you can walk up.");
+    }
+
+    /**
+     * How far from the track centreline the platform edge stands, in blocks.
+     *
+     * <p>The metro body is 3.8 wide, so its side is 1.9 out; this leaves a small gap beyond that
+     * — enough that a car sweeping through a curve does not intersect the platform, close enough
+     * to step across.
+     */
+    private static final double PLATFORM_INNER_OFFSET = 2.2D;
+
+    /**
+     * {@code /rcmc switch …} — creates, throws, lists and removes track switches.
+     *
+     * <p>Switches shipped in M3 with a save format, a sync packet and a traversal model, and no way
+     * whatsoever to make one: {@code addSwitch} was reachable only from the codec and the sync
+     * packet, i.e. from loading or replicating a switch that already existed. In a fresh world it
+     * was unreachable, which made every layout a single non-branching alignment. This is the
+     * missing authoring path.</p>
+     *
+     * <p>Ends are named {@code <sectionId> <start|end>} because that is precisely what a
+     * {@code SectionEnd} is, and the geometry check that follows — every branch must meet the
+     * throat within the join gap — gives an immediate, specific error when the wrong end is
+     * named. Pointing at track instead of typing ids belongs to M9's tool; the underlying
+     * operation is the same one either way.</p>
+     */
+    private void trackSwitch(ICommandSender sender, World world, RcmcWorldState state, String[] args)
+        throws CommandException {
+        if (args.length < 2) {
+            throw new CommandException("/rcmc switch create <throatSection> <start|end>"
+                + " <branchSection> <start|end> <branchSection> <start|end> [...]"
+                + " | list | throw <throatSection> <start|end> [branchIndex]"
+                + " | remove <throatSection> <start|end>");
+        }
+        TrackNetwork network = state.network();
+        switch (args[1].toLowerCase(java.util.Locale.ROOT)) {
+            case "create": {
+                // throat + at least two branches = 3 pairs after "switch create".
+                if (args.length < 8 || (args.length - 2) % 2 != 0) {
+                    throw new CommandException("/rcmc switch create <throatSection> <start|end>"
+                        + " <branchSection> <start|end> <branchSection> <start|end> [...]"
+                        + " — a switch needs a throat and at least two branches");
+                }
+                TrackNetwork.SectionEnd throat = parseEnd(network, args[2], args[3]);
+                List<TrackNetwork.SectionEnd> branches = new ArrayList<>();
+                for (int i = 4; i + 1 < args.length; i += 2) {
+                    branches.add(parseEnd(network, args[i], args[i + 1]));
+                }
+                try {
+                    network.addSwitch(throat, branches);
+                }
+                catch (IllegalArgumentException e) {
+                    throw new CommandException(e.getMessage());
+                }
+                state.markTrackDirty(world);
+                broadcastTrack(world, state);
+                reply(sender, TextFormatting.GREEN, "Switch created at " + throat + " -> "
+                    + branches.size() + " branches, lined to " + branches.get(0) + ".");
+                return;
+            }
+            case "list": {
+                if (network.switches().isEmpty()) {
+                    reply(sender, TextFormatting.YELLOW, "No switches. Make one with"
+                        + " /rcmc switch create <throatSection> <start|end> <branch> <start|end> ...");
+                    return;
+                }
+                for (TrackNetwork.TrackSwitch sw : network.switches()) {
+                    StringBuilder branches = new StringBuilder();
+                    for (int i = 0; i < sw.branches().size(); i++) {
+                        if (branches.length() > 0) {
+                            branches.append(", ");
+                        }
+                        branches.append(i).append('=').append(sw.branches().get(i));
+                        if (i == sw.selectedIndex()) {
+                            branches.append(" (lined)");
+                        }
+                    }
+                    reply(sender, TextFormatting.AQUA, sw.throat() + " -> " + branches);
+                }
+                return;
+            }
+            case "throw": {
+                if (args.length < 4) {
+                    throw new CommandException(
+                        "/rcmc switch throw <throatSection> <start|end> [branchIndex]");
+                }
+                TrackNetwork.SectionEnd throat = parseEnd(network, args[2], args[3]);
+                TrackNetwork.TrackSwitch sw = network.switchAt(throat);
+                if (sw == null) {
+                    throw new CommandException("No switch with its throat at " + throat
+                        + " — try /rcmc switch list");
+                }
+                // No index cycles to the next branch, which is what throwing a two-way point
+                // means and is the overwhelmingly common case.
+                int index = args.length > 4
+                    ? parseInt(args[4], 0, sw.branches().size() - 1)
+                    : (sw.selectedIndex() + 1) % sw.branches().size();
+                network.setSwitchSelection(throat, index);
+                state.markTrackDirty(world);
+                broadcastTrack(world, state);
+                reply(sender, TextFormatting.GREEN, "Switch " + throat + " lined to "
+                    + sw.selectedBranch() + " (branch " + index + ").");
+                return;
+            }
+            case "remove": {
+                if (args.length < 4) {
+                    throw new CommandException("/rcmc switch remove <throatSection> <start|end>");
+                }
+                TrackNetwork.SectionEnd throat = parseEnd(network, args[2], args[3]);
+                if (network.switchAt(throat) == null) {
+                    throw new CommandException("No switch with its throat at " + throat);
+                }
+                network.removeSwitch(throat);
+                state.markTrackDirty(world);
+                broadcastTrack(world, state);
+                reply(sender, TextFormatting.GREEN, "Switch removed from " + throat
+                    + " — those ends now lead nowhere.");
+                return;
+            }
+            default:
+                throw new CommandException("Unknown switch subcommand " + args[1]);
+        }
+    }
+
+    /** Parses a {@code <sectionId> <start|end>} pair, checking the section exists as it goes. */
+    private TrackNetwork.SectionEnd parseEnd(TrackNetwork network, String sectionArg, String endArg)
+        throws CommandException {
+        int sectionId = parseInt(sectionArg);
+        if (network.section(sectionId) == null) {
+            throw new CommandException("No section #" + sectionId + " — try /rcmc info");
+        }
+        TrackNetwork.End end;
+        if ("start".equalsIgnoreCase(endArg)) {
+            end = TrackNetwork.End.START;
+        } else if ("end".equalsIgnoreCase(endArg)) {
+            end = TrackNetwork.End.END;
+        } else {
+            throw new CommandException("Section end must be start or end, got " + endArg);
+        }
+        return new TrackNetwork.SectionEnd(sectionId, end);
     }
 
     /**
@@ -432,6 +719,17 @@ public class CommandRcmc extends CommandBase {
         }
     }
 
+    /**
+     * How long the doors stay open at a stop, in ticks.
+     *
+     * <p>Ten seconds, raised from five once metro cars became genuinely boardable. Five is a
+     * realistic off-peak dwell and was fine while nobody could get on, but a player has to notice
+     * the train has berthed, walk to a door and right-click — and a dwell that expires mid-approach
+     * reads as the doors being broken rather than as having been slow. Real dwells run 20–30
+     * seconds at busy stations, so this is still on the brisk side of realistic.</p>
+     */
+    private static final int METRO_DWELL_TICKS = 200;
+
     /** Default metro drive used by {@code /rcmc line start} until per-stock configs exist. */
     private static com.micatechnologies.minecraft.rcmc.physics.transit.TransitStopController
         metroController(double cruiseSpeed) {
@@ -441,7 +739,7 @@ public class CommandRcmc extends CommandBase {
                     1.2D, 24.0D, 22.0D),
                 1.2D, 2.0D, 1.5D, RcmcConstants.SECONDS_PER_TICK);
         return new com.micatechnologies.minecraft.rcmc.physics.transit.TransitStopController(
-            driver, cruiseSpeed, 0.75D, 30, 100, 30);
+            driver, cruiseSpeed, 0.75D, 30, METRO_DWELL_TICKS, 30);
     }
 
     /**
@@ -453,7 +751,8 @@ public class CommandRcmc extends CommandBase {
         if (args.length < 2) {
             throw new CommandException(
                 "/rcmc line create <name> <loop|shuttle> <stationA> <stationB> [...] | list"
-                    + " | remove <name> | start <name> <trainId> [cruiseSpeed] | stop <trainId>");
+                    + " | remove <name> | start <name> <trainId> [cruiseSpeed] | stop <trainId>"
+                    + " | signals <name> <count|off>");
         }
         com.micatechnologies.minecraft.rcmc.physics.transit.TransitSystem transit = state.transit();
         switch (args[1].toLowerCase(java.util.Locale.ROOT)) {
@@ -504,8 +803,11 @@ public class CommandRcmc extends CommandBase {
                         }
                         stops.append(s.name());
                     }
+                    com.micatechnologies.minecraft.rcmc.physics.transit.LineSignals sig =
+                        transit.signalsFor(l.name());
                     reply(sender, TextFormatting.AQUA, l.name() + " ("
-                        + (l.isLoop() ? "loop" : "shuttle") + "): " + stops);
+                        + (l.isLoop() ? "loop" : "shuttle") + "): " + stops
+                        + (sig == null ? "" : "  [" + sig.blocks().size() + " signal blocks]"));
                 }
                 return;
             }
@@ -556,10 +858,105 @@ public class CommandRcmc extends CommandBase {
                 reply(sender, TextFormatting.GREEN, "Train #" + trainId + " withdrawn from service.");
                 return;
             }
+            case "signals": {
+                signals(sender, world, state, transit, args);
+                return;
+            }
             default:
                 throw new CommandException("Unknown line subcommand " + args[1]);
         }
     }
+
+    /**
+     * {@code /rcmc line signals <name> <count|off>} — installs (or clears) block signalling on a
+     * line, dividing every section the line's stations sit on into {@code count} equal blocks.
+     *
+     * <p>This is what makes a second train on a metro line safe. Without it a service runs with
+     * unlimited movement authority and will happily drive into the back of the train ahead: the
+     * ATO driver brakes for stations and for its authority, and with no signals installed its
+     * authority is {@code NO_STOP}. With signals, a train's permission ends short of any block
+     * another train occupies, and being held at a red is simply a berth with the doors shut — the
+     * same braking law, no second mechanism.</p>
+     *
+     * <p><b>Equal division is a starting point, not the end state</b>, exactly as it is for the
+     * coaster {@code /rcmc block}: a real layout puts boundaries where a train can sensibly be
+     * held — approaching a platform, not mid-curve. Placing them individually is M9's tool's job;
+     * this exists so the capability is reachable at all, which until now it was not.</p>
+     *
+     * <p>Two limits carry over from the coaster block system for the same reasons: occupancy is
+     * tracked by lead car only, so blocks must be comfortably longer than the longest train, and N
+     * trains on N blocks deadlock. Unlike the coaster system this one is direction-free, so a
+     * shuttle line running both ways over one track is safe.</p>
+     */
+    private void signals(ICommandSender sender, World world, RcmcWorldState state,
+                         com.micatechnologies.minecraft.rcmc.physics.transit.TransitSystem transit,
+                         String[] args) throws CommandException {
+        if (args.length < 4) {
+            throw new CommandException("/rcmc line signals <name> <count|off>");
+        }
+        com.micatechnologies.minecraft.rcmc.physics.transit.TransitLine line = transit.line(args[2]);
+        if (line == null) {
+            throw new CommandException("No line named " + args[2] + " — try /rcmc line list");
+        }
+
+        if ("off".equalsIgnoreCase(args[3])) {
+            if (transit.signalsFor(line.name()) == null) {
+                throw new CommandException("Line " + line.name() + " has no signalling");
+            }
+            transit.setSignals(line.name(), null);
+            state.markTrackDirty(world);
+            reply(sender, TextFormatting.YELLOW, "Signalling removed from " + line.name()
+                + " — trains on it are no longer separated.");
+            return;
+        }
+
+        int count = parseInt(args[3], 2, 32);
+        // The line's stations are the only track we know for certain belongs to it; a route walk
+        // could cross sections they never touch. Signalling what the line demonstrably occupies is
+        // the honest subset — and for a single-alignment line, which is every line buildable
+        // today, it is the whole thing.
+        java.util.LinkedHashSet<Integer> sectionIds = new java.util.LinkedHashSet<>();
+        for (com.micatechnologies.minecraft.rcmc.physics.transit.TransitStation station
+            : line.stations()) {
+            sectionIds.add(station.stopPoint().sectionId());
+        }
+
+        List<BlockSection> blocks = new ArrayList<>();
+        for (int sectionId : sectionIds) {
+            TrackSection section = state.network().section(sectionId);
+            if (section == null) {
+                throw new CommandException("Line " + line.name() + " stops on section #" + sectionId
+                    + ", which no longer exists — recreate the line first");
+            }
+            double length = section.totalLength();
+            for (int i = 0; i < count; i++) {
+                double from = length * i / count;
+                // Last block ends exactly at the section length, so no unsignalled sliver is left
+                // at the seam — same reasoning as /rcmc block.
+                double to = i == count - 1 ? length : length * (i + 1) / count;
+                blocks.add(new BlockSection("s" + sectionId + "-b" + (i + 1), sectionId, from, to));
+            }
+        }
+
+        transit.setSignals(line.name(),
+            new com.micatechnologies.minecraft.rcmc.physics.transit.LineSignals(blocks,
+                com.micatechnologies.minecraft.rcmc.physics.transit.LineSignals.DEFAULT_MARGIN,
+                SIGNAL_HORIZON));
+        state.markTrackDirty(world);
+
+        reply(sender, TextFormatting.GREEN, "Line " + line.name() + " signalled — " + blocks.size()
+            + " blocks across " + sectionIds.size() + " section(s).");
+        reply(sender, TextFormatting.GRAY, "  Run at most " + (blocks.size() - 1)
+            + " trains here: " + blocks.size() + " trains on " + blocks.size()
+            + " blocks deadlocks.");
+    }
+
+    /**
+     * How far ahead, in blocks, a signalled line looks for occupancy. Generous on purpose: it need
+     * only comfortably exceed the longest braking distance on the line, and at the 15 blocks/s
+     * default cruise and the metro driver's service brake that is under 100 blocks.
+     */
+    private static final double SIGNAL_HORIZON = 500.0D;
 
     /**
      * {@code /rcmc build …} — settings for the in-hand track builder.

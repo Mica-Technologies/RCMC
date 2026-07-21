@@ -61,9 +61,11 @@ final class TrackStyles {
     }
 
     private static TrackStyles transit(Catenary catenary) {
-        // Heavier everything, sized to sit under the taller (~3.55-block) metro stock: 2 blocks
-        // between railheads, long ties, a chunky spine, and visibly heavier rail.
-        return new TrackStyles(1.00D, 1.40D, 0.20D, 0.16D, 0.09D, 0.07D, catenary);
+        // Heavier everything, sized to sit under the ~3.8-wide, ~5.45-tall metro stock: 2.8 blocks
+        // between railheads, long ties, a chunky spine, and visibly heavier rail. Widened from 2.0
+        // when the stock was scaled up — the body must still read as overhanging its track, which
+        // is what makes rolling stock look like rolling stock.
+        return new TrackStyles(1.40D, 1.90D, 0.26D, 0.20D, 0.11D, 0.09D, catenary);
     }
 
     /** Resolves a section's style id. Unknown or {@code null} ids fall back to the coaster look
@@ -72,7 +74,9 @@ final class TrackStyles {
         if (styleId == null) {
             return COASTER;
         }
-        switch (styleId) {
+        // The look comes from the base id; any wire-height suffix affects only how high the
+        // catenary hangs, which TrackMeshBuilder reads separately.
+        switch (TrackStyleIds.baseOf(styleId)) {
             case TrackStyleIds.TRANSIT:
                 return TRANSIT;
             case TrackStyleIds.TRANSIT_CATENARY:

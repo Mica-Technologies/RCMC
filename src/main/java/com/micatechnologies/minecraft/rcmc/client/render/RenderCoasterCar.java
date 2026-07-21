@@ -3,6 +3,7 @@ package com.micatechnologies.minecraft.rcmc.client.render;
 import com.micatechnologies.minecraft.rcmc.entity.EntityCoasterCar;
 import com.micatechnologies.minecraft.rcmc.physics.Train;
 import com.micatechnologies.minecraft.rcmc.physics.TrainSpec;
+import com.micatechnologies.minecraft.rcmc.world.MetroDoors;
 import com.micatechnologies.minecraft.rcmc.world.RcmcWorldState;
 import com.micatechnologies.minecraft.rcmc.track.math.TrackFrame;
 import net.minecraft.client.renderer.BufferBuilder;
@@ -55,6 +56,10 @@ public class RenderCoasterCar extends Render<EntityCoasterCar> {
             return;
         }
 
+        // Stamp the frame so RiddenTrainRenderer knows vanilla's entity pass reached this car and
+        // does not draw it a second time.
+        RiddenTrainRenderer.markDrawn(entity.getEntityId());
+
         GlStateManager.pushMatrix();
         GlStateManager.translate(x, y, z);
 
@@ -86,14 +91,57 @@ public class RenderCoasterCar extends Render<EntityCoasterCar> {
         // that now would flip the sign of frame.right everywhere, and lateral G and camera roll
         // both key off it — not a change to make casually alongside a rendering fix.
         GlStateManager.disableCull();
-        emitModel(entity);
+
+        // Force the lightmap full-bright for a lit saloon.
+        //
+        // This is what "the interior lighting does not work" actually was. The car is drawn with
+        // DefaultVertexFormats.POSITION_COLOR, which carries NO lightmap element, so every vertex
+        // inherits whatever lightmap coordinate was last set — i.e. the ambient light of wherever
+        // the car happens to be. At night that multiplies the whole model, light strips included,
+        // down to darkness, and no vertex colour can climb back out of it. Tuning which world
+        // light level trips the switch was fixing the wrong layer entirely.
+        //
+        // SignPanels already does this, and for the same reason: a lit display must not be
+        // dimmed by the room it is in.
+        boolean lit = specOf(entity) != null
+            && specOf(entity).carStyle() == TrainSpec.CarStyle.METRO
+            && saloonLightsOn(entity);
+        float lastBrightnessX = net.minecraft.client.renderer.OpenGlHelper.lastBrightnessX;
+        float lastBrightnessY = net.minecraft.client.renderer.OpenGlHelper.lastBrightnessY;
+        if (lit) {
+            net.minecraft.client.renderer.OpenGlHelper.setLightmapTextureCoords(
+                net.minecraft.client.renderer.OpenGlHelper.lightmapTexUnit, 240.0F, 240.0F);
+        }
+
+        emitModel(entity, partialTicks);
+
+        if (lit) {
+            net.minecraft.client.renderer.OpenGlHelper.setLightmapTextureCoords(
+                net.minecraft.client.renderer.OpenGlHelper.lightmapTexUnit,
+                lastBrightnessX, lastBrightnessY);
+        }
         GlStateManager.enableCull();
         GlStateManager.enableLighting();
         GlStateManager.enableTexture2D();
 
+        // Interior signage last, inside the same car-space transform but after texturing is back —
+        // the font needs it. Only metro stock has a saloon to hang a sign in.
+        TrainSpec spec = specOf(entity);
+        if (spec != null && spec.carStyle() == TrainSpec.CarStyle.METRO) {
+            MetroInteriorSign.draw(entity.world, entity.trainId(),
+                spec.carLength() / 0.72D, partialTicks);
+        }
+
         GlStateManager.popMatrix();
 
         super.doRender(entity, x, y, z, entityYaw, partialTicks);
+    }
+
+    /** This car's train spec, or {@code null} before its train state has reached the client. */
+    private static TrainSpec specOf(EntityCoasterCar entity) {
+        RcmcWorldState state = RcmcWorldState.of(entity.world);
+        Train train = state == null ? null : state.trains().train(entity.trainId());
+        return train == null ? null : train.spec();
     }
 
     /**
@@ -150,7 +198,7 @@ public class RenderCoasterCar extends Render<EntityCoasterCar> {
      * entity can exist for a tick or two before its train state arrives — drawing nothing there
      * would make cars visibly pop in.</p>
      */
-    private static void emitModel(EntityCoasterCar entity) {
+    private static void emitModel(EntityCoasterCar entity, float partialTicks) {
         float length = 3.0F;
         float couplingGap = 0.5F;
         int seatRows = 2;
@@ -173,17 +221,100 @@ public class RenderCoasterCar extends Render<EntityCoasterCar> {
         BufferBuilder buffer = tessellator.getBuffer();
         buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_COLOR);
         if (spec != null && spec.carStyle() == TrainSpec.CarStyle.METRO) {
+            // Smoothed client-side: the synced value arrives a few times a second, and drawing it
+            // raw makes the leaves jump between a handful of positions per close.
+            float doorFraction = MetroDoorAnimation.fraction(entity.world, entity.trainId(),
+                MetroDoors.openFraction(entity.world, entity.trainId()), partialTicks);
+            boolean lightsOn = saloonLightsOn(entity);
+            // A car's outermost ends are the ones with nothing coupled beyond them.
+            boolean outerFront = entity.carIndex() == 0;
+            boolean outerRear = entity.carIndex() == spec.carCount() - 1;
             // Pantographs on alternate cars, like a real EMU consist.
             MetroCarModel.emit(buffer, length, drawCoupling, entity.carIndex() % 2 == 0,
+                (float) wireHeightFor(entity), doorFraction, lightsOn, outerFront, outerRear,
                 colourOf(spec, TrainSpec.Part.BODY, 3),
                 colourOf(spec, TrainSpec.Part.TRIM, 4),
                 colourOf(spec, TrainSpec.Part.SEATS, 1));
-        } else {
-            CarModel.emit(buffer, length, seatRows, couplingGap, drawCoupling,
-                colourOf(spec, TrainSpec.Part.BODY, 3),
-                colourOf(spec, TrainSpec.Part.TRIM, 4),
-                colourOf(spec, TrainSpec.Part.SEATS, 1));
+            tessellator.draw();
+
+            // Glass last, blended. Translucent geometry drawn before the opaque body would blend
+            // against whatever happened to precede it rather than against the car.
+            GlStateManager.enableBlend();
+            GlStateManager.tryBlendFuncSeparate(GlStateManager.SourceFactor.SRC_ALPHA,
+                GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA,
+                GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ZERO);
+            GlStateManager.depthMask(false);
+            buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_COLOR);
+            MetroCarModel.emitGlazing(buffer, length, doorFraction, outerFront, outerRear);
+            tessellator.draw();
+            GlStateManager.depthMask(true);
+            GlStateManager.disableBlend();
+            return;
         }
+        CarModel.emit(buffer, length, seatRows, couplingGap, drawCoupling,
+            colourOf(spec, TrainSpec.Part.BODY, 3),
+            colourOf(spec, TrainSpec.Part.TRIM, 4),
+            colourOf(spec, TrainSpec.Part.SEATS, 1));
         tessellator.draw();
+    }
+
+    /**
+     * Whether this car's saloon lighting is lit: on below {@link #SALOON_LIGHT_THRESHOLD} of
+     * outside light, off above it.
+     *
+     * <p>A real metro's lights are on continuously, but a car lit identically at noon and at
+     * midnight has no lighting at all as far as a player can tell. Switching on the world's own
+     * light level is what makes the interior read as lit — and it means a train diving into a
+     * tunnel lights up, which is the moment the effect exists for.</p>
+     *
+     * <p>Sampled at the car's roof rather than its centre: the block the car body occupies is
+     * usually air, but sampling inside a tunnel bore or under a station canopy is exactly where the
+     * reading matters.</p>
+     */
+    private static boolean saloonLightsOn(EntityCoasterCar entity) {
+        net.minecraft.util.math.BlockPos at = new net.minecraft.util.math.BlockPos(
+            entity.posX, entity.posY + 2.0D, entity.posZ);
+        if (!entity.world.isBlockLoaded(at)) {
+            return false;
+        }
+        // Stored sky light is 15 outdoors at midnight exactly as at noon — time of day never
+        // touches it. Three ways of asking were tried before this one and all three failed
+        // identically, so the reasoning is recorded rather than the answer:
+        //
+        //   getLight(pos)          — stored light, no time term at all.
+        //   getLight(pos, true)    — the flag is checkNeighbors, not a time term either.
+        //   sky - getSkylightSubtracted() — the right idea, wrong field: World.skylightSubtracted
+        //                            is assigned only in calculateInitialSkylight() and through
+        //                            setSkylightSubtracted(), never from World.tick(), so on a
+        //                            CLIENT it is frozen at its construction value. 15 - 0 = 15.
+        //
+        // getSunBrightness is derived from the celestial angle on every call, which makes it the
+        // one form that is always current on the side that actually renders. Sky light scaled by it
+        // is how bright the sky genuinely is here and now; block light needs no correction, since a
+        // lamp is a lamp at any hour.
+        int blockLight = entity.world.getLightFor(net.minecraft.world.EnumSkyBlock.BLOCK, at);
+        int skyLight = entity.world.getLightFor(net.minecraft.world.EnumSkyBlock.SKY, at);
+        float sun = entity.world.getSunBrightness(1.0F);
+        return Math.max((double) blockLight, skyLight * sun) < SALOON_LIGHT_THRESHOLD;
+    }
+
+    /** Below this world light level the saloon lights come on. Dusk, roughly. */
+    private static final int SALOON_LIGHT_THRESHOLD = 10;
+
+    /**
+     * Height of the contact wire over the section this car is on, or {@code 0} where there is no
+     * catenary — what the pantograph stretches to meet.
+     */
+    private static double wireHeightFor(EntityCoasterCar entity) {
+        RcmcWorldState state = RcmcWorldState.of(entity.world);
+        Train train = state == null ? null : state.trains().train(entity.trainId());
+        if (train == null) {
+            return 0.0D;
+        }
+        com.micatechnologies.minecraft.rcmc.track.TrackSection section =
+            state.network().section(train.reference().sectionId());
+        return section == null ? 0.0D
+            : com.micatechnologies.minecraft.rcmc.track.TrackStyleIds
+                .contactWireHeight(section.styleId());
     }
 }

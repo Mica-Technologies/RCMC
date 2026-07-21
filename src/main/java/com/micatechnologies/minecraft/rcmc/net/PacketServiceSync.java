@@ -39,10 +39,14 @@ public class PacketServiceSync implements IMessage {
         snapshots = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
             String lineName = ByteBufUtils.readUTF8String(buf);
+            int trainId = buf.readInt();
             int direction = buf.readInt();
             int nextStop = buf.readInt();
             boolean atPlatform = buf.readBoolean();
-            snapshots.add(new ServiceSnapshot(lineName, direction, nextStop, atPlatform));
+            boolean doorsOpen = buf.readBoolean();
+            float doorFraction = buf.readFloat();
+            snapshots.add(new ServiceSnapshot(trainId, lineName, direction, nextStop, atPlatform,
+                doorsOpen, doorFraction));
         }
     }
 
@@ -51,9 +55,12 @@ public class PacketServiceSync implements IMessage {
         buf.writeInt(snapshots.size());
         for (ServiceSnapshot snapshot : snapshots) {
             ByteBufUtils.writeUTF8String(buf, snapshot.lineName());
+            buf.writeInt(snapshot.trainId());
             buf.writeInt(snapshot.serviceDirection());
             buf.writeInt(snapshot.nextStopIndex());
             buf.writeBoolean(snapshot.atPlatform());
+            buf.writeBoolean(snapshot.doorsOpen());
+            buf.writeFloat((float) snapshot.doorFraction());
         }
     }
 
