@@ -164,6 +164,25 @@ public final class RcmcWorldState {
             TrackSupports.invalidate(event.getWorld());
         }
 
+        /**
+         * Releases a departing player's unfinished build sessions.
+         *
+         * <p>Both session maps are keyed by player UUID and were never cleared, so on a
+         * long-running server they accumulated one entry per player who ever picked up a build
+         * tool. Small, but unbounded — and it also meant a player who disconnected mid-layout came
+         * back to a half-built chain they had no memory of starting.</p>
+         */
+        @SubscribeEvent
+        public void onPlayerLeave(
+            net.minecraftforge.fml.common.gameevent.PlayerEvent.PlayerLoggedOutEvent event) {
+            if (event.player == null) {
+                return;
+            }
+            java.util.UUID id = event.player.getUniqueID();
+            com.micatechnologies.minecraft.rcmc.builder.TrackBuildSession.clear(id);
+            com.micatechnologies.minecraft.rcmc.builder.PieceBuildSession.clear(id);
+        }
+
         /** New arrivals need the track before any train state can mean anything. */
         @SubscribeEvent
         public void onPlayerJoin(net.minecraftforge.fml.common.gameevent.PlayerEvent.PlayerLoggedInEvent event) {

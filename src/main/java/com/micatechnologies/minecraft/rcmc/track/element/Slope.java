@@ -58,7 +58,12 @@ public final class Slope implements TrackElement {
 
     @Override
     public String displayName() {
-        return "Slope";
+        // Signed, because "Slope" alone names an uphill and a downhill piece identically — and in a
+        // piece palette the name is the only thing the builder sees before placing it.
+        if (heightChangeBlocks > 0.0D) {
+            return "Slope Up";
+        }
+        return heightChangeBlocks < 0.0D ? "Slope Down" : "Level";
     }
 
     @Override
