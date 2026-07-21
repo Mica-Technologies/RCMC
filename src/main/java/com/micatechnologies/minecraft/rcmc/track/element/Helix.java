@@ -113,7 +113,19 @@ public final class Helix implements TrackElement {
         double speedPerRadian = Math.sqrt(radiusBlocks * radiusBlocks + k * k);
         int segments = ElementGeometry.segmentCount(speedPerRadian * totalTurnRad, context.nodeSpacing, 8);
 
-        double targetBank = ElementGeometry.balancedBankDegrees(
+        // NEGATED against turnSign, not multiplied by it.
+        //
+        // These two signs were assumed to agree and do not. turnSign says which side the arc's
+        // centre lies on; the bank has to lean the car TOWARD that centre, which in this frame is
+        // the opposite sign. Multiplying by turnSign banked every curve outward, so a rider was
+        // thrown sideways by the turn AND by the tilt — measured at 1.02g unbanked rising to 1.43g
+        // "banked" on a 40-block radius at 20 blocks/s.
+        //
+        // The convention is pinned by GForces: for a left-hand turn, the bank that cancels lateral
+        // load is negative. TrackFrame.right = forward x up, and TrackFrame.withBank rotates up
+        // about forward, which together fix the sign — see GForcesTest.perfectBankRemovesLateralLoad,
+        // which is the authority here because it asserts cancellation rather than a sign.
+        double targetBank = -ElementGeometry.balancedBankDegrees(
             designSpeedBlocksPerSecond, radiusBlocks, gravity, maxBankDegrees) * turnSign;
         double easeAngle = Math.min(MAX_EASE_ANGLE_RADIANS, totalTurnRad / 2.0D);
 

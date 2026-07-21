@@ -28,17 +28,12 @@ import org.junit.jupiter.api.Test;
  *
  * <p><b>A note on {@code track.element.Curve}'s authored bank sign.</b> Building the "unbanked vs.
  * banked" fixture below and checking it against {@code GForces} (which is independently verified by
- * {@code GForcesTest}) showed that {@code Curve}'s own computed bank — {@code
- * balancedBankDegrees(...) * turnSign} — has the <em>opposite</em> sign from what actually cancels
- * lateral G for the {@code curvatureDirection} that geometry produces: banking a {@code Curve} at its
- * own authored angle measurably <em>increases</em> peak lateral G instead of reducing it, and negating
- * that authored bank is what brings lateral G to (near) zero at the design speed. This looks like a
- * real sign bug in {@code track.element}, not a misunderstanding on this package's part — but fixing
- * it is out of scope here (that package belongs to a different, concurrently-working agent, and the
- * hard constraint on this task is "do not modify any existing file"). The fixtures below build the
- * correctly-banked case with {@link TestTracks#negateBank}, which sidesteps the bug rather than
- * depending on it, and this is flagged prominently in the final report rather than silently worked
- * around.</p>
+ * {@code GForcesTest}) found that {@code Curve}'s own computed bank had the <em>opposite</em> sign
+ * from what cancels lateral G. That was a real bug and has since been fixed in {@code
+ * track.element}; these fixtures now use a generated curve's bank directly, as they always should
+ * have. Kept as a note because it is the sort of finding a rating test is well placed to make: a
+ * sign error is invisible to the element's own tests if they assert the sign, and obvious to
+ * anything that measures what a rider feels.</p>
  */
 class RideRaterTest {
 
@@ -138,10 +133,7 @@ class RideRaterTest {
             new Straight(10.0D),
             new Curve(radius, 150.0D, TurnDirection.RIGHT, designSpeed, 60.0D, GRAVITY),
             new Straight(20.0D));
-        // See this class's javadoc: Curve's own authored bank sign is inverted relative to what
-        // GForces needs to cancel lateral G for this geometry, so the physically-correct "properly
-        // banked" fixture is the NEGATION of what Curve generated, not its raw output.
-        List<TrackNode> bankedNodes = TestTracks.negateBank(rawCurveNodes);
+        List<TrackNode> bankedNodes = rawCurveNodes;
         List<TrackNode> unbankedNodes = TestTracks.zeroBank(rawCurveNodes);
 
         TrackNetwork bankedNetwork = TestTracks.singleSectionNetwork(1, bankedNodes);
@@ -188,10 +180,10 @@ class RideRaterTest {
             new Curve(15.0D, 150.0D, TurnDirection.RIGHT, 35.0D, 5.0D, GRAVITY),
             new VerticalLoop(12.0D));
 
-        // A small drop into a big, gentle, properly banked turn at low speed. negateBank because of
-        // the Curve sign quirk documented in this class's javadoc — this fixture is meant to be
-        // genuinely gentle, which requires the bank to actually cancel lateral G rather than add to it.
-        List<TrackNode> gentleNodes = TestTracks.negateBank(TestTracks.chain(level(30.0D), 0.0D,
+        // A small drop into a big, gentle, properly banked turn at low speed. This fixture is only
+        // meaningful if the bank genuinely cancels lateral G rather than adding to it, which is
+        // exactly what the Curve sign fix restored.
+        List<TrackNode> gentleNodes = (TestTracks.chain(level(30.0D), 0.0D,
             new Straight(10.0D),
             new Slope(20.0D, -5.0D),
             new Straight(10.0D),

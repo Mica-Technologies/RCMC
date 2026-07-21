@@ -51,7 +51,7 @@ class CurveTest {
     }
 
     @Test
-    @DisplayName("a left curve banks positive, a right curve banks negative, at the same magnitude")
+    @DisplayName("a left curve banks negative, a right curve banks positive, at the same magnitude")
     void bankSignFollowsDirection() {
         Curve left = new Curve(40.0D, 90.0D, TurnDirection.LEFT, 12.0D, 60.0D);
         Curve right = new Curve(40.0D, 90.0D, TurnDirection.RIGHT, 12.0D, 60.0D);
@@ -62,8 +62,12 @@ class CurveTest {
         double leftMidBank = leftNodes.get(leftNodes.size() / 2).bankDegrees();
         double rightMidBank = rightNodes.get(rightNodes.size() / 2).bankDegrees();
 
-        assertTrue(leftMidBank > 5.0D, "left curve should bank positive: " + leftMidBank);
-        assertTrue(rightMidBank < -5.0D, "right curve should bank negative: " + rightMidBank);
+        // These signs were the other way round, and asserted the bug rather than the requirement:
+        // this test was written from the implementation's convention, so it agreed with it. The
+        // authority on which sign is correct is CurveBankSignTest, which measures lateral G instead
+        // of inspecting a sign, and found banking was making turns ~40% worse in both directions.
+        assertTrue(leftMidBank < -5.0D, "left curve should bank negative: " + leftMidBank);
+        assertTrue(rightMidBank > 5.0D, "right curve should bank positive: " + rightMidBank);
         assertEquals(leftMidBank, -rightMidBank, 0.5D);
     }
 
@@ -93,7 +97,8 @@ class CurveTest {
         List<TrackNode> nodes = curve.generate(levelContext()).nodes;
         double midBank = nodes.get(nodes.size() / 2).bankDegrees();
 
-        assertEquals(expected, midBank, 0.1D);
+        // Negative for a LEFT turn — see bankSignFollowsDirection. The magnitude is the formula's.
+        assertEquals(-expected, midBank, 0.1D);
     }
 
     @Test

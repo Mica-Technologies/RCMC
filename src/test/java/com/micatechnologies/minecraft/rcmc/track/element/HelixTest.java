@@ -70,9 +70,12 @@ class HelixTest {
 
         double expectedTarget = ElementGeometry.balancedBankDegrees(14.0D, 20.0D, 9.81D, 45.0D);
         double midBank = nodes.get(nodes.size() / 2).bankDegrees();
-        assertEquals(expectedTarget, midBank, 0.5D);
+        // Negated: a LEFT-hand helix banks negative, the same convention as Curve. See
+        // CurveTest.bankSignFollowsDirection.
+        assertEquals(-expectedTarget, midBank, 0.5D);
 
-        // First node should already be ramping up from zero, well short of the full target.
-        assertTrue(nodes.get(0).bankDegrees() < expectedTarget * 0.5D);
+        // First node should already be ramping away from zero, well short of the full target. On
+        // magnitude, so the assertion does not quietly depend on the sign the body settles at.
+        assertTrue(Math.abs(nodes.get(0).bankDegrees()) < expectedTarget * 0.5D);
     }
 }

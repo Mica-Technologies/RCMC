@@ -59,15 +59,4 @@ final class TestTracks {
         }
         return result;
     }
-
-    /** Same node positions, every authored bank sign flipped. See {@code RideRaterTest}'s javadoc
-     *  note on {@code track.element.Curve}'s bank sign for why a rating-package test needs this
-     *  instead of trusting a generated curve's own bank directly. */
-    static List<TrackNode> negateBank(List<TrackNode> nodes) {
-        List<TrackNode> result = new ArrayList<>(nodes.size());
-        for (TrackNode node : nodes) {
-            result.add(new TrackNode(node.position(), -node.bankDegrees(), node.styleId()));
-        }
-        return result;
-    }
 }
