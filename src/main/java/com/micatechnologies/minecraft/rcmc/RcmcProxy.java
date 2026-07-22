@@ -25,4 +25,14 @@ public interface RcmcProxy {
      * then takes a dedicated server down on boot.</p>
      */
     boolean isLocalPlayerAboard(int trainId);
+
+    /**
+     * Speaks a station announcement on the client — through CSM's TTS engine if it is installed,
+     * or as an on-screen subtitle otherwise. A no-op on a server, which has nothing to speak with.
+     *
+     * <p>Exists so the announcement packet handler can turn text into sound without naming a
+     * {@code net.minecraft.client} type in common code — the same discipline as
+     * {@link #isLocalPlayerAboard}.</p>
+     */
+    void speakTts(String text, String voice);
 }

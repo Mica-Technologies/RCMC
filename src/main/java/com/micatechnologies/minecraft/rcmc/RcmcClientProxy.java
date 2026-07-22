@@ -85,6 +85,8 @@ public class RcmcClientProxy extends RcmcCommonProxy {
             com.micatechnologies.minecraft.rcmc.block.RcmcBlocks.stationSign));
         bindModel(net.minecraft.item.Item.getItemFromBlock(
             com.micatechnologies.minecraft.rcmc.block.RcmcBlocks.arrivalBoard));
+        bindModel(net.minecraft.item.Item.getItemFromBlock(
+            com.micatechnologies.minecraft.rcmc.block.RcmcBlocks.stationSpeaker));
     }
 
     private static void bindModel(net.minecraft.item.Item item) {
@@ -111,5 +113,10 @@ public class RcmcClientProxy extends RcmcCommonProxy {
         return vehicle instanceof com.micatechnologies.minecraft.rcmc.entity.EntityCoasterCar
             && ((com.micatechnologies.minecraft.rcmc.entity.EntityCoasterCar) vehicle).trainId()
                 == trainId;
+    }
+
+    @Override
+    public void speakTts(String text, String voice) {
+        com.micatechnologies.minecraft.rcmc.client.TtsBridge.speak(text, voice);
     }
 }

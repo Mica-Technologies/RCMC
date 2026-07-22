@@ -17,6 +17,7 @@ public final class RcmcBlocks {
     public static BlockPlatformEdge platformEdge;
     public static com.micatechnologies.minecraft.rcmc.block.sign.BlockStationSign stationSign;
     public static com.micatechnologies.minecraft.rcmc.block.sign.BlockArrivalBoard arrivalBoard;
+    public static com.micatechnologies.minecraft.rcmc.block.sign.BlockStationSpeaker stationSpeaker;
 
     private RcmcBlocks() {
         throw new AssertionError("No instances.");
@@ -30,6 +31,8 @@ public final class RcmcBlocks {
             new com.micatechnologies.minecraft.rcmc.block.sign.BlockStationSign());
         arrivalBoard = RcmcRegistry.addBlock(
             new com.micatechnologies.minecraft.rcmc.block.sign.BlockArrivalBoard());
+        stationSpeaker = RcmcRegistry.addBlock(
+            new com.micatechnologies.minecraft.rcmc.block.sign.BlockStationSpeaker());
 
         // An ItemBlock carries the block's registry name, not its own — they share a namespace and
         // Forge matches them by name when binding models.
@@ -45,6 +48,9 @@ public final class RcmcBlocks {
         RcmcRegistry.addItem(new ItemBlock(arrivalBoard).setRegistryName(
             RcmcConstants.MOD_NAMESPACE,
             com.micatechnologies.minecraft.rcmc.block.sign.BlockArrivalBoard.NAME));
+        RcmcRegistry.addItem(new ItemBlock(stationSpeaker).setRegistryName(
+            RcmcConstants.MOD_NAMESPACE,
+            com.micatechnologies.minecraft.rcmc.block.sign.BlockStationSpeaker.NAME));
 
         // Tile entities travel with their blocks. Registry-namespaced ids, per convention.
         net.minecraftforge.fml.common.registry.GameRegistry.registerTileEntity(
@@ -53,5 +59,8 @@ public final class RcmcBlocks {
         net.minecraftforge.fml.common.registry.GameRegistry.registerTileEntity(
             com.micatechnologies.minecraft.rcmc.block.sign.TileArrivalBoard.class,
             new net.minecraft.util.ResourceLocation(RcmcConstants.MOD_NAMESPACE, "arrival_board"));
+        net.minecraftforge.fml.common.registry.GameRegistry.registerTileEntity(
+            com.micatechnologies.minecraft.rcmc.block.sign.TileStationSpeaker.class,
+            new net.minecraft.util.ResourceLocation(RcmcConstants.MOD_NAMESPACE, "station_speaker"));
     }
 }

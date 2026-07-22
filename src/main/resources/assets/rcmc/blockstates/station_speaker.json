@@ -1,0 +1,10 @@
+{
+  "variants": {
+    "facing=north": { "model": "rcmc:station_speaker" },
+    "facing=south": { "model": "rcmc:station_speaker", "y": 180 },
+    "facing=east":  { "model": "rcmc:station_speaker", "y": 90 },
+    "facing=west":  { "model": "rcmc:station_speaker", "y": 270 },
+    "facing=down":  { "model": "rcmc:station_speaker", "x": 90 },
+    "facing=up":    { "model": "rcmc:station_speaker", "x": 270 }
+  }
+}

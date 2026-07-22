@@ -53,6 +53,8 @@ public final class RcmcNetwork {
             nextId++, Side.CLIENT);
         CHANNEL.registerMessage(PacketServiceSync.Handler.class, PacketServiceSync.class,
             nextId++, Side.CLIENT);
+        CHANNEL.registerMessage(PacketStationAnnounce.Handler.class, PacketStationAnnounce.class,
+            nextId++, Side.CLIENT);
     }
 
     public static void sendTo(Object message, EntityPlayerMP player) {

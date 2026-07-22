@@ -27,4 +27,9 @@ public class RcmcCommonProxy implements RcmcProxy {
     public boolean isLocalPlayerAboard(int trainId) {
         return false;
     }
+
+    /** A server has nothing to speak with; announcements are a client concern. */
+    @Override
+    public void speakTts(String text, String voice) {
+    }
 }

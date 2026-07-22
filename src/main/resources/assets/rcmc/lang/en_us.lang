@@ -6,6 +6,7 @@ tile.rcmc.platform.name=Station Platform
 tile.rcmc.platform_edge.name=Platform Edge
 tile.rcmc.station_sign.name=Station Line Map
 tile.rcmc.arrival_board.name=Arrival Board
+tile.rcmc.station_speaker.name=Station Speaker
 entity.coaster_car.name=Ride Car
 key.categories.rcmc=Rails & Coasters
 key.rcmc.cycle_segment=Cycle Track Segment Type
