@@ -129,13 +129,13 @@ public final class TrackMeshBuilder {
      * spline track just above the ground. Flat-coloured a gravel grey (the mesh carries no texture,
      * so it is the colour of gravel rather than the gravel texture itself).
      */
-    private static final float[] BALLAST_COLOR = { 0.40F, 0.38F, 0.35F };
+    private static final float[] BALLAST_COLOR = { 0.56F, 0.54F, 0.50F };
 
     /** How far below the railhead the ballast bed reaches — a block, so a floor one block down meets it. */
     private static final double BALLAST_BOTTOM_U = -1.20D;
 
     /** Ballast shoulder half-width — wider than the gauge, like a real ballast bed spilling past the ties. */
-    private static final double BALLAST_HALF_WIDTH = 1.75D;
+    private static final double BALLAST_HALF_WIDTH = 2.35D;
 
     /** Arc-length spacing between cross-ties, in blocks. See class javadoc. */
     private static final double TIE_SPACING = 1.5D;

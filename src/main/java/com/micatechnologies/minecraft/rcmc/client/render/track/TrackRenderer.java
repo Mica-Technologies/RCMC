@@ -259,6 +259,12 @@ public final class TrackRenderer {
 
     private static void draw(BufferBuilder buffer, Tessellator tessellator, CachedSection cached,
                               double camX, double camY, double camZ, World world, float sunBrightness) {
+        // Render the swept mesh double-sided. The profiles are wound consistently, but the wide
+        // ballast bed made it obvious that some outward faces were being back-face culled by the
+        // ambient world-render cull state (the thin rails and spine hid it) — so a viewer saw
+        // through the near face to the far one. Flat-shaded solid geometry is identical either way,
+        // and disabling cull for this one draw guarantees every face shows.
+        GlStateManager.disableCull();
         buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_COLOR);
         MeshQuad[] quads = cached.quads;
         for (int i = 0; i < quads.length; i++) {
@@ -282,6 +288,7 @@ public final class TrackRenderer {
             buffer.pos(q.d.x - camX, q.d.y - camY, q.d.z - camZ).color(red, green, blue, 1.0F).endVertex();
         }
         tessellator.draw();
+        GlStateManager.enableCull();
     }
 
     private static boolean withinRenderDistance(AxisAlignedBB bounds, double camX, double camY, double camZ) {
