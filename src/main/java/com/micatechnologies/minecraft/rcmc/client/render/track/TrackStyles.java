@@ -30,9 +30,9 @@ final class TrackStyles {
         TUNNEL
     }
 
-    /** The classic coaster look — current dimensions, unchanged, unelectrified. */
+    /** The classic coaster look — current dimensions, unchanged, unelectrified, no ballast. */
     static final TrackStyles COASTER =
-        new TrackStyles(0.55D, 0.70D, 0.08D, 0.12D, 0.05D, 0.05D, Catenary.NONE);
+        new TrackStyles(0.55D, 0.70D, 0.08D, 0.12D, 0.05D, 0.05D, false, Catenary.NONE);
 
     /** Shared transit cross-section; the three electrified variants differ only in catenary. */
     private static final TrackStyles TRANSIT = transit(Catenary.NONE);
@@ -46,17 +46,20 @@ final class TrackStyles {
     final double spineHalfHeight;
     final double railHalfWidth;
     final double railHalfHeight;
+    /** Whether the track sweeps a ballast bed beneath the spine — heavy rail sits on stone. */
+    final boolean ballast;
     final Catenary catenary;
 
     private TrackStyles(double halfGauge, double tieHalfLength, double spineHalfWidth,
                         double spineHalfHeight, double railHalfWidth, double railHalfHeight,
-                        Catenary catenary) {
+                        boolean ballast, Catenary catenary) {
         this.halfGauge = halfGauge;
         this.tieHalfLength = tieHalfLength;
         this.spineHalfWidth = spineHalfWidth;
         this.spineHalfHeight = spineHalfHeight;
         this.railHalfWidth = railHalfWidth;
         this.railHalfHeight = railHalfHeight;
+        this.ballast = ballast;
         this.catenary = catenary;
     }
 
@@ -65,7 +68,7 @@ final class TrackStyles {
         // between railheads, long ties, a chunky spine, and visibly heavier rail. Widened from 2.0
         // when the stock was scaled up — the body must still read as overhanging its track, which
         // is what makes rolling stock look like rolling stock.
-        return new TrackStyles(1.40D, 1.90D, 0.26D, 0.20D, 0.11D, 0.09D, catenary);
+        return new TrackStyles(1.40D, 1.90D, 0.26D, 0.20D, 0.11D, 0.09D, true, catenary);
     }
 
     /** Resolves a section's style id. Unknown or {@code null} ids fall back to the coaster look

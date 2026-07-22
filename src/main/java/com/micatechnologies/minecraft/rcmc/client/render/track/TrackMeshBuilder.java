@@ -123,6 +123,20 @@ public final class TrackMeshBuilder {
     private static final float[] SUPPORT_COLOR = { 0.42F, 0.43F, 0.46F };
     private static final double TIE_HALF_THICKNESS_S = 0.08D;
 
+    /**
+     * Track-ballast bed, swept below the spine on heavy-rail (transit) styles so the track sits on
+     * stone rather than floating a gap above whatever is under it — the classic problem of laying
+     * spline track just above the ground. Flat-coloured a gravel grey (the mesh carries no texture,
+     * so it is the colour of gravel rather than the gravel texture itself).
+     */
+    private static final float[] BALLAST_COLOR = { 0.47F, 0.45F, 0.42F };
+
+    /** How far below the railhead the ballast bed reaches — a block, so a floor one block down meets it. */
+    private static final double BALLAST_BOTTOM_U = -1.02D;
+
+    /** Ballast shoulder half-width — wider than the gauge, like a real ballast bed spilling past the ties. */
+    private static final double BALLAST_HALF_WIDTH = 1.55D;
+
     /** Arc-length spacing between cross-ties, in blocks. See class javadoc. */
     private static final double TIE_SPACING = 1.5D;
 
@@ -197,6 +211,11 @@ public final class TrackMeshBuilder {
             com.micatechnologies.minecraft.rcmc.track.TrackPalette.Part.RAIL);
         sweepTube(section, rings, railProfile(style, -1), railColour, capEnds, quads);
         sweepTube(section, rings, railProfile(style, 1), railColour, capEnds, quads);
+        if (style.ballast) {
+            // Under the spine, so the track reads as sitting on a stone bed rather than hovering a
+            // gap above the floor. Swept like the spine — one continuous bed, capped on open runs.
+            sweepTube(section, rings, ballastProfile(style), BALLAST_COLOR, capEnds, quads);
+        }
         sweepTube(section, rings, spineProfile(style), colourOf(section,
             com.micatechnologies.minecraft.rcmc.track.TrackPalette.Part.SPINE), capEnds, quads);
         buildTies(section, total, style, quads);
@@ -470,6 +489,18 @@ public final class TrackMeshBuilder {
 
     private static ProfileEdge[] spineProfile(TrackStyles style) {
         return rectangle(0.0D, SPINE_CENTER_U, style.spineHalfWidth, style.spineHalfHeight);
+    }
+
+    /**
+     * The ballast bed: a wide, shallow box from just under the spine down to {@link #BALLAST_BOTTOM_U}.
+     * Its top overlaps the spine bottom so the two read as one structure, and its bottom sits a block
+     * below the railhead so a floor laid one block down meets it flush.
+     */
+    private static ProfileEdge[] ballastProfile(TrackStyles style) {
+        double top = SPINE_CENTER_U - style.spineHalfHeight * 0.5D;
+        double centre = (top + BALLAST_BOTTOM_U) * 0.5D;
+        double halfHeight = Math.abs(top - BALLAST_BOTTOM_U) * 0.5D;
+        return rectangle(0.0D, centre, BALLAST_HALF_WIDTH, halfHeight);
     }
 
     private static ProfileEdge[] tieProfile(TrackStyles style) {
