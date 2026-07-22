@@ -38,8 +38,15 @@ public final class RcmcWorldState {
      */
     private static final Map<World, RcmcWorldState> STATES = new WeakHashMap<>();
 
-    private final TrackNetwork network;
+    private TrackNetwork network;
     private final TrainManager trains = new TrainManager();
+
+    /**
+     * Server-side undo/redo of the authored state. {@code null} on a client, where the network is a
+     * synced mirror with nothing local to undo. Seeded in {@link #of} with the freshly loaded state,
+     * so the first edit's pre-edit snapshot is captured.
+     */
+    private EditHistory history;
 
     /**
      * Ride hardware. Server-side this is loaded from saved data; client-side it stays empty —
@@ -95,6 +102,8 @@ public final class RcmcWorldState {
             created = new RcmcWorldState(data.network(), false);
             created.elements = data.elements();
             created.transit = data.transit();
+            // Seed history with the loaded state so the first edit is undoable.
+            created.history = new EditHistory(data.snapshot(), EditHistory.DEFAULT_DEPTH);
         }
         STATES.put(world, created);
         return created;
@@ -176,8 +185,77 @@ public final class RcmcWorldState {
      */
     public void markTrackDirty(World world) {
         if (!world.isRemote) {
-            RcmcTrackData.get(world).markNetworkDirty();
+            RcmcTrackData data = RcmcTrackData.get(world);
+            data.markNetworkDirty();
+            // Record the post-edit state for undo. markTrackDirty is the one choke point every edit
+            // passes through, so hooking it here covers all edits — track, colour, style, elements,
+            // transit — without touching a single call site, and future edit types the day they
+            // are written. Skipped while a restore is being applied (its own dirty-mark would else
+            // corrupt the stacks).
+            if (history != null && !history.isRestoring()) {
+                history.record(data.snapshot());
+            }
         }
+    }
+
+    /**
+     * Steps the authored state back one edit. Returns false if there is nothing to undo.
+     *
+     * <p>Affects only the authored, persisted state (track, elements, transit) — never running
+     * trains, which are runtime and unpersisted. An undo that removes a section a train sits on
+     * leaves the train safely skipped, exactly as deleting the section by hand does.</p>
+     */
+    public boolean undo(World world) {
+        return applyRestore(world, history == null ? null : history.undo());
+    }
+
+    /** Mirror of {@link #undo} for redo. */
+    public boolean redo(World world) {
+        return applyRestore(world, history == null ? null : history.redo());
+    }
+
+    public boolean canUndo() {
+        return history != null && history.canUndo();
+    }
+
+    public boolean canRedo() {
+        return history != null && history.canRedo();
+    }
+
+    /**
+     * Installs a restored snapshot into the live world state and the save data together, then
+     * broadcasts the result to clients. Both sides of the state must be the same instances — a save
+     * writes {@link RcmcTrackData}'s copy while the world runs this one — so they are set from the
+     * one parse.
+     */
+    private boolean applyRestore(World world, net.minecraft.nbt.NBTTagCompound snapshot) {
+        if (snapshot == null || world.isRemote) {
+            return false;
+        }
+        history.beginRestore();
+        try {
+            TrackNetwork restoredNetwork =
+                com.micatechnologies.minecraft.rcmc.track.storage.TrackCodec.readNetwork(snapshot);
+            com.micatechnologies.minecraft.rcmc.physics.element.RideElementSet restoredElements =
+                com.micatechnologies.minecraft.rcmc.track.storage.ElementCodec.read(snapshot);
+            com.micatechnologies.minecraft.rcmc.physics.transit.TransitSystem restoredTransit =
+                com.micatechnologies.minecraft.rcmc.track.storage.TransitCodec.read(snapshot);
+
+            this.network = restoredNetwork;
+            this.elements = restoredElements;
+            this.transit = restoredTransit;
+            RcmcTrackData.get(world).install(restoredNetwork, restoredElements, restoredTransit);
+
+            int dimension = world.provider.getDimension();
+            RcmcNetwork.sendToAllIn(new PacketTrackSync(restoredNetwork), dimension);
+            RcmcNetwork.sendToAllIn(new PacketElementSync(restoredElements), dimension);
+            RcmcNetwork.sendToAllIn(new com.micatechnologies.minecraft.rcmc.net.PacketTransitSync(
+                restoredTransit), dimension);
+        }
+        finally {
+            history.endRestore();
+        }
+        return true;
     }
 
     /** Forge event hooks. Registered once from {@code Rcmc.preInit}. */

@@ -65,4 +65,77 @@ public final class DemoMetro {
         double[] distances = {25.0D, total * 0.5D, total - 25.0D};
         return new Result(section, names, distances);
     }
+
+    /**
+     * Builds an underground <b>double-track loop</b> subway: a closed, flat, tunnel-styled oval with
+     * two parallel straights joined by a turning loop at each end, so a train runs one way forever —
+     * out along one track, round the end, back along the other — never reversing.
+     *
+     * <p>Modelled as a <b>loop line</b> (never reverses) with six distinct stations around the ring.
+     * The metro model gives each station a single stop point and matches stations by name, so it has
+     * no notion of "one station, two directional platforms" — the honest way to express a
+     * double-track line here is six stops around the loop, exactly as a real loop/circle line has.
+     * Where the two straights run parallel, an island platform between them serves both tracks.</p>
+     *
+     * <p>The geometry is a stadium oval: a north straight running +X, a semicircular turn at the east
+     * end, a south straight running −X, a semicircular turn at the west end, closed. Straights are
+     * {@code GAUGE_SEP} apart — room for an island platform between them. Station distances are found
+     * by walking the built spline to the point nearest each platform, rather than hand-computed, so
+     * they stay correct if the control points are ever tweaked.</p>
+     */
+    public static Result buildUndergroundLoop(int sectionId, Vec3 origin) {
+        double y = origin.y;
+        final double sep = 8.0D;   // centreline separation of the two tracks
+        final double r = sep / 2.0D;   // turning-loop radius = half the separation
+        final double len = 180.0D; // straight length
+        final double d = r * 0.70710678D; // 45° offset on the semicircles
+
+        // Counter-clockwise from the west end of the north (z=0) track.
+        double[][] xz = {
+            {0, 0}, {45, 0}, {90, 0}, {135, 0}, {len, 0},
+            {len + d, r - d}, {len + r, r}, {len + d, r + d},   // east turning loop (+X bulge)
+            {len, sep}, {135, sep}, {90, sep}, {45, sep}, {0, sep},
+            {-d, r + d}, {-r, r}, {-d, r - d},                  // west turning loop (−X bulge)
+        };
+        List<TrackNode> nodes = new ArrayList<>();
+        for (double[] p : xz) {
+            nodes.add(new TrackNode(new Vec3(origin.x + p[0], y, origin.z + p[1])));
+        }
+        TrackSection section = new TrackSection(sectionId, nodes, true,
+            TrackStyleIds.TRANSIT_TUNNEL);
+
+        // Six platforms: three on the outbound (north, z=0) straight running east, three on the
+        // inbound (south, z=sep) straight running west. Named around the ring in service order.
+        double[][] platforms = {
+            {40, 0}, {90, 0}, {140, 0},           // outbound
+            {140, sep}, {90, sep}, {40, sep},     // inbound
+        };
+        String[] names = {"Union", "Central", "Harbor", "Seaside", "Midway", "Parkside"};
+        double[] distances = new double[platforms.length];
+        for (int i = 0; i < platforms.length; i++) {
+            distances[i] = nearestDistance(section,
+                new Vec3(origin.x + platforms[i][0], y, origin.z + platforms[i][1]));
+        }
+        return new Result(section, names, distances);
+    }
+
+    /** Distance along the section whose frame position is closest to {@code target}. */
+    private static double nearestDistance(TrackSection section, Vec3 target) {
+        double total = section.totalLength();
+        double best = 0.0D;
+        double bestSq = Double.MAX_VALUE;
+        // 1-block steps are ample: the nearest station point needs only to land a train berth on the
+        // right straight, and the stop controller creeps in to the exact point from there.
+        for (double s = 0.0D; s <= total; s += 1.0D) {
+            Vec3 p = section.positionAtDistance(s);
+            double dx = p.x - target.x;
+            double dz = p.z - target.z;
+            double sq = dx * dx + dz * dz;
+            if (sq < bestSq) {
+                bestSq = sq;
+                best = s;
+            }
+        }
+        return best;
+    }
 }

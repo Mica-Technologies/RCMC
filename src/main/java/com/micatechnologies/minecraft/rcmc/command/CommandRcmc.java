@@ -76,7 +76,7 @@ public class CommandRcmc extends CommandBase {
         if (args.length == 1) {
             return getListOfStringsMatchingLastWord(args, "demo", "metrodemo", "train", "clear",
                 "info", "build", "paint", "style", "rate", "block", "station", "line", "switch",
-                "platform", "rmsection");
+                "platform", "rmsection", "undo", "redo");
         }
         if (args.length == 3 && "style".equalsIgnoreCase(args[0])) {
             return getListOfStringsMatchingLastWord(args,
@@ -124,7 +124,7 @@ public class CommandRcmc extends CommandBase {
                 buildDemo(sender, world, state, args);
                 break;
             case "metrodemo":
-                buildMetroDemo(sender, world, state);
+                buildMetroDemo(sender, world, state, args);
                 break;
             case "train":
                 spawnTrain(sender, world, state, args);
@@ -164,6 +164,23 @@ public class CommandRcmc extends CommandBase {
                 break;
             case "rmsection":
                 removeSection(sender, world, state, args);
+                break;
+            case "undo":
+                if (state.undo(world)) {
+                    reply(sender, TextFormatting.GREEN, "Undid the last edit."
+                        + (state.canUndo() ? "" : " Nothing more to undo."));
+                }
+                else {
+                    reply(sender, TextFormatting.GRAY, "Nothing to undo.");
+                }
+                break;
+            case "redo":
+                if (state.redo(world)) {
+                    reply(sender, TextFormatting.GREEN, "Redid the last undone edit.");
+                }
+                else {
+                    reply(sender, TextFormatting.GRAY, "Nothing to redo.");
+                }
                 break;
             default:
                 throw new CommandException(getUsage(sender));
@@ -333,12 +350,18 @@ public class CommandRcmc extends CommandBase {
      * catenary-styled alignment, three named stations, and a registered line. One command from
      * bare terrain to "spawn a train and start service".
      */
-    private void buildMetroDemo(ICommandSender sender, World world, RcmcWorldState state)
+    private void buildMetroDemo(ICommandSender sender, World world, RcmcWorldState state,
+                               String[] args)
         throws CommandException {
         EntityPlayer player = getCommandSenderAsPlayer(sender);
+        boolean underground = args.length > 1
+            && ("underground".equalsIgnoreCase(args[1]) || "loop".equalsIgnoreCase(args[1])
+                || "subway".equalsIgnoreCase(args[1]));
         int id = state.network().allocateSectionId();
-        DemoMetro.Result demo = DemoMetro.build(id,
-            new Vec3(player.posX, player.posY, player.posZ));
+        Vec3 origin = new Vec3(player.posX, player.posY, player.posZ);
+        DemoMetro.Result demo = underground
+            ? DemoMetro.buildUndergroundLoop(id, origin)
+            : DemoMetro.build(id, origin);
         state.network().addSection(demo.section);
 
         com.micatechnologies.minecraft.rcmc.physics.transit.TransitSystem transit = state.transit();
@@ -351,19 +374,21 @@ public class CommandRcmc extends CommandBase {
             transit.addStation(station);
             stops.add(station);
         }
+        String lineName = underground ? "Subway" : "Metro";
         transit.addLine(new com.micatechnologies.minecraft.rcmc.physics.transit.TransitLine(
-            "Metro", stops, false));
+            lineName, stops, underground));
 
         state.markTrackDirty(world);
         broadcastTrack(world, state);
         RcmcNetwork.sendToAllIn(new com.micatechnologies.minecraft.rcmc.net.PacketTransitSync(transit),
             world.provider.getDimension());
 
-        reply(sender, TextFormatting.GREEN, "Built metro demo #" + id + " — "
-            + fmt(demo.section.totalLength()) + " blocks, stations "
-            + String.join(", ", demo.stationNames) + ", line 'Metro'.");
-        reply(sender, TextFormatting.GRAY, "Run /rcmc train " + id
-            + " 3 0 metro, then /rcmc line start Metro <trainId> to begin service.");
+        reply(sender, TextFormatting.GREEN, "Built " + (underground ? "underground loop" : "metro")
+            + " demo #" + id + " — " + fmt(demo.section.totalLength()) + " blocks, "
+            + demo.stationNames.length + " stations (" + String.join(", ", demo.stationNames)
+            + "), " + (underground ? "loop " : "") + "line '" + lineName + "'.");
+        reply(sender, TextFormatting.GRAY, "Run /rcmc train " + id + " 3 0 metro, then /rcmc line start "
+            + lineName + " <trainId> to begin service.");
     }
 
     /**

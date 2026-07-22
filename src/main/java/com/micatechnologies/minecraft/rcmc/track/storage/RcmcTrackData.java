@@ -97,6 +97,34 @@ public class RcmcTrackData extends WorldSavedData {
         markDirty();
     }
 
+    /**
+     * A complete snapshot of the authored state — the exact bytes that would be written to disk.
+     *
+     * <p>Reuses {@link #writeToNBT} so a snapshot can never capture less than a save does: the undo
+     * history and the save file are the same serialisation, which is what lets "whatever persists,
+     * undoes" hold without a second codec to keep in step.</p>
+     */
+    public NBTTagCompound snapshot() {
+        return writeToNBT(new NBTTagCompound());
+    }
+
+    /**
+     * Replaces the authored state with the network/elements/transit already parsed from a snapshot,
+     * and marks the data dirty so the restored state is what next persists.
+     *
+     * <p>Takes parsed objects rather than the raw NBT because the caller ({@code RcmcWorldState})
+     * must install the very same instances into its own live references — the two must not diverge,
+     * or a save would write one and the world would run the other.</p>
+     */
+    public void install(TrackNetwork network,
+                        com.micatechnologies.minecraft.rcmc.physics.element.RideElementSet elements,
+                        com.micatechnologies.minecraft.rcmc.physics.transit.TransitSystem transit) {
+        this.network = network;
+        this.elements = elements;
+        this.transit = transit;
+        markDirty();
+    }
+
     @Override
     public void readFromNBT(NBTTagCompound nbt) {
         this.network = TrackCodec.readNetwork(nbt);
