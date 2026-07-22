@@ -85,16 +85,21 @@ public final class DemoMetro {
      */
     public static Result buildUndergroundLoop(int sectionId, Vec3 origin) {
         double y = origin.y;
-        final double sep = 8.0D;   // centreline separation of the two tracks
-        final double r = sep / 2.0D;   // turning-loop radius = half the separation
-        final double len = 180.0D; // straight length
+        // Wide separation on purpose: the turning loop at each end is a semicircle of radius sep/2,
+        // so a bigger separation buys a broader, more gradual turnaround (a metro turnback, not a
+        // hairpin) — and leaves a generous island between the straights. Long straights so three
+        // stations spaced well apart each get a platform long enough for a three-car train.
+        final double sep = 20.0D;  // centreline separation of the two tracks
+        final double r = sep / 2.0D;   // turning-loop radius = half the separation (=10 blocks)
+        final double len = 360.0D; // straight length
         final double d = r * 0.70710678D; // 45° offset on the semicircles
 
-        // Counter-clockwise from the west end of the north (z=0) track.
+        // Counter-clockwise from the west end of the north (z=0) track; points every 90 blocks keep
+        // the long straights straight.
         double[][] xz = {
-            {0, 0}, {45, 0}, {90, 0}, {135, 0}, {len, 0},
+            {0, 0}, {90, 0}, {180, 0}, {270, 0}, {len, 0},
             {len + d, r - d}, {len + r, r}, {len + d, r + d},   // east turning loop (+X bulge)
-            {len, sep}, {135, sep}, {90, sep}, {45, sep}, {0, sep},
+            {len, sep}, {270, sep}, {180, sep}, {90, sep}, {0, sep},
             {-d, r + d}, {-r, r}, {-d, r - d},                  // west turning loop (−X bulge)
         };
         List<TrackNode> nodes = new ArrayList<>();
@@ -104,11 +109,11 @@ public final class DemoMetro {
         TrackSection section = new TrackSection(sectionId, nodes, true,
             TrackStyleIds.TRANSIT_TUNNEL);
 
-        // Six platforms: three on the outbound (north, z=0) straight running east, three on the
-        // inbound (south, z=sep) straight running west. Named around the ring in service order.
+        // Six platforms, three per straight, spaced 120 blocks apart so a 64-block platform (three
+        // cars) fits each with clear tunnel between. Named around the ring in service order.
         double[][] platforms = {
-            {40, 0}, {90, 0}, {140, 0},           // outbound
-            {140, sep}, {90, sep}, {40, sep},     // inbound
+            {60, 0}, {180, 0}, {300, 0},          // outbound (north, running east)
+            {300, sep}, {180, sep}, {60, sep},    // inbound (south, running west)
         };
         String[] names = {"Union", "Central", "Harbor", "Seaside", "Midway", "Parkside"};
         double[] distances = new double[platforms.length];
