@@ -129,13 +129,13 @@ public final class TrackMeshBuilder {
      * spline track just above the ground. Flat-coloured a gravel grey (the mesh carries no texture,
      * so it is the colour of gravel rather than the gravel texture itself).
      */
-    private static final float[] BALLAST_COLOR = { 0.30F, 0.29F, 0.29F };
+    private static final float[] BALLAST_COLOR = { 0.40F, 0.38F, 0.35F };
 
     /** How far below the railhead the ballast bed reaches — a block, so a floor one block down meets it. */
-    private static final double BALLAST_BOTTOM_U = -1.02D;
+    private static final double BALLAST_BOTTOM_U = -1.20D;
 
     /** Ballast shoulder half-width — wider than the gauge, like a real ballast bed spilling past the ties. */
-    private static final double BALLAST_HALF_WIDTH = 1.55D;
+    private static final double BALLAST_HALF_WIDTH = 1.75D;
 
     /** Arc-length spacing between cross-ties, in blocks. See class javadoc. */
     private static final double TIE_SPACING = 1.5D;
@@ -497,7 +497,10 @@ public final class TrackMeshBuilder {
      * below the railhead so a floor laid one block down meets it flush.
      */
     private static ProfileEdge[] ballastProfile(TrackStyles style) {
-        double top = SPINE_CENTER_U - style.spineHalfHeight * 0.5D;
+        // Top right at the underside of the sleepers/ties, so the track sits ON the bed rather than
+        // floating above a low, detached strip; bottom a block-plus down to meet a floor there. That
+        // gives a full-height bed (~1 block), not a thin sliver.
+        double top = SPINE_CENTER_U + style.spineHalfHeight;
         double centre = (top + BALLAST_BOTTOM_U) * 0.5D;
         double halfHeight = Math.abs(top - BALLAST_BOTTOM_U) * 0.5D;
         return rectangle(0.0D, centre, BALLAST_HALF_WIDTH, halfHeight);
