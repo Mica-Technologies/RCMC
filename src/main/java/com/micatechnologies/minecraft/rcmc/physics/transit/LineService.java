@@ -56,6 +56,9 @@ public final class LineService {
     private double facing;
     private int servedSeen;
 
+    /** Remaining distance to the current target station, from the last {@link #tick}. */
+    private double stationRemaining = Double.POSITIVE_INFINITY;
+
     /**
      * @param line             the line being served
      * @param controller       the M2 stop controller doing the driving
@@ -123,6 +126,7 @@ public final class LineService {
         double stationRemaining = Double.isInfinite(behind)
             ? TrackWalk.distanceTo(network, train.reference(), facing, target.stopPoint(), ROUTE_HORIZON)
             : -behind;
+        this.stationRemaining = stationRemaining;
 
         double acceleration = controller.acceleration(
             velocity, facing, stationRemaining, authorityRemaining);
@@ -178,6 +182,15 @@ public final class LineService {
     /** Current travel direction along the train's current section axis. */
     public double facing() {
         return facing;
+    }
+
+    /**
+     * Remaining track distance to the current target station as of the last tick — what a station
+     * speaker uses to hold the "now approaching" call until the train is genuinely close, rather
+     * than firing it the moment the station becomes the next stop.
+     */
+    public double distanceToNextStop() {
+        return stationRemaining;
     }
 
     @Override

@@ -45,8 +45,9 @@ public class PacketServiceSync implements IMessage {
             boolean atPlatform = buf.readBoolean();
             boolean doorsOpen = buf.readBoolean();
             float doorFraction = buf.readFloat();
+            float distanceToNextStop = buf.readFloat();
             snapshots.add(new ServiceSnapshot(trainId, lineName, direction, nextStop, atPlatform,
-                doorsOpen, doorFraction));
+                doorsOpen, doorFraction, distanceToNextStop));
         }
     }
 
@@ -61,6 +62,7 @@ public class PacketServiceSync implements IMessage {
             buf.writeBoolean(snapshot.atPlatform());
             buf.writeBoolean(snapshot.doorsOpen());
             buf.writeFloat((float) snapshot.doorFraction());
+            buf.writeFloat((float) snapshot.distanceToNextStop());
         }
     }
 

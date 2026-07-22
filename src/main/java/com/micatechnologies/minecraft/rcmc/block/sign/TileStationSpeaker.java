@@ -39,6 +39,15 @@ public class TileStationSpeaker extends TileTransitSignBase {
     /** Trains at most this many stops away are announced — "within three stations". */
     private static final int WINDOW = 2;
 
+    /**
+     * How close (track blocks) a train must be to its stop point here before "now approaching"
+     * speaks. Without this the call fires the instant this station becomes the train's next stop —
+     * a full inter-station gap away, right as it leaves the previous platform. Held below this the
+     * train stays in the "one stop away" band, so the approach call lands when it is genuinely
+     * about to enter, not when it is merely next in line.
+     */
+    private static final double APPROACH_DISTANCE = 30.0D;
+
     /** How far a player may be from the speaker and still hear it, in blocks. */
     private static final double AUDIBLE_RANGE = 20.0D;
 
@@ -88,11 +97,22 @@ public class TileStationSpeaker extends TileTransitSignBase {
                     continue;
                 }
                 present.add(snapshot.trainId());
-                int phase = raw == 0 && snapshot.atPlatform() ? PHASE_ARRIVING : raw;
+                // The train is this station's next stop (raw == 0) but still well down the line:
+                // hold it in the "one stop away" band so "now approaching" waits until it is close.
+                boolean farHold = raw == 0 && !snapshot.atPlatform()
+                    && snapshot.distanceToNextStop() > APPROACH_DISTANCE;
+                int phase;
+                if (raw == 0 && snapshot.atPlatform()) {
+                    phase = PHASE_ARRIVING;
+                } else if (farHold) {
+                    phase = 1;
+                } else {
+                    phase = raw;
+                }
                 Integer previous = lastPhase.put(snapshot.trainId(), phase);
-                // Announce only when a train has moved to a nearer band this tick, and only inside
-                // the three-station window.
-                if (phase <= WINDOW && (previous == null || phase < previous)) {
+                // Announce only when a train has moved to a nearer band this tick, inside the
+                // three-station window, and never while it is being held short of the approach.
+                if (!farHold && phase <= WINDOW && (previous == null || phase < previous)) {
                     String text = TransitSignText.announcement(line, snapshot.serviceDirection(),
                         raw, snapshot.atPlatform());
                     if (text != null) {

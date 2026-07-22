@@ -21,9 +21,11 @@ public final class ServiceSnapshot {
     private final boolean atPlatform;
     private final boolean doorsOpen;
     private final double doorFraction;
+    private final double distanceToNextStop;
 
     public ServiceSnapshot(int trainId, String lineName, int serviceDirection, int nextStopIndex,
-                           boolean atPlatform, boolean doorsOpen, double doorFraction) {
+                           boolean atPlatform, boolean doorsOpen, double doorFraction,
+                           double distanceToNextStop) {
         if (lineName == null || lineName.isEmpty()) {
             throw new IllegalArgumentException("lineName is required");
         }
@@ -40,6 +42,7 @@ public final class ServiceSnapshot {
         this.atPlatform = atPlatform;
         this.doorsOpen = doorsOpen;
         this.doorFraction = Math.max(0.0D, Math.min(1.0D, doorFraction));
+        this.distanceToNextStop = distanceToNextStop;
     }
 
     /** Snapshot of a live service. */
@@ -47,7 +50,8 @@ public final class ServiceSnapshot {
         return new ServiceSnapshot(trainId, service.line().name(), service.serviceDirection(),
             service.currentStopIndex(),
             service.controller().phase() != TransitStopController.Phase.APPROACHING,
-            service.controller().doorsOpen(), service.controller().doorFraction());
+            service.controller().doorsOpen(), service.controller().doorFraction(),
+            service.distanceToNextStop());
     }
 
     /** The train running this service — how an in-car sign finds its own. */
@@ -84,6 +88,15 @@ public final class ServiceSnapshot {
     /** How far the leaves have travelled, 0 shut to 1 open — what the car model animates. */
     public double doorFraction() {
         return doorFraction;
+    }
+
+    /**
+     * Remaining track distance to the train's next stop. Lets a station speaker hold the "now
+     * approaching" announcement until the train is genuinely close, instead of the moment this
+     * station becomes its next stop.
+     */
+    public double distanceToNextStop() {
+        return distanceToNextStop;
     }
 
     @Override
