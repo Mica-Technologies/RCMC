@@ -135,7 +135,7 @@ public final class TrackMeshBuilder {
     private static final double BALLAST_BOTTOM_U = -1.20D;
 
     /** Ballast shoulder half-width — wider than the gauge, like a real ballast bed spilling past the ties. */
-    private static final double BALLAST_HALF_WIDTH = 2.35D;
+    private static final double BALLAST_HALF_WIDTH = 2.55D;
 
     /** Arc-length spacing between cross-ties, in blocks. See class javadoc. */
     private static final double TIE_SPACING = 1.5D;
@@ -497,10 +497,12 @@ public final class TrackMeshBuilder {
      * below the railhead so a floor laid one block down meets it flush.
      */
     private static ProfileEdge[] ballastProfile(TrackStyles style) {
-        // Top right at the underside of the sleepers/ties, so the track sits ON the bed rather than
-        // floating above a low, detached strip; bottom a block-plus down to meet a floor there. That
-        // gives a full-height bed (~1 block), not a thin sliver.
-        double top = SPINE_CENTER_U + style.spineHalfHeight;
+        // Top just ABOVE the spine top / sleeper underside (+0.04), on purpose: sitting it exactly at
+        // that level made the ballast's top face coplanar with the spine's top face, which z-fights
+        // (the flickering seen down the centre of the bed from above). Lifting it a hair buries the
+        // spine top inside the bed — no coplanar faces — while the sleepers still rest on it. Bottom
+        // a block-plus down to meet a floor there, for a full-height bed rather than a thin sliver.
+        double top = SPINE_CENTER_U + style.spineHalfHeight + 0.04D;
         double centre = (top + BALLAST_BOTTOM_U) * 0.5D;
         double halfHeight = Math.abs(top - BALLAST_BOTTOM_U) * 0.5D;
         return rectangle(0.0D, centre, BALLAST_HALF_WIDTH, halfHeight);
