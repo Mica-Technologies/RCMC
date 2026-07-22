@@ -66,12 +66,15 @@ public abstract class TileTransitSignBase extends TileEntity
         }
         TrackNetwork network = state.network();
         String nearest = "";
+        Vec3 nearestForward = null;
         double best = LINK_RANGE * LINK_RANGE;
         for (TransitStation station : state.transit().stations()) {
             if (!network.hasSection(station.stopPoint().sectionId())) {
                 continue;
             }
-            Vec3 at = network.frameAt(station.stopPoint()).position;
+            com.micatechnologies.minecraft.rcmc.track.math.TrackFrame frame =
+                network.frameAt(station.stopPoint());
+            Vec3 at = frame.position;
             double dx = at.x - (pos.getX() + 0.5D);
             double dy = at.y - (pos.getY() + 0.5D);
             double dz = at.z - (pos.getZ() + 0.5D);
@@ -79,12 +82,20 @@ public abstract class TileTransitSignBase extends TileEntity
             if (distanceSq < best) {
                 best = distanceSq;
                 nearest = station.name();
+                nearestForward = frame.forward;
             }
         }
         // Only announce a change — the periodic relink retry must not mark the world dirty
         // and respam watching clients every interval while there is still nothing to find.
         if (!nearest.equals(stationName)) {
             this.stationName = nearest;
+            if (nearestForward != null) {
+                // Turn the sign to look down the platform (its face perpendicular to the track), so
+                // a ceiling board or post sign reads head-on to anyone standing along the platform
+                // rather than edge-on across the track. Placed signs get this on link, so even a
+                // /setblock (which never runs onBlockPlacedBy) still ends up oriented correctly.
+                this.facingDegrees = facingAlongTrack(nearestForward);
+            }
             pushUpdate();
         }
     }
@@ -104,6 +115,20 @@ public abstract class TileTransitSignBase extends TileEntity
     public void setFacingDegrees(float degrees) {
         this.facingDegrees = degrees;
         pushUpdate();
+    }
+
+    /**
+     * The 90°-quantised facing that turns a sign's face to look along the track it serves.
+     *
+     * <p>Uses the same quantised-yaw convention {@code onBlockPlacedBy} derives from a placer, but
+     * from the track heading instead — so the panel's normal points down the platform. The panel is
+     * double-sided, so either of the two headings along the track reads correctly; quantising to the
+     * nearest quarter turn keeps a row of signs aligned.</p>
+     */
+    private static float facingAlongTrack(Vec3 forward) {
+        double yaw = Math.toDegrees(Math.atan2(-forward.x, forward.z));
+        int quarter = net.minecraft.util.math.MathHelper.floor(yaw * 4.0D / 360.0D + 0.5D) & 3;
+        return quarter * 90.0F;
     }
 
     /** Marks dirty and notifies, so the change saves and reaches watching clients. */

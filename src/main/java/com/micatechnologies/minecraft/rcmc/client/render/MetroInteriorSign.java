@@ -78,7 +78,10 @@ public final class MetroInteriorSign {
         }
         String stop = line.station(snapshot.nextStopIndex()).name();
         String label = snapshot.atPlatform() ? "Now at" : "Next stop";
-        String destination = line.name() + " to " + line.labelFor(snapshot.serviceDirection());
+        // "Red Line  OUTBOUND/Alewife" — line, direction and terminus, from the shared text layer
+        // so the in-car sign, the platform board and the announcement speaker never disagree.
+        String destination = com.micatechnologies.minecraft.rcmc.physics.transit.TransitSignText
+            .carDestination(line, snapshot.serviceDirection());
 
         FontRenderer font = Minecraft.getMinecraft().fontRenderer;
         if (font == null) {

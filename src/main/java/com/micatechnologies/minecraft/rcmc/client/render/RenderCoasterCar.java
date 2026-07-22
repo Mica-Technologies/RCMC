@@ -128,8 +128,9 @@ public class RenderCoasterCar extends Render<EntityCoasterCar> {
         // the font needs it. Only metro stock has a saloon to hang a sign in.
         TrainSpec spec = specOf(entity);
         if (spec != null && spec.carStyle() == TrainSpec.CarStyle.METRO) {
-            MetroInteriorSign.draw(entity.world, entity.trainId(),
-                spec.carLength() / 0.72D, partialTicks);
+            double bodyLength = spec.carLength() / 0.72D;
+            MetroInteriorSign.draw(entity.world, entity.trainId(), bodyLength, partialTicks);
+            MetroExteriorSign.draw(entity.world, entity.trainId(), bodyLength, partialTicks);
         }
 
         GlStateManager.popMatrix();

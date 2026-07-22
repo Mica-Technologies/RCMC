@@ -113,6 +113,24 @@ public final class TransitLine {
         return serviceDirection >= 0 ? outboundLabel : inboundLabel;
     }
 
+    /**
+     * The destination station a service running in {@code serviceDirection} is ultimately heading
+     * for — its terminus — so signage can say "to Alewife" rather than only "OUTBOUND".
+     *
+     * <p>On an out-and-back line the terminus is the far end in the current sense of travel:
+     * {@code +1} (toward higher indices) runs to the last station, {@code -1} to the first. A
+     * <b>loop</b> has no terminus — service never reverses and every station is both ahead and
+     * behind — so this returns {@code null}, and signage falls back to the bare direction label.</p>
+     */
+    public String terminusName(int serviceDirection) {
+        if (loop) {
+            return null;
+        }
+        return serviceDirection >= 0
+            ? stations.get(stations.size() - 1).name()
+            : stations.get(0).name();
+    }
+
     @Override
     public String toString() {
         return "TransitLine{" + name + ", " + stations.size() + " stations"

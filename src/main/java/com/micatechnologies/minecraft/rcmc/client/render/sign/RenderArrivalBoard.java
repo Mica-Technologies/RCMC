@@ -4,6 +4,7 @@ import com.micatechnologies.minecraft.rcmc.block.sign.TileArrivalBoard;
 import com.micatechnologies.minecraft.rcmc.physics.transit.ArrivalEstimator;
 import com.micatechnologies.minecraft.rcmc.physics.transit.ServiceSnapshot;
 import com.micatechnologies.minecraft.rcmc.physics.transit.TransitLine;
+import com.micatechnologies.minecraft.rcmc.physics.transit.TransitSignText;
 import com.micatechnologies.minecraft.rcmc.world.RcmcWorldState;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -98,13 +99,17 @@ public class RenderArrivalBoard extends TileEntitySpecialRenderer<TileArrivalBoa
         }
         out.add(board.stationName());
 
-        // Group arrivals by direction label across every line serving this station. Insertion
-        // order keeps OUTBOUND/INBOUND stable per line definition rather than shuffling per frame.
+        // Group arrivals by direction-and-destination across every line serving this station —
+        // "OUTBOUND/Alewife" — so a rider sees where each train is bound, not just which way. The
+        // label, the row phrasing and the speaker announcement all come from TransitSignText, so a
+        // board and a speaker can never describe the same train differently. Insertion order keeps
+        // the groups stable per line definition rather than shuffling per frame.
         Map<String, List<String>> byDirection = new LinkedHashMap<>();
         for (TransitLine line : serving) {
             int stationIndex = line.indexOfStation(board.stationName());
             for (int direction : new int[] {1, -1}) {
-                byDirection.computeIfAbsent(line.labelFor(direction), k -> new ArrayList<>());
+                byDirection.computeIfAbsent(TransitSignText.destinationLabel(line, direction),
+                    k -> new ArrayList<>());
             }
             for (ServiceSnapshot snapshot : state.serviceSnapshots()) {
                 if (!snapshot.lineName().equalsIgnoreCase(line.name())) {
@@ -112,18 +117,12 @@ public class RenderArrivalBoard extends TileEntitySpecialRenderer<TileArrivalBoa
                 }
                 int stops = ArrivalEstimator.stopsAway(line, snapshot.serviceDirection(),
                     snapshot.nextStopIndex(), stationIndex);
-                if (stops < 0) {
+                String text = TransitSignText.stopsLabel(stops, snapshot.atPlatform());
+                if (text == null) {
                     continue;
                 }
-                String text;
-                if (stops == 0 && snapshot.atPlatform()) {
-                    text = "Boarding";
-                } else {
-                    // A train running to this station still has one stop to make — this one.
-                    int display = stops + 1;
-                    text = display + (display == 1 ? " stop away" : " stops away");
-                }
-                byDirection.get(line.labelFor(snapshot.serviceDirection())).add(text);
+                byDirection.get(TransitSignText.destinationLabel(line, snapshot.serviceDirection()))
+                    .add(text);
             }
         }
 
@@ -145,6 +144,9 @@ public class RenderArrivalBoard extends TileEntitySpecialRenderer<TileArrivalBoa
     private static int sortKey(String row) {
         if (row.startsWith("Boarding")) {
             return -1;
+        }
+        if (row.startsWith("now approaching")) {
+            return 0;
         }
         int space = row.indexOf(' ');
         try {
