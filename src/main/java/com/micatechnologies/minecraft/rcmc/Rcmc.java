@@ -67,6 +67,12 @@ public class Rcmc {
         RcmcConfig.init(event.getSuggestedConfigurationFile());
         MinecraftForge.EVENT_BUS.register(this);
         MinecraftForge.EVENT_BUS.register(new RcmcWorldState.Hooks());
+        // Keeps car entities ticking at the edge of loaded terrain instead of freezing 32 blocks
+        // short of it — the presentational half of Phase 1.4. The simulation itself is chunk-
+        // independent (it runs from the world tick over in-memory state); this only stops the
+        // entity puppet stuttering. Registered on both sides so a riding client predicts smoothly.
+        MinecraftForge.EVENT_BUS.register(
+            new com.micatechnologies.minecraft.rcmc.entity.CoasterCarUpdatePolicy());
         // Registered on BOTH sides: the server needs it so supports are actually solid, the client
         // so its own movement prediction agrees and the player does not rubber-band at every post.
         MinecraftForge.EVENT_BUS.register(
