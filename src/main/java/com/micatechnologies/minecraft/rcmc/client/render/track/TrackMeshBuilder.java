@@ -129,7 +129,7 @@ public final class TrackMeshBuilder {
      * spline track just above the ground. Flat-coloured a gravel grey (the mesh carries no texture,
      * so it is the colour of gravel rather than the gravel texture itself).
      */
-    private static final float[] BALLAST_COLOR = { 0.47F, 0.45F, 0.42F };
+    private static final float[] BALLAST_COLOR = { 0.30F, 0.29F, 0.29F };
 
     /** How far below the railhead the ballast bed reaches — a block, so a floor one block down meets it. */
     private static final double BALLAST_BOTTOM_U = -1.02D;
