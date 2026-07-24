@@ -27,6 +27,12 @@ public final class RcmcSounds {
     /** Two-tone chime warning that the doors are about to close. */
     public static final SoundEvent METRO_DOOR_CHIME = create("metro_door_chime");
 
+    /** Single ding — the door chime's own voice, struck once — that precedes an in-car announcement. */
+    public static final SoundEvent METRO_ANNOUNCE_CHIME = create("metro_announce_chime");
+
+    /** Bright, near-pure ding that precedes a station platform announcement. */
+    public static final SoundEvent METRO_STATION_CHIME = create("metro_station_chime");
+
     /** Door mechanism running, ending in the latch as the leaves meet. */
     public static final SoundEvent METRO_DOOR_CLOSE = create("metro_door_close");
 

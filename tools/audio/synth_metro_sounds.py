@@ -58,6 +58,44 @@ def door_chime():
     return out
 
 
+def announce_chime():
+    """
+    The single ding that precedes an in-car announcement — one strike of the door chime's own
+    voice (612 Hz fundamental with a 416 Hz partner a fifth below), left to ring out on its own.
+    The door chime is two of these 0.72 s apart; an announcement wants just one so it reads as a
+    "listen up" cue distinct from the "doors closing" warning, not a repeat of it.
+    """
+    total = 0.85
+    n = int(SR * total)
+    t = np.arange(n) / SR
+    voice = ding(t, 612.0, 0.35) + 0.55 * ding(t, 416.0, 0.39)
+    return voice * attack(t)
+
+
+def station_chime():
+    """
+    The platform announcement chime: a bright, near-pure tone that rings and fades, in the spirit
+    of a classic OS "ding". Reference clip supplied by the project owner was measured for *facts*
+    only (a fundamental of ~788 Hz, an almost sinusoidal spectrum with only a trace of upper
+    partials, a fast ~12 ms attack, a brief plateau, then an exponential release of ~0.25 s over a
+    ~0.9 s total) and those numbers are reproduced here from scratch — see the asset rule in
+    CLAUDE.md: reference for knowledge, recreate from scratch.
+    """
+    total = 0.92
+    n = int(SR * total)
+    t = np.arange(n) / SR
+    # A single dominant partial with only a whisper of the octave and a trace two above, matching
+    # the measured spectrum (2nd/3rd harmonics near zero, a faint 4th).
+    f0 = 788.0
+    tone = (np.sin(2 * np.pi * f0 * t)
+            + 0.02 * np.sin(2 * np.pi * 2 * f0 * t)
+            + 0.03 * np.sin(2 * np.pi * 4 * f0 * t))
+    # Fast attack, a short plateau, then an exponential release — the measured envelope shape.
+    plateau = 0.34
+    env = np.where(t < plateau, 1.0, np.exp(-(t - plateau) / 0.25))
+    return tone * env * attack(t, ms=12.0)
+
+
 def door_close():
     """
     The door cycle, timed to the mod's own 30-tick (1.5 s) close: motors take up, the leaves run,
@@ -126,5 +164,7 @@ if __name__ == '__main__':
     import sys
     out = sys.argv[1].rstrip('/')
     write_wav(f"{out}/metro_door_chime.wav", door_chime())
+    write_wav(f"{out}/metro_announce_chime.wav", announce_chime())
+    write_wav(f"{out}/metro_station_chime.wav", station_chime())
     write_wav(f"{out}/metro_door_close.wav", door_close())
     write_wav(f"{out}/metro_brake_release.wav", brake_release())

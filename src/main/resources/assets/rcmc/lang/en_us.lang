@@ -18,5 +18,7 @@ item.rcmc.piece_tool.name=Coaster Piece Builder
 item.rcmc.transit_tool.name=Transit Builder
 
 subtitles.rcmc.subtitle.metro_door_chime=Doors closing
+subtitles.rcmc.subtitle.metro_announce_chime=Announcement chime
+subtitles.rcmc.subtitle.metro_station_chime=Announcement chime
 subtitles.rcmc.subtitle.metro_door_close=Doors close
 subtitles.rcmc.subtitle.metro_brake_release=Brakes release

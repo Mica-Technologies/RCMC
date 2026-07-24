@@ -4,6 +4,16 @@
     "subtitle": "rcmc.subtitle.metro_door_chime",
     "sounds": [ { "name": "rcmc:metro_door_chime", "stream": false } ]
   },
+  "metro_announce_chime": {
+    "category": "neutral",
+    "subtitle": "rcmc.subtitle.metro_announce_chime",
+    "sounds": [ { "name": "rcmc:metro_announce_chime", "stream": false } ]
+  },
+  "metro_station_chime": {
+    "category": "neutral",
+    "subtitle": "rcmc.subtitle.metro_station_chime",
+    "sounds": [ { "name": "rcmc:metro_station_chime", "stream": false } ]
+  },
   "metro_door_close": {
     "category": "neutral",
     "subtitle": "rcmc.subtitle.metro_door_close",

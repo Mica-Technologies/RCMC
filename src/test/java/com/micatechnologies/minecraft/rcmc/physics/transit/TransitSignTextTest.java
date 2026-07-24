@@ -70,6 +70,17 @@ class TransitSignTextTest {
     }
 
     @Test
+    @DisplayName("in-car announcements name the stop the train is running to / has reached")
+    void inCarAnnouncements() {
+        assertEquals("Next stop: Alewife.",
+            TransitSignText.nextStopAnnouncement("Alewife"),
+            "spoken shortly after departure, naming the next stop");
+        assertEquals("This is Downtown.",
+            TransitSignText.arrivalAnnouncement("Downtown"),
+            "spoken as the doors open, naming the station just reached");
+    }
+
+    @Test
     @DisplayName("the spoken announcement names line, direction, terminus and closeness")
     void announcement() {
         TransitLine red = redLine();

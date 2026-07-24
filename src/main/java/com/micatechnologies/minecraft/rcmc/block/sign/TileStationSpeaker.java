@@ -6,14 +6,18 @@ import com.micatechnologies.minecraft.rcmc.physics.transit.ArrivalEstimator;
 import com.micatechnologies.minecraft.rcmc.physics.transit.ServiceSnapshot;
 import com.micatechnologies.minecraft.rcmc.physics.transit.TransitLine;
 import com.micatechnologies.minecraft.rcmc.physics.transit.TransitSignText;
+import com.micatechnologies.minecraft.rcmc.sound.RcmcSounds;
 import com.micatechnologies.minecraft.rcmc.world.RcmcWorldState;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.util.SoundCategory;
 
 /**
  * A station speaker's brain: it links itself to the nearest station (inherited from
@@ -52,6 +56,14 @@ public class TileStationSpeaker extends TileTransitSignBase {
     private static final double AUDIBLE_RANGE = 20.0D;
 
     /**
+     * Ticks between the platform chime and the spoken announcement it precedes, so the ding rings
+     * out first — the station chime is 0.92 s, this is that plus a breath.
+     */
+    private static final int CHIME_TO_SPEECH_TICKS = 20;
+
+    private static final float CHIME_VOLUME = 0.8F;
+
+    /**
      * A phase below zero for a train berthing here, so "now arriving" is a step nearer than "now
      * approaching" (phase 0) and still triggers the decrease that fires an announcement.
      */
@@ -60,11 +72,19 @@ public class TileStationSpeaker extends TileTransitSignBase {
     /** Last announced closeness per train, so only a genuine approach speaks. Server-side scratch. */
     private final Map<Integer, Integer> lastPhase = new HashMap<>();
 
+    /** Announcements chimed and waiting on their timer before the words are sent. Server-side scratch. */
+    private final List<Pending> pending = new ArrayList<>();
+
     @Override
     public void update() {
         // Relink while unlinked (and nothing else) — the base returns early once linked.
         super.update();
-        if (world == null || world.isRemote || !isLinked()) {
+        if (world == null || world.isRemote) {
+            return;
+        }
+        // Drain queued announcements even if the speaker has since unlinked — a chime already rang.
+        firePending();
+        if (!isLinked()) {
             return;
         }
         announceApproachingTrains();
@@ -116,7 +136,7 @@ public class TileStationSpeaker extends TileTransitSignBase {
                     String text = TransitSignText.announcement(line, snapshot.serviceDirection(),
                         raw, snapshot.atPlatform());
                     if (text != null) {
-                        broadcast(text);
+                        announce(text);
                     }
                 }
             }
@@ -125,6 +145,32 @@ public class TileStationSpeaker extends TileTransitSignBase {
         // Forget trains that have gone out of service, so the map cannot grow without bound and a
         // returning train re-announces from a clean slate.
         lastPhase.keySet().retainAll(present);
+    }
+
+    /**
+     * Chimes now and queues the words to follow once the ding has rung out. The chime is a
+     * positional sound every client in range attenuates for itself; the words go out as text a
+     * short while later, so a listener hears "ding … <announcement>" rather than both at once.
+     */
+    private void announce(String text) {
+        world.playSound(null, pos.getX() + 0.5D, pos.getY() + 0.5D, pos.getZ() + 0.5D,
+            RcmcSounds.METRO_STATION_CHIME, SoundCategory.NEUTRAL, CHIME_VOLUME, 1.0F);
+        pending.add(new Pending(text, CHIME_TO_SPEECH_TICKS));
+    }
+
+    /** Counts down queued announcements and sends each once its chime has finished. */
+    private void firePending() {
+        if (pending.isEmpty()) {
+            return;
+        }
+        for (Iterator<Pending> it = pending.iterator(); it.hasNext(); ) {
+            Pending p = it.next();
+            if (--p.ticks > 0) {
+                continue;
+            }
+            it.remove();
+            broadcast(p.text);
+        }
     }
 
     /** Sends the announcement text to every player within earshot of this speaker. */
@@ -142,6 +188,17 @@ public class TileStationSpeaker extends TileTransitSignBase {
                 // voice for now; a per-line voice could ride the packet later.
                 RcmcNetwork.sendTo(new PacketStationAnnounce(text, ""), (EntityPlayerMP) player);
             }
+        }
+    }
+
+    /** A station announcement whose chime has played and whose words are waiting on a short timer. */
+    private static final class Pending {
+        final String text;
+        int ticks;
+
+        Pending(String text, int ticks) {
+            this.text = text;
+            this.ticks = ticks;
         }
     }
 }

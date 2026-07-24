@@ -68,6 +68,23 @@ public final class TransitSignText {
     }
 
     /**
+     * The in-car announcement made shortly after departure, naming the station the train is now
+     * running to: {@code "Next stop: Alewife."} The station name is the one the service is bound
+     * for next, resolved by the caller.
+     */
+    public static String nextStopAnnouncement(String stationName) {
+        return "Next stop: " + stationName + ".";
+    }
+
+    /**
+     * The in-car announcement made as the doors open on arrival, naming the station just reached:
+     * {@code "This is Alewife."}
+     */
+    public static String arrivalAnnouncement(String stationName) {
+        return "This is " + stationName + ".";
+    }
+
+    /**
      * The full spoken announcement for a station speaker:
      * {@code "The next OUTBOUND Red Line train to Alewife is now approaching."} Returns {@code null}
      * when the service does not reach this station (nothing to announce).
