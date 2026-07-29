@@ -231,6 +231,25 @@ Announcements are scheduled through a small per-tick timer queue: play the chime
 words to follow once the ding has rung out, so a listener hears "ding … announcement" rather than
 both at once.
 
+### Spoken announcements
+
+Station names are spoken as **text**, not played from baked clips — which is the whole reason
+arbitrary player-chosen station names work. RCMC has no synthesiser of its own: it detects CSM at
+runtime and calls its MaryTTS through reflection, falling back to an on-screen subtitle when CSM is
+absent.
+
+Two things about that engine are worth knowing, because both present as "it just uses the narrator":
+
+- **It loads asynchronously, and takes seconds.** `CsmTts.say` starts the engine on its first call
+  and speaks *that* line through the game narrator. Announcements were the only caller, so every one
+  of them arrived before the engine was ready and MaryTTS was never heard. `TtsBridge.warmUp()`
+  starts it when a client learns the world has a transit line — on join, long before any train
+  reaches a platform.
+- **It needs a CSM build from 2026-07-29 or later.** Before that, CSM shaded commons-lang under its
+  own package name, where FML's `org.apache.commons.` classloader exclusion made it permanently
+  unreachable — so MaryTTS failed to initialise with `NoClassDefFoundError` and fell back to the
+  narrator every time. Fixed on CSM's side by relocating the shaded copy.
+
 All sounds are **synthesised from scratch** by `tools/audio/synth_metro_sounds.py`, checked in
 beside the audio so the provenance of every file stays inspectable. Reference recordings were
 *measured* — fundamental frequencies, harmonic content, attack and decay envelopes — and
