@@ -23,9 +23,9 @@ import net.minecraft.nbt.NBTTagList;
  * than one that was never installed. Live occupancy is <em>not</em> written; it is recomputed from
  * scratch every tick by {@code updateOccupancy}, so there is nothing there worth saving.</p>
  *
- * <p>Services (trains in service) are deliberately not persisted: trains themselves are runtime
- * state that does not survive a restart, so a persisted service would point at a train that no
- * longer exists. When train persistence lands, service persistence belongs beside it.</p>
+ * <p>Services (trains in service) are not written here — they live in {@link TrainCodec}, beside the
+ * trains they belong to, because a service is meaningless without its train and the two must be
+ * written and read as one. This codec's scope is the authored line, not who is running it.</p>
  *
  * <p>Lines store their stations by value (a {@link TransitLine} snapshots its stations), so the
  * codec writes each line's own station list rather than references into the station registry —

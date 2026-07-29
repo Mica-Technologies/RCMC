@@ -141,7 +141,8 @@ brakes to that limit the same way it brakes to a station.
 | --- | --- | --- |
 | A train stops mid-circuit and stays there | **Valleying** — it did not have the energy to crest something. Detected and surfaced rather than left as a silent hang | Give it more energy: a taller lift, a shallower hill |
 | A metro train is parked and stuck | Same detection, but recoverable | `/rcmc line start` — entering service clears a valleyed train |
-| Trains vanished after a restart | Trains do not persist yet (stations, lines, track and signals all do) | Re-spawn with `/rcmc train` and restart the service |
+| A train did not come back after a restart | Its track was deleted while the world was closed, so it has nowhere to be | Rebuild the section, then `/rcmc train` |
+| A service did not resume, but its train did | The line it worked was deleted or renamed, or the train can no longer reach any of its stations | `/rcmc line start <name> <trainId>` |
 | Track "ignores" a height you placed | Was the vertical-overshoot sag; now fixed by clamped node tangents. If you still see it, report it | — |
 
 ## Performance notes

@@ -80,8 +80,9 @@ allocated, so you never have to guess it.
   500-block circuit from being 500 tile entities. It also means you cannot break track with a
   pickaxe — use [`/rcmc rmsection`](../reference/commands.md#rcmc-rmsection) or the track editor.
 - **Supports, platforms and signage are** real blocks, and behave like blocks.
-- Everything you build persists with the world, versioned from day one — except **trains**, which
-  do not survive a restart yet. Re-spawn them with `/rcmc train` and restart the service.
+- Everything persists with the world, versioned from day one: track, ride hardware, stations,
+  lines, switches, signalling, **and the trains running on them**. A metro service resumes on the
+  same line at the same cruise speed when the world reloads.
 
 ## Next steps
 

@@ -329,6 +329,9 @@ public class CommandRcmc extends CommandBase {
 
         int trainId = state.trains().allocateTrainId();
         state.trains().add(trainId, train);
+        // Persist the new train now rather than relying on the tick hook's mark: a train spawned
+        // and then saved in the same tick would otherwise be absent from that save.
+        state.markTrainsDirty(world);
 
         for (int i = 0; i < carCount; i++) {
             EntityCoasterCar car = new EntityCoasterCar(world, trainId, i);
@@ -745,26 +748,17 @@ public class CommandRcmc extends CommandBase {
     }
 
     /**
-     * How long the doors stay open at a stop, in ticks.
+     * Default metro drive used by {@code /rcmc line start} until per-stock configs exist.
      *
-     * <p>Ten seconds, raised from five once metro cars became genuinely boardable. Five is a
-     * realistic off-peak dwell and was fine while nobody could get on, but a player has to notice
-     * the train has berthed, walk to a door and right-click — and a dwell that expires mid-approach
-     * reads as the doors being broken rather than as having been slow. Real dwells run 20–30
-     * seconds at busy stations, so this is still on the brisk side of realistic.</p>
+     * <p>The numbers, including the dwell, live in {@code TransitDrives} — shared with the save
+     * loader, which resumes a service the same way this command starts one. Two copies would let a
+     * line quietly change character across a restart: braking later, dwelling longer, accelerating
+     * harder, with both paths looking correct in isolation.</p>
      */
-    private static final int METRO_DWELL_TICKS = 200;
-
-    /** Default metro drive used by {@code /rcmc line start} until per-stock configs exist. */
     private static com.micatechnologies.minecraft.rcmc.physics.transit.TransitStopController
         metroController(double cruiseSpeed) {
-        com.micatechnologies.minecraft.rcmc.physics.transit.TrainDriver driver =
-            new com.micatechnologies.minecraft.rcmc.physics.transit.TrainDriver(
-                new com.micatechnologies.minecraft.rcmc.physics.transit.TractionProfile(
-                    1.2D, 24.0D, 22.0D),
-                1.2D, 2.0D, 1.5D, RcmcConstants.SECONDS_PER_TICK);
-        return new com.micatechnologies.minecraft.rcmc.physics.transit.TransitStopController(
-            driver, cruiseSpeed, 0.75D, 30, METRO_DWELL_TICKS, 30);
+        return com.micatechnologies.minecraft.rcmc.physics.transit.TransitDrives.metro(
+            cruiseSpeed, RcmcConstants.SECONDS_PER_TICK);
     }
 
     /**

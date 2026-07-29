@@ -49,6 +49,27 @@ public class RcmcTrackData extends WorldSavedData {
     private com.micatechnologies.minecraft.rcmc.physics.transit.TransitSystem transit =
         new com.micatechnologies.minecraft.rcmc.physics.transit.TransitSystem();
 
+    /**
+     * Trains running on that network.
+     *
+     * <p>The one piece of <em>runtime</em> state in here, and it is here for the same reason as the
+     * rest: a train is an address into a section, meaningless without it, and splitting it into its
+     * own saved blob would let the track load while the trains failed to. See
+     * {@link #writeAuthored} for the consequence that has to be handled — the undo history is built
+     * from this same serialisation, and a train is not an edit.</p>
+     */
+    private com.micatechnologies.minecraft.rcmc.physics.TrainManager trains =
+        new com.micatechnologies.minecraft.rcmc.physics.TrainManager();
+
+    /**
+     * Services read from the save, held until the world state can resume them.
+     *
+     * <p>{@link #readFromNBT} cannot resume them itself: putting a train into service needs the
+     * track network to walk, and the network is still being parsed in the same call. So the raw tag
+     * is kept and {@code RcmcWorldState} resumes from it once everything is loaded.</p>
+     */
+    private NBTTagCompound pendingServices;
+
     /** Required by {@link WorldSavedData}'s reflective instantiation on load. */
     public RcmcTrackData() {
         super(DATA_NAME);
@@ -97,15 +118,37 @@ public class RcmcTrackData extends WorldSavedData {
         markDirty();
     }
 
+    public com.micatechnologies.minecraft.rcmc.physics.TrainManager trains() {
+        return trains;
+    }
+
     /**
-     * A complete snapshot of the authored state — the exact bytes that would be written to disk.
+     * The services read from disk, for the world state to resume once the network is available.
+     * Cleared by {@link #takePendingServices} so a resume can only ever happen once.
+     */
+    public NBTTagCompound takePendingServices() {
+        NBTTagCompound taken = pendingServices;
+        pendingServices = null;
+        return taken;
+    }
+
+    /**
+     * A complete snapshot of the <em>authored</em> state, for the undo history.
      *
-     * <p>Reuses {@link #writeToNBT} so a snapshot can never capture less than a save does: the undo
-     * history and the save file are the same serialisation, which is what lets "whatever persists,
-     * undoes" hold without a second codec to keep in step.</p>
+     * <p>Shares {@link #writeAuthored} with {@link #writeToNBT}, so a snapshot can never capture
+     * less authored state than a save does — that is what lets "whatever persists, undoes" hold
+     * without a second codec to keep in step.</p>
+     *
+     * <p><b>Trains are excluded, and that is the point of the split.</b> Undo steps back through
+     * building decisions; a train's position is not one. Folding trains into the snapshot would
+     * make undoing a track edit also yank every running train back to wherever it happened to be
+     * several edits ago — teleporting riders backwards along the track as a side effect of an
+     * unrelated undo. The contract {@code RcmcWorldState.undo} documents ("affects only the
+     * authored state — never running trains") is enforced here, structurally, rather than by
+     * remembering it at each call site.</p>
      */
     public NBTTagCompound snapshot() {
-        return writeToNBT(new NBTTagCompound());
+        return writeAuthored(new NBTTagCompound());
     }
 
     /**
@@ -130,10 +173,32 @@ public class RcmcTrackData extends WorldSavedData {
         this.network = TrackCodec.readNetwork(nbt);
         this.elements = ElementCodec.read(nbt);
         this.transit = TransitCodec.read(nbt);
+        // The integrator comes from the server's own config rather than the save: physics values
+        // are server-authoritative, so a train must restore with the physics this server runs, not
+        // the physics it was saved under.
+        this.trains = TrainCodec.read(nbt, new com.micatechnologies.minecraft.rcmc.physics.PhysicsIntegrator(
+            com.micatechnologies.minecraft.rcmc.RcmcConfig.gravity,
+            com.micatechnologies.minecraft.rcmc.RcmcConfig.rollingResistance,
+            com.micatechnologies.minecraft.rcmc.RcmcConfig.airDrag,
+            com.micatechnologies.minecraft.rcmc.RcmcConfig.maxSpeed));
+        this.pendingServices = nbt;
     }
 
     @Override
     public NBTTagCompound writeToNBT(NBTTagCompound compound) {
+        writeAuthored(compound);
+        TrainCodec.write(trains, transit, compound);
+        return compound;
+    }
+
+    /**
+     * Writes everything a builder authored: track, ride hardware, stations, lines, signalling.
+     *
+     * <p>Split out so {@link #snapshot} and {@link #writeToNBT} cannot disagree about what
+     * "authored" means. The difference between them is exactly one line — the trains — and it is
+     * visible in both places rather than implied.</p>
+     */
+    private NBTTagCompound writeAuthored(NBTTagCompound compound) {
         NBTTagCompound written = TrackCodec.writeNetwork(network);
         for (String key : written.getKeySet()) {
             compound.setTag(key, written.getTag(key));
