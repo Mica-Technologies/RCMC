@@ -60,6 +60,15 @@ public class PacketTransitSync implements IMessage {
                 return;
             }
             state.transit().replaceAuthoredFrom(TransitCodec.read(message.payload));
+
+            if (!state.transit().lines().isEmpty()) {
+                // This world has a metro, so an announcement is coming eventually. Start CSM's
+                // speech synthesiser loading now — it takes seconds, and its say() speaks through
+                // the game narrator instead of synthesising anything until it is ready. Announced
+                // arrivals were the only caller, so every one of them was narrated and MaryTTS was
+                // never heard. Warming up here, on join, gives it the whole journey to load.
+                com.micatechnologies.minecraft.rcmc.Rcmc.proxy.warmUpTts();
+            }
         }
     }
 }

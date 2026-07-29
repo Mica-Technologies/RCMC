@@ -3,6 +3,7 @@ package com.micatechnologies.minecraft.rcmc.physics.transit;
 import com.micatechnologies.minecraft.rcmc.physics.Train;
 import com.micatechnologies.minecraft.rcmc.physics.TrainManager;
 import com.micatechnologies.minecraft.rcmc.track.TrackNetwork;
+import com.micatechnologies.minecraft.rcmc.track.TrackRef;
 import com.micatechnologies.minecraft.rcmc.track.TrackWalk;
 import java.util.Collection;
 import java.util.Collections;
@@ -195,7 +196,8 @@ public final class TransitSystem {
             throw new IllegalArgumentException("train " + trainId
                 + " cannot reach any station of line " + line.name() + " — is it on this line's track?");
         }
-        LineService service = new LineService(line, controller, bestIndex, 1, bestFacing);
+        LineService service = new LineService(line, controller, bestIndex,
+            serviceDirectionFrom(line, network, train.reference(), bestFacing, bestIndex), bestFacing);
         services.put(trainId, service);
         // A train sitting at rest before service has usually already latched VALLEYED (zero
         // force, zero speed, nothing claiming it) — and TrainManager skips faulted trains before
@@ -203,6 +205,55 @@ public final class TransitSystem {
         // the recovery: setHeld(true) both marks the intent and clears the stall, per Train.
         train.setHeld(true);
         return service;
+    }
+
+    /**
+     * Which way along the line's station order the train is actually pointing.
+     *
+     * <p><b>This used to be hardcoded to {@code +1}, and that was a real bug.</b> The first stop is
+     * chosen as the nearest station <em>in either direction</em>, so the train may well be facing
+     * against the order its stations are listed in. Serving stop {@code k} and then targeting
+     * {@code k+1} regardless meant the next stop could be a whole lap away in the direction of
+     * travel — so the train drove straight past every station between here and there. On a
+     * <b>loop</b> that presents exactly as "the metro skips stations", and it became much easier to
+     * hit once services resumed from a save, because a train reloading at a platform can pick either
+     * facing depending on which side of the stop point it came to rest.</p>
+     *
+     * <p>Measured from the <em>train</em>, not from the target station: whichever neighbour of the
+     * target the train would reach sooner, driving the way it is pointed, is the stop that comes
+     * after it. Doing it from the station instead would need the facing translated onto that
+     * station's own section axis, which is exactly the kind of sign bookkeeping
+     * {@code TrackWalk} exists to keep out of callers.</p>
+     *
+     * <p>A shuttle whose nearest station is a terminus gets the only direction that exists, which is
+     * also a small improvement: it used to start toward {@code +1} from the far end and rely on the
+     * turnback to correct itself on arrival.</p>
+     */
+    private static int serviceDirectionFrom(TransitLine line, TrackNetwork network, TrackRef from,
+                                            double facing, int index) {
+        if (line.stationCount() < 2) {
+            return 1;
+        }
+        double toNext = neighbourDistance(line, network, from, facing, index + 1);
+        double toPrevious = neighbourDistance(line, network, from, facing, index - 1);
+        if (Double.isInfinite(toNext) && Double.isInfinite(toPrevious)) {
+            return 1;
+        }
+        return toNext <= toPrevious ? 1 : -1;
+    }
+
+    /** Distance to the station at {@code index}, wrapping on a loop; infinite if there is none. */
+    private static double neighbourDistance(TransitLine line, TrackNetwork network, TrackRef from,
+                                            double facing, int index) {
+        int resolved = index;
+        if (line.isLoop()) {
+            resolved = Math.floorMod(index, line.stationCount());
+        }
+        else if (index < 0 || index >= line.stationCount()) {
+            return Double.POSITIVE_INFINITY;
+        }
+        return TrackWalk.distanceTo(network, from, facing, line.station(resolved).stopPoint(),
+            10_000.0D);
     }
 
     /** Takes a train out of service. The train keeps rolling under whatever else controls it. */

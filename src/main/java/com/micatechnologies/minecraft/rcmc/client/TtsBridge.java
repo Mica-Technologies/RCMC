@@ -31,6 +31,42 @@ public final class TtsBridge {
     private static boolean resolved;
     private static Method sayMethod;
     private static Method defaultVoiceMethod;
+    private static Method startInitMethod;
+    private static boolean warmedUp;
+
+    /**
+     * Starts CSM's synthesiser loading, well before anything needs to say a word.
+     *
+     * <p><b>Why this is necessary and not merely tidy.</b> {@code CsmTts.say} begins with:</p>
+     *
+     * <pre>
+     *     if (!initStarted) startInit();
+     *     if (!initialized) { CsmNarrator.say(text); return; }
+     * </pre>
+     *
+     * <p>Loading MaryTTS is asynchronous and takes seconds. So the first call to {@code say} only
+     * <em>starts</em> the engine and speaks that line through the game narrator instead — and if
+     * announcements are the only caller, every one of them arrives before the engine is ready and
+     * the synthesiser is never heard at all. That is exactly what was reported: CSM installed, CSM
+     * loaded, and every announcement coming out of the narrator.</p>
+     *
+     * <p>Called when a client learns the world actually has a transit line, which is on join and
+     * long before any train reaches a platform. Deliberately not at client startup: a world with no
+     * metro in it should not pay to load a speech synthesiser.</p>
+     */
+    public static void warmUp() {
+        if (warmedUp || !resolveCsm() || startInitMethod == null) {
+            return;
+        }
+        warmedUp = true;
+        try {
+            startInitMethod.invoke(null);
+        }
+        catch (Throwable ignored) {
+            // Warming up is an optimisation. If it fails, the first announcement still speaks —
+            // through CSM's narrator fallback, which is where this started.
+        }
+    }
 
     private TtsBridge() {
         throw new AssertionError("No instances.");
@@ -75,6 +111,14 @@ public final class TtsBridge {
             }
             catch (NoSuchMethodException ignored) {
                 defaultVoiceMethod = null;
+            }
+            try {
+                startInitMethod = csmTts.getMethod("startInit");
+            }
+            catch (NoSuchMethodException ignored) {
+                // Older CSM without an explicit warm-up. say() still starts the engine itself; the
+                // first announcement is just narrated rather than spoken.
+                startInitMethod = null;
             }
             return true;
         }

@@ -32,4 +32,9 @@ public class RcmcCommonProxy implements RcmcProxy {
     @Override
     public void speakTts(String text, String voice) {
     }
+
+    @Override
+    public void warmUpTts() {
+        // No client, nothing to speak with.
+    }
 }
