@@ -135,11 +135,38 @@ only and are never synced.
 - Blocks are metres; time is seconds inside `physics`, converted at the tick boundary via
   `RcmcConstants.SECONDS_PER_TICK`
 
+## Docs
+
+`docs/` is a **published MkDocs Material site** — everything in it (except `AGENT-PLANS/`) goes
+live at `https://mica-technologies.github.io/RCMC/` on any push to `main` that touches it. Write
+accordingly: it is player-facing, not scratch.
+
+```
+docs/index.md        site home
+docs/guide/          user-facing: getting started, coasters vs metro, building, riding
+docs/reference/      commands, items and blocks, track styles, config
+docs/design/         internals — TRACK_GEOMETRY, PHYSICS, TRANSIT
+docs/AGENT-PLANS/    gitignored working notes; excluded from the site by mkdocs.yml
+```
+
+Rules for the site:
+
+- **A new page must be added to `nav:` in `mkdocs.yml`.** CI runs `mkdocs build --strict`, so a
+  broken internal link or a nav entry pointing at a missing file fails the workflow.
+- Preview locally with `python -m pip install -r docs/requirements.txt && mkdocs serve`.
+- **Every command signature, keybind and default in `reference/` is read from the source.** If you
+  change a command, a keybind or a config default, the reference page is part of that change.
+- Do not pin past `mkdocs<2` — MkDocs 2.0 removes the plugin system with no migration path.
+
 ## Planning docs
 
 `docs/AGENT-PLANS/` is **gitignored** — it holds the phased implementation plan and agent
 working notes. `docs/AGENT-PLANS/MASTER_PLAN.md` is the 0→100 roadmap; read it before starting
 substantial work, and update the phase checkboxes as things land.
+
+Its checkboxes drift, because they are updated by hand and the code is not. When the plan and the
+code disagree, **the code wins** — verify a claim by grepping call sites before believing a `[x]`,
+and fix the box while you are there.
 
 ## CI
 
@@ -149,3 +176,5 @@ substantial work, and update the phase checkboxes as things land.
 - `build-mod-release-pre-release-main.yml` — on push to `main`, tags and publishes a
   pre-release with checksums; `workflow_dispatch` with `release=true` cuts a full release.
 - `cleanup-mod-pre-releases.yml` — prunes pre-releases older than 90 days.
+- `deploy-wiki-pages-main.yml` — builds `docs/` and deploys it to GitHub Pages on doc-touching
+  pushes to `main`. Requires the repo's Pages source to be set to "GitHub Actions" once, by hand.
