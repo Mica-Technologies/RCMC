@@ -58,4 +58,54 @@ public final class ArrivalEstimator {
         }
         return -1;
     }
+
+    /**
+     * Seconds until a train {@code distanceRemaining} away, doing {@code speed}, comes to a stop.
+     *
+     * <p><b>Why time and not distance.</b> A platform announcement should <em>finish</em> as the
+     * train pulls in. The station speaker used a fixed 30-block threshold, and a distance is simply
+     * not an amount of time: it is however long the train takes to cover it, which depends on how
+     * fast it is going and how hard it brakes. On the stock metro preset 30 blocks happens to leave
+     * about seven seconds, which is adequate; firm the braking up and the same 30 blocks leaves
+     * under five, and the call is still being spoken as the doors open. It also cannot account for
+     * how long the sentence itself takes to say.</p>
+     *
+     * <p>Two regimes, continuous at the boundary:</p>
+     * <ul>
+     *   <li><b>Already braking</b> ({@code d <= v²/2a}) — constant deceleration to rest covers
+     *       {@code d} at a mean of {@code v/2}, so it takes {@code 2d/v}.</li>
+     *   <li><b>Still cruising</b> — {@code d/v} to reach the brake point plus {@code v/2a} for the
+     *       braking itself, i.e. {@code d/v + v/2a}.</li>
+     * </ul>
+     *
+     * <p>Infinite for a train that is not moving: a train dwelling at the previous platform has no
+     * arrival time here yet, and announcing one would be a guess. As it pulls away the estimate
+     * falls smoothly from infinity, so the announcement fires the moment it is genuinely due.</p>
+     *
+     * @param distanceRemaining track distance to the stop point, in blocks; {@code <= 0} means
+     *                          it is already there
+     * @param speed             current speed in blocks/s; sign is ignored
+     * @param brakeDeceleration service braking rate in blocks/s², positive
+     */
+    public static double secondsToArrival(double distanceRemaining, double speed,
+                                          double brakeDeceleration) {
+        if (distanceRemaining <= 0.0D) {
+            return 0.0D;
+        }
+        double v = Math.abs(speed);
+        if (v <= MOVING_SPEED) {
+            return Double.POSITIVE_INFINITY;
+        }
+        if (brakeDeceleration <= 0.0D) {
+            return distanceRemaining / v;
+        }
+        double brakingDistance = v * v / (2.0D * brakeDeceleration);
+        if (distanceRemaining <= brakingDistance) {
+            return 2.0D * distanceRemaining / v;
+        }
+        return distanceRemaining / v + v / (2.0D * brakeDeceleration);
+    }
+
+    /** Below this a train counts as stopped rather than approaching slowly. */
+    private static final double MOVING_SPEED = 0.05D;
 }

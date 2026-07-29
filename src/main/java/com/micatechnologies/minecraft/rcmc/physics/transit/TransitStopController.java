@@ -259,6 +259,16 @@ public final class TransitStopController {
         return stopsServed;
     }
 
+    /**
+     * The service braking rate this controller stops at, blocks/s².
+     *
+     * <p>Exposed so a platform announcement can work out <em>when</em> a train will arrive rather
+     * than merely how far away it is — see {@code ArrivalEstimator.secondsToArrival}.</p>
+     */
+    public double serviceBrakeDeceleration() {
+        return driver.serviceBrakeDeceleration();
+    }
+
     public double cruiseSpeed() {
         return cruiseSpeed;
     }
