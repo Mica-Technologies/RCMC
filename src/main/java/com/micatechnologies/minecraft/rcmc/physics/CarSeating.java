@@ -151,6 +151,54 @@ public final class CarSeating {
         return Math.max(0.0D, bodyLength(spec) * 0.5D - END_WALL_CLEARANCE);
     }
 
+    /**
+     * Half the width of a doorway, in blocks.
+     *
+     * <p>Here rather than in the car model because three separate things need to agree about where
+     * a door is: the model that draws the opening, the walkable bounds that let a rider step
+     * through it, and the test that decides they have left the train. The model used to be the only
+     * one that knew, which was fine while a doorway was scenery.</p>
+     */
+    public static final double DOOR_HALF_WIDTH = 0.9D;
+
+    /**
+     * Where the doorways sit along a car, as offsets from its centre.
+     *
+     * <p>Two pairs per car, at the quarter points — the arrangement the metro presets are drawn
+     * with.</p>
+     */
+    public static double[] doorCentreOffsets(TrainSpec spec) {
+        if (spec == null || spec.carStyle() != TrainSpec.CarStyle.METRO) {
+            return new double[0];
+        }
+        double quarter = bodyLength(spec) * 0.25D;
+        return new double[] {-quarter, quarter};
+    }
+
+    /** Whether {@code alongOffset} falls within a doorway, and so has an opening to walk through. */
+    public static boolean isAtDoorway(TrainSpec spec, double alongOffset) {
+        for (double centre : doorCentreOffsets(spec)) {
+            if (Math.abs(alongOffset - centre) <= DOOR_HALF_WIDTH) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * How far across a rider must get before they count as having left the train.
+     *
+     * <p>Just outside the body, so stepping through a doorway is a deliberate act that completes
+     * rather than a rider brushing the wall and being ejected. Only reachable at a doorway, and
+     * only while the doors are open — see {@code EntityCoasterCar.walkStandingRider}.</p>
+     */
+    public static double exitHalfWidth(TrainSpec spec) {
+        if (spec == null || spec.carStyle() != TrainSpec.CarStyle.METRO) {
+            return 0.0D;
+        }
+        return METRO_BODY_HALF_WIDTH + 0.35D;
+    }
+
     /** Where the benches stop and the aisle begins: {@code 1.80 inner wall − 0.55 seat depth}. */
     private static final double BENCH_INNER_EDGE = 1.25D;
 
