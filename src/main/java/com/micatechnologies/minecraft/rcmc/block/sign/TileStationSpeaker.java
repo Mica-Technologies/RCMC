@@ -2,7 +2,9 @@ package com.micatechnologies.minecraft.rcmc.block.sign;
 
 import com.micatechnologies.minecraft.rcmc.net.PacketStationAnnounce;
 import com.micatechnologies.minecraft.rcmc.net.RcmcNetwork;
+import com.micatechnologies.minecraft.rcmc.physics.Train;
 import com.micatechnologies.minecraft.rcmc.physics.transit.ArrivalEstimator;
+import com.micatechnologies.minecraft.rcmc.physics.transit.LineService;
 import com.micatechnologies.minecraft.rcmc.physics.transit.ServiceSnapshot;
 import com.micatechnologies.minecraft.rcmc.physics.transit.TransitLine;
 import com.micatechnologies.minecraft.rcmc.physics.transit.TransitSignText;
@@ -44,13 +46,36 @@ public class TileStationSpeaker extends TileTransitSignBase {
     private static final int WINDOW = 2;
 
     /**
-     * How close (track blocks) a train must be to its stop point here before "now approaching"
-     * speaks. Without this the call fires the instant this station becomes the train's next stop —
-     * a full inter-station gap away, right as it leaves the previous platform. Held below this the
-     * train stays in the "one stop away" band, so the approach call lands when it is genuinely
-     * about to enter, not when it is merely next in line.
+     * A last-resort distance floor, in track blocks.
+     *
+     * <p>The approach call is timed rather than placed — see {@link #announcementLeadSeconds}. This
+     * catches the one case the timing cannot: a train creeping the last few metres into its berth
+     * has a tiny speed, so its estimated arrival time is large even though it is plainly about to
+     * arrive. Without a floor a slow approach would never announce at all and the first anyone
+     * heard would be the "now arriving" call, which is the bug this replaces.</p>
      */
-    private static final double APPROACH_DISTANCE = 30.0D;
+    private static final double NEAR_DISTANCE = 12.0D;
+
+    /**
+     * Seconds of speech assumed per character of announcement text.
+     *
+     * <p>A rough model of a normal speaking rate (about 13 characters a second). The synthesiser
+     * will not tell us how long a line takes until it has said it, and the whole point is to start
+     * <em>before</em> that — so the length of the sentence is the best predictor available, and it
+     * is a good one: "The next inbound Ring train to Parkside is now approaching" genuinely does
+     * take longer to say than a short one.</p>
+     */
+    private static final double SECONDS_PER_CHARACTER = 1.0D / 13.0D;
+
+    /** Bounds on the estimate above, so a freak name cannot make the lead absurd either way. */
+    private static final double MIN_SPEECH_SECONDS = 2.0D;
+    private static final double MAX_SPEECH_SECONDS = 7.0D;
+
+    /**
+     * Extra seconds so the words finish a moment BEFORE the train pulls in, rather than exactly as
+     * it does. Announcements that end on the doors opening feel late even when they are not.
+     */
+    private static final double SETTLE_SECONDS = 1.0D;
 
     /** How far a player may be from the speaker and still hear it, in blocks. */
     private static final double AUDIBLE_RANGE = 20.0D;
@@ -117,10 +142,11 @@ public class TileStationSpeaker extends TileTransitSignBase {
                     continue;
                 }
                 present.add(snapshot.trainId());
-                // The train is this station's next stop (raw == 0) but still well down the line:
-                // hold it in the "one stop away" band so "now approaching" waits until it is close.
+                // The train is this station's next stop (raw == 0) but not yet due: hold it in the
+                // "one stop away" band so "now approaching" waits until the call would land at the
+                // right moment. Held for TIME, not distance — see announcementLeadSeconds.
                 boolean farHold = raw == 0 && !snapshot.atPlatform()
-                    && snapshot.distanceToNextStop() > APPROACH_DISTANCE;
+                    && !isDue(state, line, snapshot);
                 int phase;
                 if (raw == 0 && snapshot.atPlatform()) {
                     phase = PHASE_ARRIVING;
@@ -145,6 +171,46 @@ public class TileStationSpeaker extends TileTransitSignBase {
         // Forget trains that have gone out of service, so the map cannot grow without bound and a
         // returning train re-announces from a clean slate.
         lastPhase.keySet().retainAll(present);
+    }
+
+    /**
+     * Whether the approach call should go out now, so that it <em>ends</em> as the train pulls in.
+     *
+     * <p>The old test was a fixed 30 blocks. That is not an amount of time — it is however long the
+     * train takes to cover it — so the margin it bought depended entirely on the braking rate, and
+     * it could not account for how long the sentence takes to say. On the stock preset it was
+     * adequate but marginal; a firmer brake or a longer station name broke it. What matters is how
+     * long the train has left, and both inputs to that are known here.</p>
+     *
+     * <p><b>Not the cause of the reported "only fires on arrival".</b> That was the service
+     * direction bug: with the wrong direction, {@code stopsAway} did not report this station as the
+     * train's next stop at all until it berthed. This is the separate improvement asked for on the
+     * back of it — that the call should <em>end</em> as the train pulls in.</p>
+     *
+     * <p>The lead is the whole announcement: the chime, the pause after it, and the words
+     * themselves, plus a moment so the last syllable is not landing on the doors opening.</p>
+     */
+    private boolean isDue(RcmcWorldState state, TransitLine line, ServiceSnapshot snapshot) {
+        double distance = snapshot.distanceToNextStop();
+        if (distance <= NEAR_DISTANCE) {
+            return true;
+        }
+        Train train = state.trains().train(snapshot.trainId());
+        LineService service = state.transit().serviceFor(snapshot.trainId());
+        if (train == null || service == null) {
+            return false;
+        }
+        double seconds = ArrivalEstimator.secondsToArrival(distance, train.velocity(),
+            service.controller().serviceBrakeDeceleration());
+        return seconds <= announcementLeadSeconds(line, snapshot);
+    }
+
+    /** How long this station's approach call takes to deliver, chime and all. */
+    private static double announcementLeadSeconds(TransitLine line, ServiceSnapshot snapshot) {
+        String text = TransitSignText.announcement(line, snapshot.serviceDirection(), 0, false);
+        double speech = text == null ? MIN_SPEECH_SECONDS : text.length() * SECONDS_PER_CHARACTER;
+        speech = Math.max(MIN_SPEECH_SECONDS, Math.min(MAX_SPEECH_SECONDS, speech));
+        return CHIME_TO_SPEECH_TICKS / 20.0D + speech + SETTLE_SECONDS;
     }
 
     /**
