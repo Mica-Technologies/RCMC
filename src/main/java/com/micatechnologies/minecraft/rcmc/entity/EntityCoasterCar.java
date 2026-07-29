@@ -449,7 +449,14 @@ public class EntityCoasterCar extends Entity {
         // actually open, the wall is not there.
         boolean doorsOpen = com.micatechnologies.minecraft.rcmc.world.MetroDoors
             .areOpen(this.world, trainId());
-        boolean throughDoorway = doorsOpen && CarSeating.isAtDoorway(spec, offset[0]);
+        // Only the side that actually opened is a way out. The side is track-relative and so is
+        // the sign of `across` (it is measured along frame.right), so they compare directly — no
+        // conversion, which is why this reads as simply as it does.
+        com.micatechnologies.minecraft.rcmc.physics.transit.DoorSide openSide =
+            com.micatechnologies.minecraft.rcmc.world.MetroDoors.openSide(this.world, trainId());
+        boolean towardOpenSide = offset[1] >= 0.0D ? openSide.opensRight() : openSide.opensLeft();
+        boolean throughDoorway = doorsOpen && towardOpenSide
+            && CarSeating.isAtDoorway(spec, offset[0]);
         double exitLimit = CarSeating.exitHalfWidth(spec);
         double halfWidth = throughDoorway ? exitLimit : CarSeating.walkableHalfWidth(spec);
         offset[1] = Math.max(-halfWidth, Math.min(halfWidth, offset[1]));

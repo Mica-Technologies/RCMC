@@ -162,6 +162,27 @@ nose.
 Two blocks are involved: `rcmc:platform` decking, and `rcmc:platform_edge`, which carries the
 tactile warning strip and a facing that points at the track.
 
+### The platform decides which doors open
+
+**Where you put the platform is how the train knows which side to open.** Placing a station, or
+laying a platform, looks for platform blocks either side of the track and records what it finds —
+so a platform on one side gives you doors on one side, and platforms on both give you both. Nothing
+extra to author, and a platform you built by hand out of the same blocks is read exactly the same
+way.
+
+Override it when you need to:
+
+```
+/rcmc station doors <name> <left|right|both|auto>
+```
+
+Useful for a platform built out of other blocks, which the detector cannot see, or for an island
+platform you only want served on one side. `auto` re-runs the detection.
+
+Riders get told. As a train runs into a station it announces **"Entering Harbor. The doors will open
+on the left."** — a few seconds before it berths, so there is time to cross the car and be at the
+right door when it opens. A rider can only walk out through a door that actually opened.
+
 ### Signage
 
 | Block | What it shows |

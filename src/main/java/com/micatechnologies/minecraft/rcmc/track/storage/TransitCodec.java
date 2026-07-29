@@ -3,6 +3,7 @@ package com.micatechnologies.minecraft.rcmc.track.storage;
 import com.micatechnologies.minecraft.rcmc.physics.block.BlockSection;
 import com.micatechnologies.minecraft.rcmc.physics.transit.LineSignals;
 import com.micatechnologies.minecraft.rcmc.physics.transit.TransitLine;
+import com.micatechnologies.minecraft.rcmc.physics.transit.DoorSide;
 import com.micatechnologies.minecraft.rcmc.physics.transit.TransitStation;
 import com.micatechnologies.minecraft.rcmc.physics.transit.TransitSystem;
 import com.micatechnologies.minecraft.rcmc.track.TrackRef;
@@ -38,13 +39,15 @@ public final class TransitCodec {
      *
      * <p>v1 was stations and lines only, and was written with <em>no</em> version key at all —
      * which is why absent reads as 1 rather than as corrupt. v2 adds per-line block signalling.
+     * v3 adds each station's door side; an absent key reads as {@code BOTH}, which is what every
+     * station did before the field existed, so older saves need no migration.
      *
      * <p>Unlike {@link TrackCodec}, a future version is <b>not</b> refused here. Transit content is
      * additive decoration on a track that {@code TrackCodec} already version-guards: if a newer
      * save is opened by an older mod, that codec refuses first and this one never runs. Duplicating
      * the refusal would only add a second, less informative failure path.</p>
      */
-    static final int DATA_VERSION = 2;
+    static final int DATA_VERSION = 3;
 
     private static final String KEY_VERSION = "TransitVersion";
     private static final String KEY_STATIONS = "TransitStations";
@@ -57,6 +60,7 @@ public final class TransitCodec {
     private static final String KEY_IN_LABEL = "InboundLabel";
     private static final String KEY_OUT_LABEL = "OutboundLabel";
     private static final String KEY_STOPS = "Stops";
+    private static final String KEY_DOOR_SIDE = "DoorSide";
 
     private static final String KEY_SIGNALS = "TransitSignals";
     private static final String KEY_LINE = "Line";
@@ -182,6 +186,7 @@ public final class TransitCodec {
         tag.setString(KEY_NAME, station.name());
         tag.setInteger(KEY_SECTION, station.stopPoint().sectionId());
         tag.setDouble(KEY_DISTANCE, station.stopPoint().distance());
+        tag.setInteger(KEY_DOOR_SIDE, station.doorSide().ordinal());
         return tag;
     }
 
@@ -190,8 +195,13 @@ public final class TransitCodec {
         if (name.isEmpty()) {
             return null;
         }
+        // Absent in v1 and v2 saves, where getInteger returns 0. That is deliberately NOT the
+        // default: BOTH is, because it is what every station did before sides existed. So an
+        // absent key is read as BOTH rather than as LEFT (ordinal 0).
+        DoorSide side = tag.hasKey(KEY_DOOR_SIDE)
+            ? DoorSide.byOrdinal(tag.getInteger(KEY_DOOR_SIDE)) : DoorSide.BOTH;
         return new TransitStation(name,
-            new TrackRef(tag.getInteger(KEY_SECTION), tag.getDouble(KEY_DISTANCE)));
+            new TrackRef(tag.getInteger(KEY_SECTION), tag.getDouble(KEY_DISTANCE)), side);
     }
 
     private static String orDefault(String value, String fallback) {

@@ -1,5 +1,6 @@
 package com.micatechnologies.minecraft.rcmc.world;
 
+import com.micatechnologies.minecraft.rcmc.physics.transit.DoorSide;
 import com.micatechnologies.minecraft.rcmc.physics.transit.LineService;
 import com.micatechnologies.minecraft.rcmc.physics.transit.ServiceSnapshot;
 import net.minecraft.world.World;
@@ -40,6 +41,30 @@ public final class MetroDoors {
             }
         }
         return false;
+    }
+
+    /**
+     * Which side of the track this train's doors open on at its current stop.
+     *
+     * <p>Track-relative, matching the axes the car model is drawn in. {@link DoorSide#BOTH} for a
+     * train not in service, which is what every train did before stations had sides — a car with no
+     * service telling it otherwise should not have half its doors welded shut.</p>
+     */
+    public static DoorSide openSide(World world, int trainId) {
+        RcmcWorldState state = RcmcWorldState.of(world);
+        if (state == null) {
+            return DoorSide.BOTH;
+        }
+        LineService service = state.transit().serviceFor(trainId);
+        if (service != null) {
+            return state.transit().doorSideFor(service);
+        }
+        for (ServiceSnapshot snapshot : state.serviceSnapshots()) {
+            if (snapshot.trainId() == trainId) {
+                return snapshot.doorSide();
+            }
+        }
+        return DoorSide.BOTH;
     }
 
     /**

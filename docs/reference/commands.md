@@ -145,10 +145,19 @@ removes block signalling with `off`. Reports the safe train count for the divisi
 ### `/rcmc station`
 
 ```
-/rcmc station <name>            create or move a station at the track you are aiming at
+/rcmc station <name>                                  create or move a station at the track you are aiming at
 /rcmc station list
 /rcmc station remove <name>
+/rcmc station doors <name> <left|right|both|auto>     which side the doors open
 ```
+
+**Door side** is normally worked out for you: placing a station, or laying a platform, looks for
+platform blocks either side of the track and records what it finds. `doors` is the override — use
+it for a platform built out of something other than RCMC's own blocks, or for an island platform
+you only want served on one side. `auto` re-runs the detection.
+
+Left and right are **as a train running forward along the track sees them**, so the answer does not
+change when a service reverses. Announcements convert it to the rider's own left and right.
 
 ### `/rcmc line`
 

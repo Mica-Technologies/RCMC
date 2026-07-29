@@ -1,5 +1,6 @@
 package com.micatechnologies.minecraft.rcmc.net;
 
+import com.micatechnologies.minecraft.rcmc.physics.transit.DoorSide;
 import com.micatechnologies.minecraft.rcmc.physics.transit.ServiceSnapshot;
 import com.micatechnologies.minecraft.rcmc.world.RcmcWorldState;
 import io.netty.buffer.ByteBuf;
@@ -46,8 +47,9 @@ public class PacketServiceSync implements IMessage {
             boolean doorsOpen = buf.readBoolean();
             float doorFraction = buf.readFloat();
             float distanceToNextStop = buf.readFloat();
+            int doorSide = buf.readInt();
             snapshots.add(new ServiceSnapshot(trainId, lineName, direction, nextStop, atPlatform,
-                doorsOpen, doorFraction, distanceToNextStop));
+                doorsOpen, doorFraction, distanceToNextStop, DoorSide.byOrdinal(doorSide)));
         }
     }
 
@@ -63,6 +65,9 @@ public class PacketServiceSync implements IMessage {
             buf.writeBoolean(snapshot.doorsOpen());
             buf.writeFloat((float) snapshot.doorFraction());
             buf.writeFloat((float) snapshot.distanceToNextStop());
+            // Track-relative, which is the form the car model is drawn in — a client needs no
+            // station registry and no facing arithmetic to know which doors to animate.
+            buf.writeInt(snapshot.doorSide().ordinal());
         }
     }
 
