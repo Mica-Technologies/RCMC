@@ -58,10 +58,13 @@ class BuildSessionFlowTest {
         place(session, 100, 86, 0);
         place(session, 120, 94, 0);
 
-        // Back to plain for the rest.
-        session.cycleType();
-        session.cycleType();
-        session.cycleType();
+        // Back to plain for the rest. Cycled until it arrives rather than pressed a fixed number of
+        // times: this was three presses, which wrapped only while there were exactly four types.
+        // Adding LAUNCH and TYRES left it sitting on TYRES, and the rest of the test still passed —
+        // the assertion below is what caught it.
+        while (session.currentType() != SegmentType.PLAIN) {
+            session.cycleType();
+        }
         assertEquals(SegmentType.PLAIN, session.currentType());
         place(session, 140, 90, 0);
         place(session, 160, 80, 0);

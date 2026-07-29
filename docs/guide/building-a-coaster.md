@@ -50,8 +50,20 @@ nodes it should cover:
 | --- | --- |
 | **Plain track** | Nothing — just track |
 | **Chain lift** | A chain lift: constant pull up to a target speed, and the train cannot outrun the chain while engaged |
+| **Launch track** | An LSM-style launch: pushes at ~8 blocks/s² toward 22 blocks/s, then switches the motors off |
 | **Brake run** | A trim brake, bleeding speed to a target |
+| **Drive tyres** | Station friction wheels holding a 2 blocks/s creep — for positioning a train on the platform |
 | **Station** | A station platform: stop, dwell, dispatch |
+
+!!! tip "A launch is a force, not a promise"
+
+    Unlike a chain lift, a launch has nothing physically holding the train at its target — the
+    motors push, and whatever speed results is the result. So **the length you tag decides the exit
+    speed**: at the default 8 blocks/s² you need about 30 blocks of launch to reach 22, and a
+    shorter run simply leaves slower (`sqrt(2 × a × length)`). Tag a longer run to launch harder.
+
+    That is exactly how real launches behave, and it is why a launch can be tuned to overshoot or
+    fall short in a way a chain lift structurally cannot.
 
 ### Committing and validation
 

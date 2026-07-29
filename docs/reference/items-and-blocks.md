@@ -14,7 +14,7 @@ Everything registers under the `rcmc:` prefix and appears in the mod's own creat
 | Sneak + right-click a block | Place a node and commit the section |
 | Right-click air | Commit the section |
 | Sneak + right-click air | Undo the last node; on an empty session, cancel |
-| ++g++ | Cycle segment type: plain → chain lift → brake run → station |
+| ++g++ | Cycle segment type: plain → chain lift → launch track → brake run → drive tyres → station |
 | ++r++ | Reset height and bank adjustments |
 | Shift + scroll | Height of the pending node, 0.5 blocks per notch |
 | ++ctrl++ + scroll | Bank, 5° per notch |
