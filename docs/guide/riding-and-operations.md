@@ -1,0 +1,155 @@
+# Riding and operations
+
+## Boarding
+
+**A coaster** is boarded by right-clicking a car. You take a seat; the ride does the rest.
+
+**A metro** is boarded by *walking in*. While a train is berthed with its doors open, the car's
+collision box drops to just its floor slab and anyone standing inside is seated automatically. So
+you walk through the doorway off a level platform, exactly as you would in life.
+
+That is safe because doors only open when a train is berthed and stopped — no moving car is ever
+non-solid. A short grace period after dismounting stops the auto-seat trapping you aboard.
+
+Boarding a train **in service** is gated on its doors being open. If it refuses, it says so: a
+closed door and a broken feature look identical otherwise.
+
+## The camera
+
+The rider camera is locked to the car — yaw, pitch **and roll**. Roll is what makes a banked turn
+read as a banked turn and an inversion read as an inversion, and it is the one thing a vanilla
+minecart fundamentally cannot do, since 1.12.2 entities have only yaw and pitch.
+
+You keep limited free-look. If you would rather the world stayed upright, camera roll is a config
+toggle (`client.enableCameraRoll`).
+
+## Standing and walking in a metro
+
+You can stand up and walk around inside a moving metro car.
+
+The design underneath is worth knowing, because it explains the limits: **standing is implemented
+as riding**. Minecraft has no moving reference frames, so a player merely *standing* in a car at 15
+blocks/s would have to be teleported by the car's delta every tick — fighting client prediction and
+the server's own movement checks the whole way. As a passenger, vanilla already moves you with the
+vehicle perfectly, so the only remaining question is *where in the car* you are. The hard problem is
+sidestepped rather than solved.
+
+Consequences:
+
+- You board where you walked in, not in an assigned seat.
+- The walls and seat fronts are clamps on your position, not collision — vanilla collision never
+  runs for you while aboard.
+- **You cannot step off a moving train.** Sneaking mid-run would have vanilla shove you out through
+  a solid car at line speed, so a dismount with the doors shut and the train moving simply re-boards
+  you.
+- In multiplayer, other players appear standing where they boarded. Their own client is right;
+  per-passenger offsets are not synced yet.
+
+## The ride HUD
+
+Client-side, on while riding, toggleable with `client.enableRideHud`:
+
+- Current **speed**
+- **G-forces** in all three axes — vertical, lateral, longitudinal
+- **Height** and **ride time**
+
+Vertical G is the one to watch: negative vertical G is **airtime**, the single most sought-after
+sensation in coaster design, and sustained high positive G is what makes a ride intense rather than
+exciting.
+
+### G-force screen effects
+
+Tied to what the ride is actually doing to you, and all configurable or disableable:
+
+| Effect | Trigger | Config |
+| --- | --- | --- |
+| **Greyout** — tunnel vision | Above ~4.5 vertical G | `client.grayOutThresholdG`, `grayOutRangeG` |
+| **Redout** | Below −2.0 G, sustained negative | `client.redOutThresholdG`, `redOutRangeG` |
+| **FOV kick** | Longitudinal G on launches and brakes | `client.enableGForceFovKick`, `fovKickDegreesPerG`, `fovKickMaxDegrees` |
+
+Values are smoothed over a configurable window (`client.gForceSmoothingSeconds`) so a single
+frame's spike does not flash the screen.
+
+## Ratings — what have I built?
+
+```
+/rcmc rate <sectionId>
+```
+
+RCT's three-number verdict, computed from a **simulated run at design time** rather than from an
+actual ride — so a rating is available before the ride ever opens, exactly as in RCT.
+
+| Number | Driven by |
+| --- | --- |
+| **Excitement** | Max and average speed, airtime duration, inversion count, drop height, lateral variety, ride length |
+| **Intensity** | Peak G in all three axes, max speed, how long high G is sustained |
+| **Nausea** | Lateral G *unmatched by bank*, inversion count, direction-change frequency, sustained helices |
+
+The difference between the bank you authored and the bank the turn actually required **is** the
+discomfort — which is why a properly banked curve rates so differently from an unbanked one of the
+same radius.
+
+A **safety verdict** is reported separately from the scores: a ride exceeding the configured G
+limits is flagged as unsafe. In the RCT tradition, you are allowed to build the death machine and
+then told exactly what you have done.
+
+!!! warning "The formulae are uncalibrated"
+
+    The rating maths has never been checked against how a ride actually *feels* to a human. If a
+    number seems wrong, it may well be. That comparison is exactly the feedback the project wants.
+
+An incomplete lap — a train that stalls halfway — is called out explicitly, so a broken circuit
+cannot produce a plausible-looking rating.
+
+## Multi-train operation
+
+### Coasters: fixed block sections
+
+```
+/rcmc block <sectionId> <count|off>
+```
+
+Divides a circuit into block sections, each holding at most one train. A train may not enter a
+block until the next is clear; if it cannot, it stops at the block brake.
+
+Know the limits before you rely on it:
+
+- **Occupancy tracks the lead car only.** Blocks must be comfortably longer than the trains on them.
+- **N trains on N wall-to-wall blocks deadlock permanently.** That is a property of exclusive
+  fixed-block signalling, not a defect — the command reports the safe train count when it divides a
+  section.
+- The closed-circuit wrap correction assumes the wrapping pair of blocks share one section. A
+  circuit assembled from several joined sections falls back to a simpler calculation that may be
+  wrong.
+
+**Turn it off and trains crash.** That is a feature, and it comes with appropriate drama.
+
+### Metro: movement authority
+
+```
+/rcmc line signals <lineName> <count|off>
+```
+
+Different model, same underlying braking law. Rather than a permission to enter the next block, the
+driver is given a **distance it is authorised to run** — the nearest boundary of any block occupied
+by another train, walked in the train's own facing, so it is safe on bidirectional single track. It
+brakes to that limit the same way it brakes to a station.
+
+## Failure modes and recovery
+
+| Symptom | What it is | Fix |
+| --- | --- | --- |
+| A train stops mid-circuit and stays there | **Valleying** — it did not have the energy to crest something. Detected and surfaced rather than left as a silent hang | Give it more energy: a taller lift, a shallower hill |
+| A metro train is parked and stuck | Same detection, but recoverable | `/rcmc line start` — entering service clears a valleyed train |
+| Trains vanished after a restart | Trains do not persist yet (stations, lines, track and signals all do) | Re-spawn with `/rcmc train` and restart the service |
+| Track "ignores" a height you placed | Was the vertical-overshoot sag; now fixed by clamped node tangents. If you still see it, report it | — |
+
+## Performance notes
+
+Track meshes are cached per section and rebuilt only on edit, so a large park costs nothing per
+frame for track that has not changed. **Recolouring rebuilds a section's mesh** — the same cost as
+any other edit, which is fine because painting is occasional, but it is not free during a live
+colour sweep.
+
+Distance culling and level-of-detail are **not implemented yet**, so a very large park at a long
+render distance will draw more track geometry than it strictly needs to.

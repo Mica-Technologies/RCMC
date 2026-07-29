@@ -1,0 +1,100 @@
+site_name: RCMC Wiki
+site_description: >-
+  Rails & Coasters: Minecraft — a Minecraft 1.12.2 Forge mod adding spline-based track,
+  physics-simulated rollercoasters, and metro-style powered rail transit.
+site_url: https://mica-technologies.github.io/RCMC/
+repo_url: https://github.com/Mica-Technologies/RCMC
+repo_name: Mica-Technologies/RCMC
+edit_uri: edit/main/docs/
+copyright: >-
+  RCMC is licensed under the LGPL 2.1. Documentation is part of the RCMC repository.
+
+# The phased implementation plan and agent working notes are gitignored working documents,
+# not published material. They are absent from a CI checkout anyway; this keeps a LOCAL
+# `mkdocs serve` from picking them up and quietly publishing them on the next deploy.
+exclude_docs: |
+  AGENT-PLANS/
+
+theme:
+  name: material
+  language: en
+  icon:
+    repo: fontawesome/brands/github
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.indexes
+    - navigation.footer
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.action.edit
+    - toc.follow
+  palette:
+    # Rail-signal green in light mode, amber-on-dark in dark mode — the two colours the mod's
+    # own signage already uses.
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: green
+      accent: amber
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: black
+      accent: amber
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  # Renders :material-…: / :octicons-…: shortcodes as inline SVG icons. Without this they render
+  # as literal colon-wrapped text, which is what a missing icon looks like on a card.
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.snippets
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+plugins:
+  - search
+
+nav:
+  - Home: index.md
+  - Guides:
+      - Getting started: guide/getting-started.md
+      - Coasters vs metro: guide/coasters-vs-metro.md
+      - Building a coaster: guide/building-a-coaster.md
+      - Building a metro line: guide/building-a-metro.md
+      - Riding and operations: guide/riding-and-operations.md
+  - Reference:
+      - Commands: reference/commands.md
+      - Items and blocks: reference/items-and-blocks.md
+      - Track styles: reference/track-styles.md
+      - Configuration: reference/config.md
+  - Internals:
+      - Track geometry: design/TRACK_GEOMETRY.md
+      - Physics: design/PHYSICS.md
+      - Transit systems: design/TRANSIT.md
