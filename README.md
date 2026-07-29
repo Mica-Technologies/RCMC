@@ -21,8 +21,9 @@ an everything-on-rails megamod.
 ## What works today
 
 **Coasters** — build track freehand node by node, or from a palette of nine prefab manoeuvres
-(straight, slope, curve, helix, vertical loop, corkscrew, airtime hill). Chain lifts, brake
-runs, stations with dwell and dispatch. Auto-generated supports, including on banked and
+(straight, slope, curve, helix, vertical loop, corkscrew, airtime hill). Chain lifts, LSM
+launches, brake runs, station drive tyres, and stations with dwell and dispatch — all tagged onto
+track as you lay it. Auto-generated supports, including on banked and
 inverted track. Fixed block sections for multi-train operation, with real crashes when you
 switch them off. RCT-style excitement / intensity / nausea ratings from a simulated run, plus
 a separate safety verdict. Ride HUD with live G-forces, camera roll through inversions, and

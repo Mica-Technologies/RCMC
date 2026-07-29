@@ -3,6 +3,8 @@ package com.micatechnologies.minecraft.rcmc.builder;
 import com.micatechnologies.minecraft.rcmc.RcmcConstants;
 import com.micatechnologies.minecraft.rcmc.physics.element.BrakeRun;
 import com.micatechnologies.minecraft.rcmc.physics.element.ChainLift;
+import com.micatechnologies.minecraft.rcmc.physics.element.DriveTyres;
+import com.micatechnologies.minecraft.rcmc.physics.element.LaunchTrack;
 import com.micatechnologies.minecraft.rcmc.physics.element.RideElement;
 import com.micatechnologies.minecraft.rcmc.physics.element.StationPlatform;
 import com.micatechnologies.minecraft.rcmc.track.TrackSection;
@@ -87,6 +89,38 @@ public final class SegmentElements {
     }
 
     /**
+     * The segment type that would produce {@code element}, or {@code null} for an element with no
+     * authoring path.
+     *
+     * <p>The inverse of {@link #create}, and it exists so the track editor can cycle a span's type
+     * without keeping its own table of "what follows what". It previously did keep one, keyed on
+     * {@code ElementCodec}'s type strings, and its own comment said the two could drift apart —
+     * which they duly did the moment a type was added here.</p>
+     *
+     * <p>A {@code null} return is the signal this class is meant to give: an element the builder
+     * cannot express. That is a real state — {@code LaunchTrack} sat in exactly it, complete and
+     * persisted but unreachable, because nothing in {@link #create} produced one.</p>
+     */
+    public static TrackBuildSession.SegmentType segmentTypeOf(RideElement element) {
+        if (element instanceof ChainLift) {
+            return TrackBuildSession.SegmentType.LIFT;
+        }
+        if (element instanceof LaunchTrack) {
+            return TrackBuildSession.SegmentType.LAUNCH;
+        }
+        if (element instanceof BrakeRun) {
+            return TrackBuildSession.SegmentType.BRAKE;
+        }
+        if (element instanceof DriveTyres) {
+            return TrackBuildSession.SegmentType.TYRES;
+        }
+        if (element instanceof StationPlatform) {
+            return TrackBuildSession.SegmentType.STATION;
+        }
+        return null;
+    }
+
+    /**
      * Conservative defaults per type. Tuning a specific lift's speed or a brake's target belongs in
      * the ride-controller UI, not in a placement gesture — a builder tagging track is saying what
      * it <em>is</em>, not how it is configured.
@@ -96,8 +130,22 @@ public final class SegmentElements {
         switch (type) {
             case LIFT:
                 return new ChainLift(sectionId, from, to, 5.0D, 12.0D, tick);
+            case LAUNCH:
+                // A launch is a force, not a speed constraint, so the span the builder tagged is
+                // what decides the exit speed: 8 blocks/s^2 needs about 30 blocks to reach 22, and
+                // a shorter run simply leaves slower (sqrt(2*a*length)). That is the honest
+                // behaviour of a real launch and it is why the default is stated as a target the
+                // motors aim for rather than a speed they guarantee.
+                //
+                // Positive target = the direction of increasing distance, which is the direction
+                // the builder was laying track in when they tagged the span.
+                return new LaunchTrack(sectionId, from, to, LAUNCH_TARGET_SPEED, LAUNCH_ACCELERATION);
             case BRAKE:
                 return new BrakeRun(sectionId, from, to, 6.0D, 6.0D, BrakeRun.Mode.TRIM, tick);
+            case TYRES:
+                // Walking pace. Drive tyres position a train within a station; anything faster
+                // reads as a launch, which is the element next to this one in the palette.
+                return new DriveTyres(sectionId, from, to, 2.0D, 3.0D, tick);
             case STATION:
                 // Stop shortly before the far end, leaving room to accelerate away from the
                 // platform before whatever follows takes over.
@@ -107,4 +155,10 @@ public final class SegmentElements {
                 return null;
         }
     }
+
+    /** Launch speed the motors aim for, blocks/s — reached only if the tagged run is long enough. */
+    private static final double LAUNCH_TARGET_SPEED = 22.0D;
+
+    /** Launch acceleration, blocks/s². Roughly 0.8 g, which is a firm but not brutal LSM launch. */
+    private static final double LAUNCH_ACCELERATION = 8.0D;
 }

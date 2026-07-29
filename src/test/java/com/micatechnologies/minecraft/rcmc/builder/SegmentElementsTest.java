@@ -126,6 +126,92 @@ class SegmentElementsTest {
             "runs should not overlap");
     }
 
+    /** Flat and long, which is what a launch run and a station approach both actually are. */
+    private static TrackSection flatSection() {
+        List<TrackNode> nodes = new ArrayList<>();
+        for (int i = 0; i <= 4; i++) {
+            nodes.add(new TrackNode(new Vec3(i * 20.0D, 64.0D, 0.0D)));
+        }
+        return new TrackSection(1, nodes, false, null);
+    }
+
+    /** Runs a train over a whole section tagged as one type, and returns it. */
+    private static Train runTagged(TrackSection section, SegmentType type,
+                                   double startSpeed, int ticks) {
+        TrackNetwork network = new TrackNetwork();
+        network.addSection(section);
+
+        RideElementSet elements = new RideElementSet();
+        for (RideElement element : SegmentElements.build(section,
+            allOf(type, section.nodes().size()))) {
+            elements.add(element);
+        }
+
+        Train train = new Train(TrainSpec.singleCar(),
+            new PhysicsIntegrator(9.81D, 0.01D, 0.0015D, 60.0D), new TrackRef(1, 1.0D), startSpeed);
+        TrainManager manager = new TrainManager();
+        manager.add(1, train);
+        for (int tick = 0; tick < ticks && train.isRunning(); tick++) {
+            manager.tick(network, elements, 4, TICK);
+        }
+        return train;
+    }
+
+    @Test
+    @DisplayName("a launch actually launches: it accelerates a train to its target speed")
+    void launchAcceleratesATrain() {
+        // LaunchTrack was complete, tested and persisted for weeks with no way to place one. This
+        // asserts the authoring path, not the element — the element's own physics is covered in
+        // LaunchTrackTest. What was missing was the sentence connecting the two.
+        TrackSection section = flatSection();
+        Train train = runTagged(section, SegmentType.LAUNCH, 1.0D, 60);
+
+        assertTrue(train.velocity() > 20.0D,
+            "launch failed to bring the train up to speed; reached " + train.velocity());
+    }
+
+    @Test
+    @DisplayName("a launch stops pushing once the train is at target speed")
+    void launchDoesNotPushForever() {
+        // The motors switch off at target rather than accelerating indefinitely — the property that
+        // makes this a launch and not a rocket. A long run at full push would sail past it.
+        TrackSection section = flatSection();
+        Train train = runTagged(section, SegmentType.LAUNCH, 1.0D, 200);
+
+        assertTrue(train.velocity() < 24.0D,
+            "launch kept pushing past its target; reached " + train.velocity());
+    }
+
+    @Test
+    @DisplayName("drive tyres bring a train down to a creep speed and hold it there")
+    void driveTyresCreep() {
+        // DriveTyres was the other element with no authoring path, and it was marked DONE in the
+        // plan. Approaching from ABOVE the creep speed is the case that matters: the tyres are a
+        // speed servo, so they must brake a fast train as well as nudge a stopped one.
+        TrackSection section = flatSection();
+        Train train = runTagged(section, SegmentType.TYRES, 10.0D, 200);
+
+        assertEquals(2.0D, train.velocity(), 0.5D,
+            "drive tyres should hold the creep speed, not the speed the train arrived at");
+    }
+
+    @Test
+    @DisplayName("every segment type maps back to itself through segmentTypeOf")
+    void typesRoundTrip() {
+        // The track editor cycles a span by asking what is there and taking .next(). A type missing
+        // from that inverse mapping is silently converted into something else on the next G press.
+        TrackSection section = flatSection();
+        for (SegmentType type : SegmentType.values()) {
+            List<RideElement> built =
+                SegmentElements.build(section, allOf(type, section.nodes().size()));
+            if (type == SegmentType.PLAIN) {
+                continue;
+            }
+            assertEquals(type, SegmentElements.segmentTypeOf(built.get(0)),
+                type + " did not survive the round trip through segmentTypeOf");
+        }
+    }
+
     @Test
     @DisplayName("all-plain track produces no elements at all")
     void plainProducesNothing() {

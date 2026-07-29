@@ -241,7 +241,16 @@ public class ItemTrackEditor extends Item {
         return types;
     }
 
-    /** The type after whatever currently occupies the span, so repeated presses cycle. */
+    /**
+     * The type after whatever currently occupies the span, so repeated presses cycle.
+     *
+     * <p>The order comes from {@code SegmentType.next()} — the same order the build tool's G key
+     * cycles — rather than from a table here. This method used to hold one, keyed on
+     * {@code ElementCodec}'s type strings, and it silently omitted launches and drive tyres: press
+     * G on a span holding either and it fell through to the default and turned it into a lift.
+     * Deriving the order means a new segment type is cycled here the moment it exists, with nothing
+     * to remember to update.</p>
+     */
     private static TrackBuildSession.SegmentType nextTypeFor(RcmcWorldState state, int sectionId,
                                                              double from, double to) {
         for (RideElement element : state.elements().elements()) {
@@ -249,18 +258,17 @@ public class ItemTrackEditor extends Item {
                 || element.startDistance() >= to) {
                 continue;
             }
-            String type = ElementCodec.typeOf(element);
-            if ("chain_lift".equals(type)) {
-                return TrackBuildSession.SegmentType.BRAKE;
-            }
-            if ("brake".equals(type)) {
-                return TrackBuildSession.SegmentType.STATION;
-            }
-            if ("station".equals(type)) {
-                return TrackBuildSession.SegmentType.PLAIN;
+            TrackBuildSession.SegmentType current =
+                com.micatechnologies.minecraft.rcmc.builder.SegmentElements.segmentTypeOf(element);
+            // An element with no segment type at all cannot be cycled from, so treat the span as
+            // empty and start the cycle over rather than reporting a type the builder cannot see.
+            if (current != null) {
+                return current.next();
             }
         }
-        return TrackBuildSession.SegmentType.LIFT;
+        // Nothing here: PLAIN is what an untagged span is, so its successor is where the cycle
+        // starts.
+        return TrackBuildSession.SegmentType.PLAIN.next();
     }
 
     private static void removeOverlapping(RcmcWorldState state, int sectionId,
@@ -317,12 +325,17 @@ public class ItemTrackEditor extends Item {
             + String.format("%.1f", section.totalLength()) + " blocks"
             + (section.isClosed() ? " (circuit)" : ""));
 
-        String here = "plain track";
+        // Named the way the builder names them ("Chain lift"), not the way the save file does
+        // ("chain_lift"): this line and the G-key cycle message describe the same thing to the
+        // same person, so they should not use two vocabularies for it.
+        String here = TrackBuildSession.SegmentType.PLAIN.label();
         for (RideElement element : state.elements().elements()) {
             if (element.sectionId() == section.id() && element.contains(
                 new com.micatechnologies.minecraft.rcmc.track.TrackRef(section.id(), distance))) {
-                String type = ElementCodec.typeOf(element);
-                here = type == null ? "unknown hardware" : type;
+                TrackBuildSession.SegmentType type = com.micatechnologies.minecraft.rcmc.builder
+                    .SegmentElements.segmentTypeOf(element);
+                here = type == null ? "unknown hardware (" + ElementCodec.typeOf(element) + ")"
+                    : type.label();
                 break;
             }
         }

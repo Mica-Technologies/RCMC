@@ -1,5 +1,6 @@
 package com.micatechnologies.minecraft.rcmc.client.build;
 
+import com.micatechnologies.minecraft.rcmc.builder.TrackBuildSession;
 import com.micatechnologies.minecraft.rcmc.item.RcmcItems;
 import java.util.ArrayList;
 import java.util.List;
@@ -37,8 +38,21 @@ public final class BuildToolHud {
     private static final int WARN = 0xFFFFB020;
     private static final int SNAP = 0xFF60FF60;
 
-    private static final String[] SEGMENT_LABELS =
-        {"Plain track", "Chain lift", "Brake run", "Station"};
+    /**
+     * Segment labels, read from the enum rather than repeated here.
+     *
+     * <p>This was a parallel {@code String[]} that had to be kept in step with
+     * {@code SegmentType} by hand, with nothing to catch it if it was not — and the HUD is
+     * precisely where being out of step does the most damage, since it is the builder's only
+     * indication of what the next click will lay down. Adding two types to the enum would have
+     * left both of them displaying as "?".</p>
+     *
+     * <p>Importing the enum is safe on the client: {@code builder} is pure Java with no Minecraft
+     * types, so it loads on either side. The session state that lives beside it is server-side by
+     * <em>use</em>, not by class loading.</p>
+     */
+    private static final TrackBuildSession.SegmentType[] SEGMENT_TYPES =
+        TrackBuildSession.SegmentType.values();
 
     @SubscribeEvent
     public void onRenderOverlay(RenderGameOverlayEvent.Post event) {
@@ -65,8 +79,8 @@ public final class BuildToolHud {
         colors.add(HEADING);
 
         int type = ClientBuildSession.segmentType();
-        lines.add("Segment: " + (type >= 0 && type < SEGMENT_LABELS.length
-            ? SEGMENT_LABELS[type] : "?"));
+        lines.add("Segment: " + (type >= 0 && type < SEGMENT_TYPES.length
+            ? SEGMENT_TYPES[type].label() : "?"));
         colors.add(VALUE);
 
         lines.add(String.format("Bank: %+.0f°   Height: %+.1f",

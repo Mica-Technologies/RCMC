@@ -30,11 +30,23 @@ public final class TrackBuildSession {
      * length — station, then chain, then plain track — and forcing one type per section would make
      * a builder cut the layout into pieces to express that, which is exactly the busywork the tool
      * exists to remove.</p>
+     *
+     * <p><b>Ordering is the cycle order</b>, so it is a UX decision rather than a list: the two
+     * accelerating types sit together, and the two station-yard types sit together, because a
+     * builder reaching for one has usually just been thinking about the other.</p>
+     *
+     * <p>This enum is the single source of truth for what a builder can lay down. Anything that
+     * needs the set — the HUD's labels, the editor's cycle order,
+     * {@link SegmentElements} — derives it from here. It previously did not: a parallel label array
+     * in the HUD and a hand-written cycle table in the track editor both had to be edited in step
+     * with this list, and neither would have failed to compile if they had not been.</p>
      */
     public enum SegmentType {
         PLAIN("Plain track"),
         LIFT("Chain lift"),
+        LAUNCH("Launch track"),
         BRAKE("Brake run"),
+        TYRES("Drive tyres"),
         STATION("Station");
 
         private final String label;
