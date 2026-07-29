@@ -1,5 +1,6 @@
 package com.micatechnologies.minecraft.rcmc.client.render;
 
+import com.micatechnologies.minecraft.rcmc.physics.CarSeating;
 import net.minecraft.client.renderer.BufferBuilder;
 
 /**
@@ -86,7 +87,10 @@ final class MetroCarModel {
     private static final float PANEL_PITCH = 2.4F;
 
     // --- Doors: paired sliding doors, drawn slightly proud of the wall in trim colour. ---------
-    private static final float DOOR_WIDTH = 1.8F;
+    // Width comes from CarSeating, which also decides where a rider may walk through an opening.
+    // Three things have to agree about where a door is — this model, the walkable bounds, and the
+    // test for "has stepped out" — so exactly one of them owns the number.
+    private static final float DOOR_WIDTH = (float) (CarSeating.DOOR_HALF_WIDTH * 2.0D);
     private static final float DOOR_PROUD = 0.03F;
 
     /** Thickness of a door leaf, and the width of the frame around its window. */
@@ -492,7 +496,14 @@ final class MetroCarModel {
         return shut + (open - shut) * fraction;
     }
 
-    /** Door bay centres along the car — the quarter points, where real metro doors cluster. */
+    /**
+     * Door bay centres along the car — the quarter points, where real metro doors cluster.
+     *
+     * <p>Mirrors {@link CarSeating#doorCentreOffsets}, which is the same quarter-point rule
+     * expressed against body length rather than half-length. Kept as its own method because the
+     * model works in floats and half-lengths throughout; the assertion that the two agree lives in
+     * {@code CarSeatingTest}.</p>
+     */
     private static float[] doorCentres(float half) {
         return new float[] {-half * 0.5F, half * 0.5F};
     }

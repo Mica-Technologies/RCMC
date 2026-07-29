@@ -1,6 +1,7 @@
 package com.micatechnologies.minecraft.rcmc.physics;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -154,5 +155,50 @@ class CarSeatingTest {
         assertEquals(0.0D, CarSeating.acrossOffset(spec, -1), 1e-9D);
         assertEquals(0.0D, CarSeating.alongOffset(spec, -1), 1e-9D);
         assertTrue(Math.abs(CarSeating.alongOffset(spec, 999)) <= halfBody);
+    }
+
+    @Test
+    @DisplayName("doorways sit at the quarter points, where the model draws them")
+    void doorwaysAtQuarterPoints() {
+        // The car model draws its door bays at +/- half*0.5 of the body half-length, which is the
+        // same quarter-point rule expressed against half-length instead of length. The two are
+        // separate expressions of one measurement — the model works in floats and half-lengths —
+        // so this is the assertion that keeps them equal.
+        TrainSpec spec = TrainSpec.metroTrain(3);
+        double half = CarSeating.bodyLength(spec) * 0.5D;
+        double[] centres = CarSeating.doorCentreOffsets(spec);
+
+        assertEquals(2, centres.length, "a metro car has two door bays per side");
+        assertEquals(-half * 0.5D, centres[0], 1e-9D);
+        assertEquals(half * 0.5D, centres[1], 1e-9D);
+    }
+
+    @Test
+    @DisplayName("a rider is at a doorway only where there is actually an opening")
+    void doorwayTest() {
+        TrainSpec spec = TrainSpec.metroTrain(3);
+        double[] centres = CarSeating.doorCentreOffsets(spec);
+
+        assertTrue(CarSeating.isAtDoorway(spec, centres[0]), "the middle of a door is a doorway");
+        assertTrue(CarSeating.isAtDoorway(spec, centres[1] - CarSeating.DOOR_HALF_WIDTH + 0.01D),
+            "the edge of the opening still counts");
+        assertFalse(CarSeating.isAtDoorway(spec, centres[1] + CarSeating.DOOR_HALF_WIDTH + 0.1D),
+            "just past the frame is solid wall");
+        assertFalse(CarSeating.isAtDoorway(spec, 0.0D),
+            "the centre of the car is between the two bays — walking into the wall there must "
+                + "not drop a rider onto the trackbed");
+    }
+
+    @Test
+    @DisplayName("the exit threshold is outside the body, so brushing a wall does not eject anyone")
+    void exitThresholdIsOutsideTheBody() {
+        TrainSpec spec = TrainSpec.metroTrain(3);
+
+        assertTrue(CarSeating.exitHalfWidth(spec) > CarSeating.METRO_BODY_HALF_WIDTH,
+            "a rider must be clear of the car before they count as having left it");
+        assertTrue(CarSeating.exitHalfWidth(spec) > CarSeating.walkableHalfWidth(spec),
+            "the aisle bound has to be reachable before the exit bound, or nobody could stand up");
+        assertEquals(0.0D, CarSeating.exitHalfWidth(TrainSpec.singleCar()), 1e-9D,
+            "coaster stock has no doors to walk out of");
     }
 }

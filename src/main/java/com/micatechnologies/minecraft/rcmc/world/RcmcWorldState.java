@@ -179,6 +179,16 @@ public final class RcmcWorldState {
         return trains;
     }
 
+    /**
+     * Solid floors for berthed metro cars, cached per tick. Per world, and used from the collision
+     * event on both sides — see {@link TrainFloors}.
+     */
+    private final TrainFloors trainFloors = new TrainFloors();
+
+    public TrainFloors trainFloors() {
+        return trainFloors;
+    }
+
     public com.micatechnologies.minecraft.rcmc.physics.element.RideElementSet elements() {
         return elements;
     }

@@ -77,6 +77,10 @@ public class Rcmc {
         // so its own movement prediction agrees and the player does not rubber-band at every post.
         MinecraftForge.EVENT_BUS.register(
             new com.micatechnologies.minecraft.rcmc.world.TrackCollisionHandler());
+        // Same both-sides reasoning, for the floor of a berthed metro car: a player walks in off a
+        // platform, so there has to be something under them before they are a passenger.
+        MinecraftForge.EVENT_BUS.register(
+            new com.micatechnologies.minecraft.rcmc.world.TrainFloorCollision());
         com.micatechnologies.minecraft.rcmc.net.RcmcNetwork.init();
         com.micatechnologies.minecraft.rcmc.block.RcmcBlocks.init();
         com.micatechnologies.minecraft.rcmc.item.RcmcItems.init();

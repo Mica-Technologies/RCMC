@@ -178,6 +178,16 @@ public class EntityCoasterCar extends Entity {
         this.rotationYaw = (float) Math.toDegrees(Math.atan2(-frame.forward.x, frame.forward.z));
         this.rotationPitch = (float) Math.toDegrees(Math.asin(-clamp(frame.forward.y)));
 
+        // Drained here, and before boardWalkIns, so a rider stepping out is put on the platform
+        // before the boarding check looks at who is standing inside — otherwise they would be
+        // seated again on their way through the door.
+        //
+        // The queue is filled from updatePassenger, which vanilla calls from the PASSENGER's
+        // updateRidden (Entity:2273), not from this entity's update — so an exit is applied on this
+        // car's next tick, which may be this one or the following one depending on iteration order.
+        // Either way it is never applied while the passenger list is being walked, which is the
+        // point of queueing it.
+        applyPendingDismounts();
         boardWalkIns();
     }
 
@@ -242,10 +252,15 @@ public class EntityCoasterCar extends Entity {
         if (!doorsOpen && !moving) {
             return;
         }
+        TrainSpec spec = train == null ? null : train.spec();
         long now = this.world.getTotalWorldTime();
+        // Searched by the car's OWN footprint, not by its bounding box. The box is square in plan
+        // (setSize cannot be anything else), so on a 20-block car it describes the middle fifth —
+        // and a player boarding through a doorway is nowhere near the middle. The box is only used
+        // to bound the search now; the footprint test below decides.
         for (EntityPlayer player : this.world.getEntitiesWithinAABB(EntityPlayer.class,
-            getEntityBoundingBox().grow(-0.2D, 0.0D, -0.2D))) {
-            if (player.isRiding() || !canFitPassenger(player)) {
+            getEntityBoundingBox().grow(searchReach(spec), 0.0D, searchReach(spec)))) {
+            if (player.isRiding() || !canFitPassenger(player) || !isInsideBody(player, spec)) {
                 continue;
             }
             if (!doorsOpen) {
@@ -326,6 +341,43 @@ public class EntityCoasterCar extends Entity {
     }
 
     /**
+     * How far beyond the entity box to look for players, so the search covers the whole car.
+     *
+     * <p>Half the body length plus a block. Deliberately generous: this only bounds the candidate
+     * list, and {@link #isInsideBody} does the deciding.</p>
+     */
+    private static double searchReach(TrainSpec spec) {
+        return spec == null ? 0.0D : CarSeating.bodyLength(spec) * 0.5D + 1.0D;
+    }
+
+    /**
+     * Whether {@code entity} stands within this car's body, tested in the car's own axes.
+     *
+     * <p>Exact for a car at any angle, where an axis-aligned box is exact only for one pointing due
+     * north or east. Boarding used the box, which is why walking in at a doorway of a long car did
+     * nothing until the player wandered into the middle of it.</p>
+     */
+    private boolean isInsideBody(Entity entity, TrainSpec spec) {
+        if (spec == null || frame == null || spec.carStyle() != TrainSpec.CarStyle.METRO) {
+            // Coaster stock is short enough that its bounding box IS its body, and it is boarded by
+            // right-clicking rather than by walking in.
+            return true;
+        }
+        double dx = entity.posX - frame.position.x;
+        double dy = entity.posY - frame.position.y;
+        double dz = entity.posZ - frame.position.z;
+        double along = dx * frame.forward.x + dy * frame.forward.y + dz * frame.forward.z;
+        double across = dx * frame.right.x + dy * frame.right.y + dz * frame.right.z;
+        double up = dx * frame.up.x + dy * frame.up.y + dz * frame.up.z;
+        return Math.abs(along) <= CarSeating.bodyLength(spec) * 0.5D
+            && Math.abs(across) <= CarSeating.METRO_BODY_HALF_WIDTH
+            // Feet at floor level, with room for the step up and the height of the saloon — so
+            // somebody on the roof, or under the car, is not seated.
+            && up >= CarSeating.METRO_FLOOR_HEIGHT - 1.0D
+            && up <= CarSeating.METRO_ROOF_HEIGHT;
+    }
+
+    /**
      * Where each standing rider is within this car: {@code [along, across]} in blocks from centre.
      *
      * <p>Per entity rather than static: two cars of a consist are different rooms.</p>
@@ -389,10 +441,73 @@ public class EntityCoasterCar extends Entity {
             }
         }
         double halfLength = CarSeating.walkableHalfLength(spec);
-        double halfWidth = CarSeating.walkableHalfWidth(spec);
         offset[0] = Math.max(-halfLength, Math.min(halfLength, offset[0]));
+
+        // The side wall is a clamp, not a collision — a standing rider's position is written
+        // directly, so vanilla never gets a say and this bound IS the wall. Which means the only
+        // way to walk OUT of an open door is to move the bound: at a doorway, with the doors
+        // actually open, the wall is not there.
+        boolean doorsOpen = com.micatechnologies.minecraft.rcmc.world.MetroDoors
+            .areOpen(this.world, trainId());
+        boolean throughDoorway = doorsOpen && CarSeating.isAtDoorway(spec, offset[0]);
+        double exitLimit = CarSeating.exitHalfWidth(spec);
+        double halfWidth = throughDoorway ? exitLimit : CarSeating.walkableHalfWidth(spec);
         offset[1] = Math.max(-halfWidth, Math.min(halfWidth, offset[1]));
+
+        if (throughDoorway && Math.abs(offset[1]) >= exitLimit - 1.0e-6D
+            && !this.world.isRemote && player.getRidingEntity() == this) {
+            // Walked clear of the body through an open door: they have got off. Queued rather than
+            // done here because this runs from the passenger loop in onUpdate, and dismounting
+            // mid-iteration mutates the list being walked.
+            pendingDismounts.add(player.getUniqueID());
+        }
         return offset;
+    }
+
+    /** Riders who have walked out through a door this tick; see {@link #walkStandingRider}. */
+    private final java.util.List<java.util.UUID> pendingDismounts = new java.util.ArrayList<>();
+
+    /**
+     * Puts riders who walked out of a door onto the platform.
+     *
+     * <p>Placed just outside the doorway they used rather than left to vanilla's dismount search,
+     * which looks for somewhere safe near the <em>vehicle</em> and would happily pick the far side
+     * of the train, or the track. A platform laid at car-floor height is level with the doorway, so
+     * stepping out lands on it exactly as stepping in came off it.</p>
+     */
+    private void applyPendingDismounts() {
+        if (pendingDismounts.isEmpty() || this.world.isRemote) {
+            return;
+        }
+        Train train = trainOrNull();
+        TrainSpec spec = train == null ? null : train.spec();
+        for (java.util.UUID id : pendingDismounts) {
+            for (Entity passenger : new java.util.ArrayList<>(getPassengers())) {
+                if (!id.equals(passenger.getUniqueID())) {
+                    continue;
+                }
+                if (frame == null || spec == null) {
+                    // Nothing to place them against. Letting go is still better than holding them,
+                    // and vanilla's own dismount search takes it from here.
+                    passenger.dismountRidingEntity();
+                    continue;
+                }
+                double[] offset = standingOffsets.get(id);
+                double along = offset == null ? 0.0D : offset[0];
+                double side = offset == null || offset[1] >= 0.0D ? 1.0D : -1.0D;
+                // A step further out than the exit threshold, so they land clear of the car rather
+                // than in the doorway, where the boarding check would seat them straight back in.
+                double across = side * (CarSeating.exitHalfWidth(spec) + 0.55D);
+                double x = frame.position.x + frame.forward.x * along + frame.right.x * across;
+                double y = frame.position.y + frame.up.y * CarSeating.METRO_FLOOR_HEIGHT;
+                double z = frame.position.z + frame.forward.z * along + frame.right.z * across;
+                // Dismount first: removePassenger clears their offset and starts the re-board
+                // grace, and setPosition on a passenger is overwritten by the vehicle otherwise.
+                passenger.dismountRidingEntity();
+                passenger.setPositionAndUpdate(x, y, z);
+            }
+        }
+        pendingDismounts.clear();
     }
 
     /**
@@ -476,21 +591,14 @@ public class EntityCoasterCar extends Entity {
         if (!com.micatechnologies.minecraft.rcmc.world.MetroDoors.areOpen(this.world, trainId())) {
             return getEntityBoundingBox();
         }
-        AxisAlignedBB body = getEntityBoundingBox();
-        double top = body.minY + CarSeating.METRO_FLOOR_HEIGHT;
-        return new AxisAlignedBB(
-            body.minX + FLOOR_EDGE_INSET, top - FLOOR_SLAB_THICKNESS, body.minZ + FLOOR_EDGE_INSET,
-            body.maxX - FLOOR_EDGE_INSET, top, body.maxZ - FLOOR_EDGE_INSET);
+        // Doors open: nothing solid from the entity itself. The floor a passenger walks in on is
+        // contributed by TrainFloorCollision instead, because it takes more than one box to
+        // describe — this entity's box is square in plan, so the slab this method used to return
+        // covered about a fifth of a 20-block car, in the middle, nowhere near a doorway. Walking
+        // in off a platform put a player over the gap and dropped them through the floor.
+        return null;
     }
 
-    /** Thickness of the floor slab left solid while the doors are open. */
-    private static final double FLOOR_SLAB_THICKNESS = 0.5D;
-
-    /**
-     * How far the floor slab is held in from the car's outer skin, so nobody stands on a sliver of
-     * floor while still outside the train.
-     */
-    private static final double FLOOR_EDGE_INSET = 0.2D;
 
     /**
      * Pushed aside rather than pushing. A player walking into a stationary train should be stopped

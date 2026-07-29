@@ -4,12 +4,17 @@
 
 **A coaster** is boarded by right-clicking a car. You take a seat; the ride does the rest.
 
-**A metro** is boarded by *walking in*. While a train is berthed with its doors open, the car's
-collision box drops to just its floor slab and anyone standing inside is seated automatically. So
+**A metro** is boarded by *walking in*. While a train is berthed with its doors open, the car stops
+being a solid box and becomes just a floor, and anyone standing inside is seated automatically. So
 you walk through the doorway off a level platform, exactly as you would in life.
 
 That is safe because doors only open when a train is berthed and stopped — no moving car is ever
 non-solid. A short grace period after dismounting stops the auto-seat trapping you aboard.
+
+**And you get off the same way: walk out through an open door.** No sneak, no dismount key — step
+through the doorway and you are on the platform, placed beside the door you used. The doorways are
+real openings, so this only works where there is one: walking into the wall between them stops you,
+as it should.
 
 Boarding a train **in service** is gated on its doors being open. If it refuses, it says so: a
 closed door and a broken feature look identical otherwise.
@@ -41,7 +46,9 @@ Consequences:
   runs for you while aboard.
 - **You cannot step off a moving train.** Sneaking mid-run would have vanilla shove you out through
   a solid car at line speed, so a dismount with the doors shut and the train moving simply re-boards
-  you.
+  you. With the doors open you leave by walking through one.
+- The walls are the clamps on your position rather than collision, which is exactly why walking out
+  works: at a doorway, with the doors open, the clamp is simply not there.
 - In multiplayer, other players appear standing where they boarded. Their own client is right;
   per-passenger offsets are not synced yet.
 
