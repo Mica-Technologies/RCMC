@@ -156,9 +156,36 @@ public final class TransitSystem {
     public java.util.List<ServiceSnapshot> serviceSnapshots() {
         java.util.List<ServiceSnapshot> snapshots = new java.util.ArrayList<>(services.size());
         for (Map.Entry<Integer, LineService> entry : services.entrySet()) {
-            snapshots.add(ServiceSnapshot.of(entry.getKey(), entry.getValue()));
+            snapshots.add(ServiceSnapshot.of(entry.getKey(), entry.getValue(),
+                doorSideFor(entry.getValue())));
         }
         return snapshots;
+    }
+
+    /**
+     * Which side of the <b>track</b> {@code service}'s doors open at its current stop.
+     *
+     * <p>Deliberately NOT converted to the train's own left and right. The car model is drawn in
+     * the track's axes — {@code RenderCoasterCar} loads {@code (right, up, forward)} straight onto
+     * the matrix stack, so model {@code +x} is {@code frame.right} whichever way the train is
+     * running — and metro stock is double-ended, so it is not flipped when a service reverses.
+     * Rendering therefore wants this answer as-is. Only the things said to a <em>person</em> want
+     * it converted, and those call {@link DoorSide#asSeenFrom} at the point of use.</p>
+     *
+     * <p><b>Resolved against the station registry, not against the line's own copy.</b> A
+     * {@link TransitLine} snapshots its stations by value — which is what lets a line survive its
+     * stations being renamed or deleted — so a door side authored after the line was created lives
+     * only in the registry, and reading the line's copy would quietly serve the old answer forever.
+     * The line's copy is the fallback for a station that has since been removed from the registry
+     * altogether.</p>
+     */
+    public DoorSide doorSideFor(LineService service) {
+        if (service == null) {
+            return DoorSide.BOTH;
+        }
+        TransitStation stop = service.line().station(service.currentStopIndex());
+        TransitStation authoritative = station(stop.name());
+        return (authoritative == null ? stop : authoritative).doorSide();
     }
 
     // --- Services. -----------------------------------------------------------------------------

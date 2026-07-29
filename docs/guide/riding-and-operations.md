@@ -11,6 +11,10 @@ you walk through the doorway off a level platform, exactly as you would in life.
 That is safe because doors only open when a train is berthed and stopped — no moving car is ever
 non-solid. A short grace period after dismounting stops the auto-seat trapping you aboard.
 
+**Only the platform side opens.** Which side that is comes from where the platform was built, and
+the train announces it as it runs in — *"Entering Harbor. The doors will open on the left."* — with
+enough warning to cross the car first.
+
 **And you get off the same way: walk out through an open door.** No sneak, no dismount key — step
 through the doorway and you are on the platform, placed beside the door you used. The doorways are
 real openings, so this only works where there is one: walking into the wall between them stops you,

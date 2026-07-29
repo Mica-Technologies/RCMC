@@ -202,11 +202,33 @@ final class MetroCarModel {
                      boolean drawPantograph, float wireHeight, float doorFraction,
                      boolean lightsOn, boolean outerFront, boolean outerRear,
                      float[] bodyColour, float[] trimColour, float[] seatColour) {
+        emit(buffer, bogieSpacing, drawCoupling, drawPantograph, wireHeight, doorFraction,
+            doorFraction, lightsOn, outerFront, outerRear, bodyColour, trimColour, seatColour);
+    }
+
+    /**
+     * As above, but with the two sides animated independently.
+     *
+     * <p>Most stations have a platform on one side only, and doors that open onto the trackbed
+     * look wrong and invite a passenger to step out of one. The sides are given in the car's own
+     * model axes, which are the TRACK's axes: {@code +x} is {@code frame.right} whichever way the
+     * train is running (see {@code RenderCoasterCar}, which loads the frame straight onto the
+     * matrix stack, and note that metro stock is double-ended so it is never flipped).</p>
+     *
+     * @param rightFraction how far the {@code +x} side's leaves have slid, 0 shut to 1 open
+     * @param leftFraction  likewise for the {@code -x} side
+     */
+    static void emit(BufferBuilder buffer, float bogieSpacing, boolean drawCoupling,
+                     boolean drawPantograph, float wireHeight, float rightFraction,
+                     float leftFraction, boolean lightsOn, boolean outerFront, boolean outerRear,
+                     float[] bodyColour, float[] trimColour, float[] seatColour) {
         float bodyLength = bogieSpacing / TRUCK_CENTRE_RATIO;
         float half = bodyLength * 0.5F;
         // Unlit, the interior is not black — it is dim. Everything inside is drawn through this
         // factor so switching the lights off dims the saloon rather than only dulling the fittings.
         float shade = lightsOn ? 1.0F : 0.55F;
+        // Anything that only cares WHETHER doors are moving takes the wider of the two.
+        float doorFraction = Math.max(rightFraction, leftFraction);
 
         // Underframe skirt between the trucks, and the floor slab the whole interior stands on.
         box(buffer, -SKIRT_HALF_WIDTH, SKIRT_BOTTOM, -half + 0.3F,
@@ -215,9 +237,9 @@ final class MetroCarModel {
             BODY_HALF_WIDTH, FLOOR_TOP, half, UNDERFRAME_COLOR);
 
         emitSide(buffer, half, BODY_HALF_WIDTH - WALL_THICKNESS, BODY_HALF_WIDTH,
-            bodyColour, trimColour, doorFraction, shade);
+            bodyColour, trimColour, rightFraction, shade);
         emitSide(buffer, half, -BODY_HALF_WIDTH, -BODY_HALF_WIDTH + WALL_THICKNESS,
-            bodyColour, trimColour, doorFraction, shade);
+            bodyColour, trimColour, leftFraction, shade);
 
         // Ends differ now: an end facing out of the consist is a cab with a windshield, an end
         // facing the next car carries a gangway door. The body itself stays symmetric — which end

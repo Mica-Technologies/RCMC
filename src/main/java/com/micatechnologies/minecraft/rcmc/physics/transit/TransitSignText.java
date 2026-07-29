@@ -85,6 +85,25 @@ public final class TransitSignText {
     }
 
     /**
+     * The in-car announcement made as a train runs into a station, naming it and the side the doors
+     * will open: {@code "Entering Alewife. The doors will open on the left."}
+     *
+     * <p>Said <em>before</em> arrival, unlike {@link #arrivalAnnouncement}, because the point of it
+     * is to give a standing passenger time to move to the right side of the car — an announcement
+     * telling you which door to use as it opens is too late to be useful.</p>
+     *
+     * @param side which side opens <b>as this train sees it</b> — already converted through
+     *             {@link DoorSide#asSeenFrom}, because a platform on the track's left is on the
+     *             rider's right when the train runs the other way
+     */
+    public static String enteringAnnouncement(String stationName, DoorSide side) {
+        String doors = side == DoorSide.BOTH
+            ? "The doors will open on both sides."
+            : "The doors will open on the " + side.spokenLabel() + ".";
+        return "Entering " + stationName + ". " + doors;
+    }
+
+    /**
      * The full spoken announcement for a station speaker:
      * {@code "The next OUTBOUND Red Line train to Alewife is now approaching."} Returns {@code null}
      * when the service does not reach this station (nothing to announce).

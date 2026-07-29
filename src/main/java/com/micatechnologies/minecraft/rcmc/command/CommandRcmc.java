@@ -97,7 +97,11 @@ public class CommandRcmc extends CommandBase {
             return getListOfStringsMatchingLastWord(args, "start", "end");
         }
         if (args.length == 2 && "station".equalsIgnoreCase(args[0])) {
-            return getListOfStringsMatchingLastWord(args, "list", "remove");
+            return getListOfStringsMatchingLastWord(args, "list", "remove", "doors");
+        }
+        if (args.length == 4 && "station".equalsIgnoreCase(args[0])
+            && "doors".equalsIgnoreCase(args[1])) {
+            return getListOfStringsMatchingLastWord(args, "left", "right", "both", "auto");
         }
         if (args.length == 2 && "build".equalsIgnoreCase(args[0])) {
             return getListOfStringsMatchingLastWord(args, "bank", "circuit", "status", "cancel");
@@ -543,8 +547,23 @@ public class CommandRcmc extends CommandBase {
             }
         }
 
+        // The platform is the answer to "which side do the doors open" — detect it from what was
+        // just built rather than from the argument, so a hand-built platform and a commanded one
+        // are read the same way and there is only ever one source of truth for it.
+        com.micatechnologies.minecraft.rcmc.physics.transit.DoorSide detected =
+            com.micatechnologies.minecraft.rcmc.world.PlatformSide.detect(
+                world, state.network(), station);
+        if (detected != null && detected != station.doorSide()) {
+            state.transit().addStation(station.withDoorSide(detected));
+            RcmcNetwork.sendToAllIn(new com.micatechnologies.minecraft.rcmc.net.PacketTransitSync(
+                state.transit()), world.provider.getDimension());
+        }
+
         reply(sender, TextFormatting.GREEN, "Platform built at " + station.name() + " — "
-            + blocks + " blocks, " + fmt(to - from) + " blocks long, " + width + " wide.");
+            + blocks + " blocks, " + fmt(to - from) + " blocks long, " + width + " wide."
+            + (detected == null ? ""
+                : " Doors will open on the " + detected.name().toLowerCase(java.util.Locale.ROOT)
+                    + " of the track."));
         double step = Math.abs(CarSeating.METRO_FLOOR_HEIGHT
             - Math.round(CarSeating.METRO_FLOOR_HEIGHT));
         reply(sender, TextFormatting.GRAY, step < 0.05D
@@ -700,7 +719,8 @@ public class CommandRcmc extends CommandBase {
     private void station(ICommandSender sender, World world, RcmcWorldState state, String[] args)
         throws CommandException {
         if (args.length < 2) {
-            throw new CommandException("/rcmc station <name> | list | remove <name>");
+            throw new CommandException(
+                "/rcmc station <name> | list | remove <name> | doors <name> <left|right|both|auto>");
         }
         com.micatechnologies.minecraft.rcmc.physics.transit.TransitSystem transit = state.transit();
         switch (args[1].toLowerCase(java.util.Locale.ROOT)) {
@@ -712,8 +732,44 @@ public class CommandRcmc extends CommandBase {
                 for (com.micatechnologies.minecraft.rcmc.physics.transit.TransitStation s
                     : transit.stations()) {
                     reply(sender, TextFormatting.AQUA, s.name() + " — section "
-                        + s.stopPoint().sectionId() + " @ " + fmt(s.stopPoint().distance()));
+                        + s.stopPoint().sectionId() + " @ " + fmt(s.stopPoint().distance())
+                        + ", doors " + s.doorSide().name().toLowerCase(java.util.Locale.ROOT));
                 }
+                return;
+            }
+            case "doors": {
+                // Manual override for the automatic detection — a platform that is not built out
+                // of RCMC's own blocks cannot be found by looking, and an island platform served
+                // on one side only is a legitimate thing to want.
+                if (args.length < 4) {
+                    throw new CommandException("/rcmc station doors <name> <left|right|both|auto>");
+                }
+                com.micatechnologies.minecraft.rcmc.physics.transit.TransitStation station =
+                    transit.station(args[2]);
+                if (station == null) {
+                    throw new CommandException("No station named " + args[2]);
+                }
+                com.micatechnologies.minecraft.rcmc.physics.transit.DoorSide side;
+                if ("auto".equalsIgnoreCase(args[3])) {
+                    side = com.micatechnologies.minecraft.rcmc.world.PlatformSide.detect(
+                        world, state.network(), station);
+                    if (side == null) {
+                        throw new CommandException("No platform found either side of " + args[2]
+                            + " — build one, or set the side explicitly");
+                    }
+                }
+                else {
+                    side = com.micatechnologies.minecraft.rcmc.physics.transit.DoorSide.parse(args[3]);
+                    if (side == null) {
+                        throw new CommandException("Side must be left, right, both or auto");
+                    }
+                }
+                transit.addStation(station.withDoorSide(side));
+                state.markTrackDirty(world);
+                RcmcNetwork.sendToAllIn(new com.micatechnologies.minecraft.rcmc.net.PacketTransitSync(transit), world.provider.getDimension());
+                reply(sender, TextFormatting.GREEN, "Doors at " + station.name() + " open on the "
+                    + side.name().toLowerCase(java.util.Locale.ROOT)
+                    + " of the track (as a train running forward sees it).");
                 return;
             }
             case "remove": {
@@ -736,13 +792,25 @@ public class CommandRcmc extends CommandBase {
                 if (hit == null) {
                     throw new CommandException("No track within 16 blocks — stand at the platform");
                 }
-                transit.addStation(new com.micatechnologies.minecraft.rcmc.physics.transit
-                    .TransitStation(args[1], hit.ref));
+                com.micatechnologies.minecraft.rcmc.physics.transit.TransitStation created =
+                    new com.micatechnologies.minecraft.rcmc.physics.transit.TransitStation(
+                        args[1], hit.ref);
+                // Look for a platform now. If one is already there the answer is authored by the
+                // build rather than by a second command; if not, the station keeps BOTH and
+                // /rcmc platform will settle it when the platform goes in.
+                com.micatechnologies.minecraft.rcmc.physics.transit.DoorSide detected =
+                    com.micatechnologies.minecraft.rcmc.world.PlatformSide.detect(
+                        world, state.network(), created);
+                if (detected != null) {
+                    created = created.withDoorSide(detected);
+                }
+                transit.addStation(created);
                 state.markTrackDirty(world);
                 RcmcNetwork.sendToAllIn(new com.micatechnologies.minecraft.rcmc.net.PacketTransitSync(transit), world.provider.getDimension());
                 reply(sender, TextFormatting.GREEN, "Station " + args[1] + " at section "
                     + hit.ref.sectionId() + " @ " + fmt(hit.ref.distance())
-                    + " (trains stop with their lead car here).");
+                    + " (trains stop with their lead car here)."
+                    + (detected == null ? "" : " Doors: " + detected.name().toLowerCase(java.util.Locale.ROOT) + "."));
             }
         }
     }

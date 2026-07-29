@@ -23,9 +23,27 @@ public final class ServiceSnapshot {
     private final double doorFraction;
     private final double distanceToNextStop;
 
+    /**
+     * Which side of the <b>track</b> the doors open at the current stop.
+     *
+     * <p>Track-relative, not rider-relative: the car model is drawn in the track's own axes, so
+     * this is the form the renderer wants. Anything spoken to a passenger converts it through
+     * {@link DoorSide#asSeenFrom} first. Sent rather than derived because a client has no station
+     * registry to look it up in, and a line's own copy of a station can be stale — see
+     * {@code TransitSystem.doorSideFor}.</p>
+     */
+    private final DoorSide doorSide;
+
     public ServiceSnapshot(int trainId, String lineName, int serviceDirection, int nextStopIndex,
                            boolean atPlatform, boolean doorsOpen, double doorFraction,
                            double distanceToNextStop) {
+        this(trainId, lineName, serviceDirection, nextStopIndex, atPlatform, doorsOpen,
+            doorFraction, distanceToNextStop, DoorSide.BOTH);
+    }
+
+    public ServiceSnapshot(int trainId, String lineName, int serviceDirection, int nextStopIndex,
+                           boolean atPlatform, boolean doorsOpen, double doorFraction,
+                           double distanceToNextStop, DoorSide doorSide) {
         if (lineName == null || lineName.isEmpty()) {
             throw new IllegalArgumentException("lineName is required");
         }
@@ -43,15 +61,21 @@ public final class ServiceSnapshot {
         this.doorsOpen = doorsOpen;
         this.doorFraction = Math.max(0.0D, Math.min(1.0D, doorFraction));
         this.distanceToNextStop = distanceToNextStop;
+        this.doorSide = doorSide == null ? DoorSide.BOTH : doorSide;
     }
 
-    /** Snapshot of a live service. */
-    public static ServiceSnapshot of(int trainId, LineService service) {
+    /**
+     * Snapshot of a live service.
+     *
+     * @param doorSide the current stop's TRACK-relative door side — resolved by the caller, which
+     *                 is the only layer holding the station registry needed to look it up
+     */
+    public static ServiceSnapshot of(int trainId, LineService service, DoorSide doorSide) {
         return new ServiceSnapshot(trainId, service.line().name(), service.serviceDirection(),
             service.currentStopIndex(),
             service.controller().phase() != TransitStopController.Phase.APPROACHING,
             service.controller().doorsOpen(), service.controller().doorFraction(),
-            service.distanceToNextStop());
+            service.distanceToNextStop(), doorSide);
     }
 
     /** The train running this service — how an in-car sign finds its own. */
@@ -95,6 +119,11 @@ public final class ServiceSnapshot {
      * approaching" announcement until the train is genuinely close, instead of the moment this
      * station becomes its next stop.
      */
+    /** Which side of the track the doors open at the current stop. Never null. */
+    public DoorSide doorSide() {
+        return doorSide;
+    }
+
     public double distanceToNextStop() {
         return distanceToNextStop;
     }

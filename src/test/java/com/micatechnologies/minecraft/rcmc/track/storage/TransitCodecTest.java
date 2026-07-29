@@ -136,4 +136,39 @@ class TransitCodecTest {
         assertTrue(read.lines().isEmpty());
         assertTrue(read.signals().isEmpty());
     }
+
+    @Test
+    @DisplayName("a station's door side survives a round trip")
+    void doorSideRoundTrips() {
+        TransitSystem transit = new TransitSystem();
+        transit.addStation(station("North", 1, 10.0D)
+            .withDoorSide(com.micatechnologies.minecraft.rcmc.physics.transit.DoorSide.LEFT));
+        transit.addStation(station("South", 1, 90.0D)
+            .withDoorSide(com.micatechnologies.minecraft.rcmc.physics.transit.DoorSide.RIGHT));
+
+        TransitSystem out = roundTrip(transit);
+
+        assertEquals(com.micatechnologies.minecraft.rcmc.physics.transit.DoorSide.LEFT,
+            out.station("North").doorSide());
+        assertEquals(com.micatechnologies.minecraft.rcmc.physics.transit.DoorSide.RIGHT,
+            out.station("South").doorSide());
+    }
+
+    @Test
+    @DisplayName("a save from before door sides reads as BOTH, not as LEFT")
+    void olderSaveDefaultsToBoth() {
+        // The trap this guards. DoorSide.LEFT is ordinal 0, and getInteger on a missing key returns
+        // 0 — so a v1 or v2 save read carelessly would silently weld every station's right-hand
+        // doors shut. Absence has to mean BOTH, which is what those stations actually did.
+        NBTTagCompound tag = new NBTTagCompound();
+        TransitCodec.write(sample(), tag);
+        for (int i = 0; i < tag.getTagList("TransitStations", 10).tagCount(); i++) {
+            tag.getTagList("TransitStations", 10).getCompoundTagAt(i).removeTag("DoorSide");
+        }
+
+        TransitSystem out = TransitCodec.read(tag);
+
+        assertEquals(com.micatechnologies.minecraft.rcmc.physics.transit.DoorSide.BOTH,
+            out.station("North").doorSide());
+    }
 }

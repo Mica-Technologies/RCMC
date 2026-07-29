@@ -231,8 +231,18 @@ public class RenderCoasterCar extends Render<EntityCoasterCar> {
             boolean outerFront = entity.carIndex() == 0;
             boolean outerRear = entity.carIndex() == spec.carCount() - 1;
             // Pantographs on alternate cars, like a real EMU consist.
+            // Only the platform side opens. The side is track-relative and so is this model's
+            // +x axis (the frame is loaded straight onto the matrix stack above), so no conversion
+            // is needed here — and metro stock is double-ended, so a reversing service does not
+            // flip the model out from under it.
+            com.micatechnologies.minecraft.rcmc.physics.transit.DoorSide side =
+                com.micatechnologies.minecraft.rcmc.world.MetroDoors.openSide(
+                    entity.world, entity.trainId());
+            float rightFraction = side.opensRight() ? doorFraction : 0.0F;
+            float leftFraction = side.opensLeft() ? doorFraction : 0.0F;
             MetroCarModel.emit(buffer, length, drawCoupling, entity.carIndex() % 2 == 0,
-                (float) wireHeightFor(entity), doorFraction, lightsOn, outerFront, outerRear,
+                (float) wireHeightFor(entity), rightFraction, leftFraction,
+                lightsOn, outerFront, outerRear,
                 colourOf(spec, TrainSpec.Part.BODY, 3),
                 colourOf(spec, TrainSpec.Part.TRIM, 4),
                 colourOf(spec, TrainSpec.Part.SEATS, 1));

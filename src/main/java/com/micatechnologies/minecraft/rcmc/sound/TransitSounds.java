@@ -4,6 +4,8 @@ import com.micatechnologies.minecraft.rcmc.net.PacketStationAnnounce;
 import com.micatechnologies.minecraft.rcmc.net.RcmcNetwork;
 import com.micatechnologies.minecraft.rcmc.physics.Train;
 import com.micatechnologies.minecraft.rcmc.physics.TrainManager;
+import com.micatechnologies.minecraft.rcmc.physics.transit.ArrivalEstimator;
+import com.micatechnologies.minecraft.rcmc.physics.transit.DoorSide;
 import com.micatechnologies.minecraft.rcmc.physics.transit.LineService;
 import com.micatechnologies.minecraft.rcmc.physics.transit.TransitLine;
 import com.micatechnologies.minecraft.rcmc.physics.transit.TransitSignText;
@@ -76,6 +78,24 @@ public final class TransitSounds {
     /** trainId -> whether its warning chime has already played for the stop it is at. */
     private final Map<Integer, Boolean> chimed = new HashMap<>();
 
+    /**
+     * trainId -> the stop index its "Entering …" call has already been made for.
+     *
+     * <p>Keyed by stop rather than by a boolean so the call fires once per approach and rearms
+     * itself for the next station without needing to spot a departure.</p>
+     */
+    private final Map<Integer, Integer> enteringAnnounced = new HashMap<>();
+
+    /**
+     * How long before berthing the "Entering …" call goes out, in seconds.
+     *
+     * <p>Long enough that a standing passenger can cross the saloon to the door before it opens,
+     * which is the entire point of telling them which side it will be. Timed against the estimated
+     * arrival rather than a distance, for the reason set out in {@code ArrivalEstimator}: a
+     * distance is not an amount of time.</p>
+     */
+    private static final double ENTERING_LEAD_SECONDS = 9.0D;
+
     /** In-car announcements waiting on their timer — see {@link PendingAnnouncement}. */
     private final List<PendingAnnouncement> pending = new ArrayList<>();
 
@@ -114,11 +134,16 @@ public final class TransitSounds {
                 chimed.remove(trainId);
             }
 
+            announceEntering(world, transit, trainId, service, train, network);
+
             if (previous == null || previous == phase) {
                 continue;
             }
             if (phase == TransitStopController.Phase.DOORS_OPENING
                 && previous == TransitStopController.Phase.APPROACHING) {
+                // Berthing: the "Entering …" call has served its purpose, and clearing it here is
+                // what rearms it for the next station.
+                enteringAnnounced.remove(trainId);
                 // Arrived: the doors are starting to open. Ding now, then say "This is <here>".
                 // currentStopIndex is still the station being berthed at.
                 play(world, train, network, RcmcSounds.METRO_ANNOUNCE_CHIME);
@@ -161,6 +186,38 @@ public final class TransitSounds {
     }
 
     /** Counts down queued announcements and, when one comes due, chimes and/or speaks it. */
+    /**
+     * Says "Entering X. The doors will open on the left." as a train runs into a station.
+     *
+     * <p>Before arrival, not on it: a passenger told which door to use as it opens has been told
+     * too late to walk to it. Fired once per approach, on the same arrival-time estimate the
+     * platform speaker uses, so it lands with time to cross the car.</p>
+     *
+     * <p>The side is converted to the <em>rider's</em> left and right here — this is the one place
+     * that matters, because it is the only one talking to a person. The renderer and the snapshot
+     * both keep it track-relative.</p>
+     */
+    private void announceEntering(World world, TransitSystem transit, int trainId,
+                                  LineService service, Train train, TrackNetwork network) {
+        if (service.controller().phase() != TransitStopController.Phase.APPROACHING) {
+            return;
+        }
+        int stopIndex = service.currentStopIndex();
+        if (Integer.valueOf(stopIndex).equals(enteringAnnounced.get(trainId))) {
+            return;
+        }
+        double seconds = ArrivalEstimator.secondsToArrival(service.distanceToNextStop(),
+            train.velocity(), service.controller().serviceBrakeDeceleration());
+        if (seconds > ENTERING_LEAD_SECONDS) {
+            return;
+        }
+        enteringAnnounced.put(trainId, stopIndex);
+        DoorSide side = transit.doorSideFor(service).asSeenFrom(service.facing());
+        play(world, train, network, RcmcSounds.METRO_ANNOUNCE_CHIME);
+        pending.add(new PendingAnnouncement(trainId, CHIME_TO_SPEECH_TICKS,
+            TransitSignText.enteringAnnouncement(stopName(service, stopIndex), side), false));
+    }
+
     private void firePending(World world, TrainManager trains, TrackNetwork network) {
         if (pending.isEmpty()) {
             return;
