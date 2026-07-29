@@ -125,14 +125,23 @@ public final class RcmcWorldState {
     }
 
     /**
-     * Whether restored trains still need their car entities.
+     * Ticks until the next check that every train has its car entities.
      *
-     * <p>Deferred to the first world tick rather than done during {@link #of}, which is a lazy
-     * getter reachable from a chunk load, a command, or a render path. Spawning entities from
-     * whichever of those happens to touch the state first is not something to leave to chance;
-     * a tick is a defined moment when the world is running.</p>
+     * <p>Per world rather than on the event handler, which is one shared instance across every
+     * dimension.</p>
      */
-    private boolean carsPending;
+    private int carReconcileCountdown;
+
+    /**
+     * How often to check that trains have their cars, in ticks.
+     *
+     * <p>Once a second. It cannot be a one-off at load: {@code World.spawnEntity} refuses silently
+     * while the target chunk is unloaded, which on the first tick after a world load it always is —
+     * and cars are not saved with their chunks, so an unloaded chunk destroys them permanently. See
+     * {@link TrainEntities#spawnMissingCars}. A second is short enough that nobody watches a train
+     * arrive without its cars, and the check is a scan of already-loaded entities.</p>
+     */
+    private static final int CAR_RECONCILE_INTERVAL_TICKS = 20;
 
     /**
      * Puts saved services back into service.
@@ -142,12 +151,24 @@ public final class RcmcWorldState {
      */
     private void resumeServices(RcmcTrackData data) {
         net.minecraft.nbt.NBTTagCompound saved = data.takePendingServices();
+        int resumed = 0;
         if (saved != null) {
-            com.micatechnologies.minecraft.rcmc.track.storage.TrainCodec.readServices(
+            resumed = com.micatechnologies.minecraft.rcmc.track.storage.TrainCodec.readServices(
                 saved, trains, transit, network,
                 com.micatechnologies.minecraft.rcmc.RcmcConstants.SECONDS_PER_TICK);
         }
-        carsPending = !trains.isEmpty();
+        if (!trains.isEmpty()) {
+            // Logged because a park coming back wrong is otherwise silent, and the difference
+            // between "the save lost my trains" and "the save has them but nothing spawned" is the
+            // first thing anyone needs to know. It is one line per world load, not per tick.
+            com.micatechnologies.minecraft.rcmc.Rcmc.LOGGER.info(
+                "Restored {} train(s) and resumed {} service(s) on {} track section(s)",
+                trains.count(), resumed, network.sections().size());
+        }
+        // Check for missing cars on the very next tick rather than a second in: a world that just
+        // loaded is the case that most needs them, even though it usually takes a few attempts
+        // before the chunks are there to spawn into.
+        carReconcileCountdown = 0;
     }
 
     public TrackNetwork network() {
@@ -332,6 +353,27 @@ public final class RcmcWorldState {
 
         private int tickCounter;
 
+        /**
+         * Brings a server world's state up as it loads, rather than whenever something first asks
+         * for it.
+         *
+         * <p>{@link #of} is lazy, and before trains persisted that was fine: nothing existed until
+         * a player ran a command, which created the state on the way. A world that loads with
+         * trains already in it has no such trigger, so nothing would resume its services or
+         * reconcile its cars until something happened to ask for the state — for a dimension nobody
+         * is standing in, potentially never.</p>
+         *
+         * <p>Note this does not make trains <em>run</em> with nobody online; the tick hook pauses
+         * them in place for that. It makes them <em>ready</em>, so the first tick after someone
+         * arrives is a normal one rather than a cold start.</p>
+         */
+        @SubscribeEvent
+        public void onWorldLoad(WorldEvent.Load event) {
+            if (event.getWorld() != null && !event.getWorld().isRemote) {
+                of(event.getWorld());
+            }
+        }
+
         @SubscribeEvent
         public void onWorldUnload(WorldEvent.Unload event) {
             STATES.remove(event.getWorld());
@@ -393,10 +435,24 @@ public final class RcmcWorldState {
             if (state == null || state.trains.isEmpty()) {
                 return;
             }
-            if (state.carsPending && !event.world.isRemote) {
-                // Restored trains have no car entities: cars are not saved, precisely so that the
-                // train in the save file is the only thing that decides how many exist.
-                state.carsPending = false;
+            if (!event.world.isRemote && event.world.playerEntities.isEmpty()) {
+                // Nobody here to see it: freeze, in place, exactly as it stands. Not a shutdown —
+                // skipping the tick advances nothing at all, so a train holds its position and
+                // velocity, a dwell timer holds its remaining ticks, and a service stays a service.
+                // When someone arrives it continues from that state as though no time had passed.
+                //
+                // This is per DIMENSION, because that is what a world tick is. A metro in the
+                // overworld pauses while the only player online is in the nether — nobody can see
+                // it there either, and the alternative is burning tick time simulating a park with
+                // no observer. Change this to a server-wide player count if that ever reads wrong.
+                return;
+            }
+            if (!event.world.isRemote && --state.carReconcileCountdown <= 0) {
+                // Standing reconciliation, not a one-off at load. A car is a rendering of a train
+                // that the world is free to discard — an unloaded chunk takes its cars with it, and
+                // a spawn into a chunk that has not arrived yet is silently refused. Both are
+                // answered by simply checking again. See TrainEntities.spawnMissingCars.
+                state.carReconcileCountdown = CAR_RECONCILE_INTERVAL_TICKS;
                 TrainEntities.spawnMissingCars(event.world, state);
             }
             // Trains move every tick, so the saved copy is stale the moment it is written.
