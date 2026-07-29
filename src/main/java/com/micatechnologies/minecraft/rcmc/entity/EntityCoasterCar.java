@@ -47,6 +47,18 @@ public class EntityCoasterCar extends Entity {
     private TrackFrame frame;
     private TrackFrame previousFrame;
 
+    /**
+     * True for a car loaded out of chunk NBT — which now means only one thing: it was saved by a
+     * version of the mod that still persisted cars.
+     *
+     * <p>Cars are no longer written to disk ({@link #writeToNBTOptional}); {@code TrainEntities}
+     * creates exactly the cars the saved trains call for. A car arriving from disk is therefore a
+     * duplicate of one this world has already made, and it removes itself. Without this, a world
+     * saved before train persistence would grow a second, unowned car for every one it restored —
+     * identical, superimposed, and separately boardable — as each old chunk loaded.</p>
+     */
+    private boolean restoredFromDisk;
+
     public EntityCoasterCar(World world) {
         super(world);
         // Vanilla collision and movement are entirely bypassed: position comes from the track.
@@ -94,10 +106,28 @@ public class EntityCoasterCar extends Entity {
         this.prevPosZ = this.posZ;
         this.previousFrame = this.frame;
 
+        if (!this.world.isRemote && restoredFromDisk) {
+            // A car from a save that predates train persistence. The world has already created the
+            // cars its trains call for, so this one is a duplicate of an existing car — see the
+            // field javadoc. Removed on its first tick, before it can be boarded or collided with.
+            setDead();
+            return;
+        }
+
         RcmcWorldState state = RcmcWorldState.of(this.world);
         TrainManager manager = state == null ? null : state.trains();
         TrackNetwork network = state == null ? null : state.network();
         Train train = manager == null ? null : manager.train(trainId());
+
+        if (train == null && !this.world.isRemote && state != null) {
+            // Server-side there is no such thing as a car whose train has not arrived yet: a train
+            // is registered before its cars are spawned, in both the command and the restore path.
+            // So this car has outlived its train — /rcmc rmsection or /rcmc clear removed it — and
+            // nothing else will ever clean it up. (Client-side this IS a normal transient, which is
+            // why the check is sided.)
+            setDead();
+            return;
+        }
 
         if (train == null || network == null) {
             // No train behind this entity — it outlived its train, or the client has not yet
@@ -529,11 +559,33 @@ public class EntityCoasterCar extends Entity {
     protected void readEntityFromNBT(NBTTagCompound compound) {
         this.dataManager.set(TRAIN_ID, compound.getInteger("TrainId"));
         this.dataManager.set(CAR_INDEX, compound.getInteger("CarIndex"));
+        // Only a car saved before train persistence can arrive here — see the field javadoc.
+        this.restoredFromDisk = true;
     }
 
     @Override
     protected void writeEntityToNBT(NBTTagCompound compound) {
         compound.setInteger("TrainId", trainId());
         compound.setInteger("CarIndex", carIndex());
+    }
+
+    /**
+     * Refuses to be saved with the chunk.
+     *
+     * <p>The train in {@code RcmcTrackData} is the only thing that decides how many cars exist and
+     * where they are; a car is a rendering of it. Persisting cars as well would create a second
+     * source of truth that disagrees with the first whenever a chunk's loaded state at save time
+     * differs from its state at load time — which is most of the time, for a coaster spanning
+     * hundreds of blocks.</p>
+     *
+     * <p>Vanilla calls this from {@code Chunk.writeToNBT}'s entity loop and skips the entity
+     * entirely when it returns false; that is the same mechanism a mounted entity uses to avoid
+     * being written twice. {@link #writeEntityToNBT} is deliberately left intact rather than
+     * emptied, so that anything which serialises a car for another reason still produces something
+     * meaningful.</p>
+     */
+    @Override
+    public boolean writeToNBTOptional(NBTTagCompound compound) {
+        return false;
     }
 }

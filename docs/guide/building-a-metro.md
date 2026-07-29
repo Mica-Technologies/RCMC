@@ -239,8 +239,10 @@ the only knob.
 
 Things you will run into, listed so they read as gaps rather than bugs:
 
-- **Trains do not persist.** Stations, lines, switches and signals all save with the world; trains
-  do not, so services do not survive a restart. Re-spawn and restart the service.
+- **A resumed service restarts its stop cycle.** Trains and their services *do* persist, but a
+  train saved berthed with its doors open reloads berthed with them shut and opens them again, and
+  one saved mid-dwell serves a full dwell. It is indistinguishable from a train that has just
+  arrived — which, after a reload, is what it is.
 - **No door-alignment markers.** The platform knows where the train berths, but nothing marks where
   each doorway will land.
 - **Signal boundaries are equal divisions only** (above).

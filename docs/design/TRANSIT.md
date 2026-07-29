@@ -155,6 +155,32 @@ there worth saving. What *is* persisted is each line's blocks, margin and horizo
     anything, grep its public entry points from outside their own package. No hits means it is not
     wired, however green the tests are.**
 
+## Persistence
+
+Stations, lines and signalling are authored content and save with the track (`TransitCodec`).
+**Trains and their services save alongside them** (`TrainCodec`), so a metro line is still running
+when the world comes back.
+
+What a service actually stores is small on purpose: **the line and the cruise speed, nothing else**.
+Which stop is next, which way the train faces, where it is in the door cycle — all of it is
+re-derived on load by `enterService`, which walks the track from wherever the train stands. That is
+not a shortcut around serialising the controller's timers; it is more correct than doing so. The
+track can be edited while the world is closed, and a saved *"next stop is index 4, facing +1"* could
+come back pointing at a station that has since moved, been renamed, or been deleted. A re-derived
+one cannot go stale.
+
+Two things are deliberately absent from the save:
+
+- **Fault status and the held flag.** Both are functions of the train's position, velocity and the
+  track under it — all of which *are* saved — so they re-latch on the first tick. Persisting them
+  would need a setter on `Train` that exists only for the codec, and would let a stale fault outlive
+  the condition that caused it.
+- **Car entities.** Cars are not written to chunk NBT at all. The train in the save decides how many
+  exist and where they are, and `TrainEntities` creates exactly those on load. Saving them too would
+  be a second source of truth that disagrees with the first whenever a chunk's loaded state at save
+  time differs from its state at load time — which, for a coaster spanning hundreds of blocks, is
+  most of the time.
+
 ## Sync: one format, two uses
 
 - **`PacketTransitSync`** — the authored stations and lines. Full-send on join and on every command
@@ -196,7 +222,7 @@ keep it that way.
 
 | Limit | Why |
 | --- | --- |
-| Trains do not persist | `TransitCodec` deliberately saves stations and lines only; trains themselves have no save format yet, so services vanish with them |
+| A resumed service restarts its stop cycle | `TrainCodec` saves a service's line and cruise speed, not its controller's phase and timers. A train saved berthed with its doors open reloads berthed and opens them again. Re-deriving from where the train stands cannot go stale the way a saved "next stop is index 4" can, if the track changed while the world was closed |
 | Signal boundaries are equal divisions | Placing individual boundaries is tool work that has not been done; the command divides evenly as a starting point |
 | Remote players' in-car walking is not synced | Offsets are computed on each side from local input, so a remote player renders where they boarded |
 | No transit-specific build validation | Gentler curve radii, level platforms and station gradient limits are not enforced |

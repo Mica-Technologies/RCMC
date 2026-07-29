@@ -39,7 +39,16 @@ public final class RcmcWorldState {
     private static final Map<World, RcmcWorldState> STATES = new WeakHashMap<>();
 
     private TrackNetwork network;
-    private final TrainManager trains = new TrainManager();
+
+    /**
+     * Trains in this world.
+     *
+     * <p>On the server this is {@code RcmcTrackData}'s own manager, not a copy — the save writes
+     * whatever this reference holds, so a second instance would mean the world running one set of
+     * trains and persisting another. On a client it is a local mirror populated by
+     * {@code PacketTrainSync}.</p>
+     */
+    private TrainManager trains = new TrainManager();
 
     /**
      * Server-side undo/redo of the authored state. {@code null} on a client, where the network is a
@@ -102,11 +111,43 @@ public final class RcmcWorldState {
             created = new RcmcWorldState(data.network(), false);
             created.elements = data.elements();
             created.transit = data.transit();
+            created.trains = data.trains();
             // Seed history with the loaded state so the first edit is undoable.
             created.history = new EditHistory(data.snapshot(), EditHistory.DEFAULT_DEPTH);
+            // Must happen after the fields above are installed: putting a train back into service
+            // walks the network to find its next stop.
+            STATES.put(world, created);
+            created.resumeServices(data);
+            return created;
         }
         STATES.put(world, created);
         return created;
+    }
+
+    /**
+     * Whether restored trains still need their car entities.
+     *
+     * <p>Deferred to the first world tick rather than done during {@link #of}, which is a lazy
+     * getter reachable from a chunk load, a command, or a render path. Spawning entities from
+     * whichever of those happens to touch the state first is not something to leave to chance;
+     * a tick is a defined moment when the world is running.</p>
+     */
+    private boolean carsPending;
+
+    /**
+     * Puts saved services back into service.
+     *
+     * <p>Runs once, on first access to a freshly loaded world. Separate from the codec because it
+     * needs the network to walk, which the codec has no business touching.</p>
+     */
+    private void resumeServices(RcmcTrackData data) {
+        net.minecraft.nbt.NBTTagCompound saved = data.takePendingServices();
+        if (saved != null) {
+            com.micatechnologies.minecraft.rcmc.track.storage.TrainCodec.readServices(
+                saved, trains, transit, network,
+                com.micatechnologies.minecraft.rcmc.RcmcConstants.SECONDS_PER_TICK);
+        }
+        carsPending = !trains.isEmpty();
     }
 
     public TrackNetwork network() {
@@ -195,6 +236,24 @@ public final class RcmcWorldState {
             if (history != null && !history.isRestoring()) {
                 history.record(data.snapshot());
             }
+        }
+    }
+
+    /**
+     * Marks the save dirty because the set of trains changed, without touching the undo history.
+     *
+     * <p>Distinct from {@link #markTrackDirty} on purpose: spawning or withdrawing a train is not a
+     * building decision, so recording an undo snapshot for it would push real edits off the end of
+     * the history while adding entries that undo to an identical authored state.</p>
+     *
+     * <p>The per-tick mark in the tick hook covers a train that merely <em>moved</em>. This exists
+     * for the case that one cannot cover: removing the last train, after which the tick hook
+     * returns early and would never mark anything again — leaving the deleted train on disk, to
+     * reappear on the next load.</p>
+     */
+    public void markTrainsDirty(World world) {
+        if (world != null && !world.isRemote) {
+            RcmcTrackData.get(world).markNetworkDirty();
         }
     }
 
@@ -334,6 +393,18 @@ public final class RcmcWorldState {
             if (state == null || state.trains.isEmpty()) {
                 return;
             }
+            if (state.carsPending && !event.world.isRemote) {
+                // Restored trains have no car entities: cars are not saved, precisely so that the
+                // train in the save file is the only thing that decides how many exist.
+                state.carsPending = false;
+                TrainEntities.spawnMissingCars(event.world, state);
+            }
+            // Trains move every tick, so the saved copy is stale the moment it is written.
+            // WorldSavedData has no change detection and clears its own flag after each write, so
+            // without re-marking here an autosave would persist one position and then never update
+            // it — a train would reload wherever it happened to be at the last edit. markDirty is a
+            // boolean set; the serialisation itself still happens once per save.
+            state.markTrainsDirty(event.world);
             try {
                 // Only the server drives ride hardware; see the `elements` field javadoc.
                 com.micatechnologies.minecraft.rcmc.physics.TrainManager.ExternalAcceleration control
