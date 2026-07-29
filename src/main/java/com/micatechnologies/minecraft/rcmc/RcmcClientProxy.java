@@ -119,4 +119,9 @@ public class RcmcClientProxy extends RcmcCommonProxy {
     public void speakTts(String text, String voice) {
         com.micatechnologies.minecraft.rcmc.client.TtsBridge.speak(text, voice);
     }
+
+    @Override
+    public void warmUpTts() {
+        com.micatechnologies.minecraft.rcmc.client.TtsBridge.warmUp();
+    }
 }

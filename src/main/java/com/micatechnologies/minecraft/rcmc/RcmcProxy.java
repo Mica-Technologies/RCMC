@@ -35,4 +35,13 @@ public interface RcmcProxy {
      * {@link #isLocalPlayerAboard}.</p>
      */
     void speakTts(String text, String voice);
+
+    /**
+     * Starts any speech synthesiser loading, ahead of the first announcement.
+     *
+     * <p>Separate from {@link #speakTts} because the engine takes seconds to load and speaks
+     * through the game narrator until it is ready — so the warm-up has to happen well before the
+     * first thing anyone wants said.</p>
+     */
+    void warmUpTts();
 }
