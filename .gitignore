@@ -85,8 +85,11 @@ run/config/*
 logs/
 crash-reports/
 
-# Output of .github/scripts/server-smoke-test.sh when run locally.
+# Output of .github/scripts/server-smoke-test.sh when run locally. Glob rather than the one
+# default name, because SMOKE_LOG can point it anywhere and a stray boot log is easy to commit
+# by accident.
 server-smoke.log
+server-*.log
 
 # macOS Finder metadata
 .DS_Store

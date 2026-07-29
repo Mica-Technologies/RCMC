@@ -176,10 +176,35 @@ Two things are deliberately absent from the save:
   would need a setter on `Train` that exists only for the codec, and would let a stale fault outlive
   the condition that caused it.
 - **Car entities.** Cars are not written to chunk NBT at all. The train in the save decides how many
-  exist and where they are, and `TrainEntities` creates exactly those on load. Saving them too would
-  be a second source of truth that disagrees with the first whenever a chunk's loaded state at save
-  time differs from its state at load time — which, for a coaster spanning hundreds of blocks, is
-  most of the time.
+  exist and where they are, and `TrainEntities` creates exactly those. Saving them too would be a
+  second source of truth that disagrees with the first whenever a chunk's loaded state at save time
+  differs from its state at load time — which, for a coaster spanning hundreds of blocks, is most of
+  the time.
+
+### Cars are recreated, never restored
+
+`TrainEntities.spawnMissingCars` runs **once a second, forever**, not once at load. Two independent
+reasons, and the first one shipped as a bug:
+
+1. **`World.spawnEntity` silently returns `false` if the target chunk is not loaded**
+   (`World:1303`). On the first tick after a world loads, the chunks around a joining player have
+   not arrived yet — so a single attempt at load time spawns nothing, reports no error, and leaves
+   a world looking as though train persistence did not work. It did: the trains were restored and
+   the services were running, invisibly.
+2. Cars are not saved with their chunks, so an unloading chunk destroys them. Recreating them is
+   the only way they come back.
+
+The check is deliberately proportional to the **number of trains**, not to the number of entities in
+the world. A train whose lead car is in an unloaded chunk costs one `isBlockLoaded` call and stops
+there — no entity scan, no spawn attempt, because no car could exist there anyway. A loaded train
+costs one chunk-local AABB query. Scanning `loadedEntityList` would have made a quiet background
+check scale with a busy server's entity count.
+
+### Pausing
+
+A world tick with **no players in that dimension does nothing at all** — trains freeze in place,
+holding position, velocity and dwell timers, and resume untouched when someone arrives. Per
+dimension, because that is the granularity a world tick has.
 
 ## Sync: one format, two uses
 
