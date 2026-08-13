@@ -54,8 +54,25 @@ public final class LineService {
      */
     private static final double OVERSHOOT_WINDOW = 16.0D;
 
+    /**
+     * Resolves a station name against the live registry.
+     *
+     * <p>A {@link TransitLine} snapshots its stations <em>by value</em>, which is exactly what lets
+     * a line survive its stations being renamed or deleted — but it also means the line's copy of a
+     * station is frozen at the moment the line was created. A berth added afterwards exists only in
+     * the registry, so a service reading its own line's copy would never see the second platform of
+     * an island and would keep berthing on the wrong track forever.</p>
+     *
+     * <p>Same reasoning {@code TransitSystem.doorSideFor} already applies to the door side: the
+     * line owns the <em>route</em>, the registry owns each station's <em>current shape</em>.</p>
+     */
+    public interface StationLookup {
+        TransitStation station(String name);
+    }
+
     private final TransitLine line;
     private final TransitStopController controller;
+    private final StationLookup stations;
 
     private int stopIndex;
     private int serviceDirection;
@@ -86,6 +103,17 @@ public final class LineService {
      */
     public LineService(TransitLine line, TransitStopController controller,
                        int initialStopIndex, int serviceDirection, double initialFacing) {
+        this(line, controller, initialStopIndex, serviceDirection, initialFacing, null);
+    }
+
+    /**
+     * @param stations resolves stations against the live registry, or {@code null} to use the
+     *                 line's own frozen copies — see {@link StationLookup}
+     */
+    public LineService(TransitLine line, TransitStopController controller,
+                       int initialStopIndex, int serviceDirection, double initialFacing,
+                       StationLookup stations) {
+        this.stations = stations;
         if (line == null || controller == null) {
             throw new IllegalArgumentException("line and controller are required");
         }
@@ -137,7 +165,7 @@ public final class LineService {
             facing = velocity >= 0.0D ? 1.0D : -1.0D;
         }
 
-        TransitStation target = line.station(stopIndex);
+        TransitStation target = currentStation();
         if (berth == null) {
             berth = target.platformFor(network, train.reference(), facing, ROUTE_HORIZON);
         }
@@ -194,6 +222,22 @@ public final class LineService {
 
     public TransitStopController controller() {
         return controller;
+    }
+
+    /**
+     * The current target as the <em>registry</em> has it, falling back to the line's frozen copy.
+     *
+     * <p>Matched by name, which is the same handle the line stores. A station renamed out from
+     * under a running service simply is not found, and the line's copy carries the service to the
+     * end of its route rather than stranding it — which is the whole point of storing by value.</p>
+     */
+    private TransitStation currentStation() {
+        TransitStation snapshot = line.station(stopIndex);
+        if (stations == null) {
+            return snapshot;
+        }
+        TransitStation live = stations.station(snapshot.name());
+        return live == null ? snapshot : live;
     }
 
     /** Index of the station currently being run to — what an M7 arrival board counts against. */
