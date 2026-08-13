@@ -6,7 +6,7 @@ package com.micatechnologies.minecraft.rcmc.physics.transit;
  * <p>Platform arrival boards, in-car destination signs and station announcement speakers all
  * describe the same thing — a service, its direction, its destination terminus, and how close it
  * is — and they must never disagree, because a board reading "2 stops away" while the speaker says
- * "Approaching" reads as a fault. So the phrasing lives here, pure and shared, driven off the
+ * "APPR" reads as a fault. So the phrasing lives here, pure and shared, driven off the
  * same {@link ArrivalEstimator} stop count, and unit-tested rather than trusted to three renderers
  * to keep in step by hand.</p>
  *
@@ -75,31 +75,34 @@ public final class TransitSignText {
     /**
      * The short arrival phrase a board row shows, from a raw {@link ArrivalEstimator} stop count
      * (0 = this station is the service's next stop) and whether the train is berthed here now:
-     * {@code "Boarding"}, {@code "Approaching"}, {@code "1 stop"}, {@code "3 stops"}, or
+     * {@code "BRD"}, {@code "APPR"}, {@code "1 stop"}, {@code "3 stops"}, or
      * {@code null} if the service never reaches this station.
      *
-     * <p>Counts are raw — a train whose next stop is this station reads "Approaching", one stop
+     * <p>Counts are raw — a train whose next stop is this station reads "APPR", one stop
      * before it "1 stop". This is the same scale {@link #announcement} uses, which is the whole
      * point of routing both through one function.</p>
      *
      * <p><b>Terse on purpose, and only here.</b> A board row already carries a direction and a
      * destination before this is appended, and every word costs panel width that the destination
-     * needs more. The spoken announcement says "is two stops away" in full, because a sentence read
-     * aloud has no width to run out of — same event, same thresholds, phrased for its medium.</p>
+     * needs more. The two longest — "Approaching" and "Boarding" — are the ones that still forced
+     * a row to page, so both are abbreviated the way every real board abbreviates them. The
+     * spoken announcement
+     * says "is now approaching" in full, because a sentence read aloud has no width to run out of
+     * — same event, same thresholds, phrased for its medium.</p>
      */
     public static String stopsLabel(int rawStopsAway, boolean atPlatform) {
         if (rawStopsAway < 0) {
             return null;
         }
         if (rawStopsAway == 0) {
-            return atPlatform ? "Boarding" : "Approaching";
+            return atPlatform ? "BRD" : "APPR";
         }
         return rawStopsAway == 1 ? "1 stop" : rawStopsAway + " stops";
     }
 
     /**
      * {@link #stopsLabel(int, boolean)} with the berth the train is pulling into named after it —
-     * {@code "Boarding (2)"} — for a board at an island platform, where "which side of the island"
+     * {@code "BRD (2)"} — for a board at an island platform, where "which side of the island"
      * is the question a rider actually needs answered.
      *
      * <p>The berth is appended only when {@code rawStopsAway} is zero, because that is the only
@@ -169,7 +172,7 @@ public final class TransitSignText {
      * when the service does not reach this station (nothing to announce).
      *
      * <p>Kept in lock-step with {@link #stopsLabel} by sharing the same {@code rawStopsAway}/
-     * {@code atPlatform} thresholds: a board reading "Approaching" and a speaker saying
+     * {@code atPlatform} thresholds: a board reading "APPR" and a speaker saying
      * "is now approaching" are the same event described two ways.</p>
      */
     public static String announcement(TransitLine line, int serviceDirection, int rawStopsAway,

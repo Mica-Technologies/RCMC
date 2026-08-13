@@ -73,8 +73,10 @@ class TransitSignTextTest {
     @Test
     @DisplayName("stop-count phrasing matches across the board's raw scale")
     void stopsLabel() {
-        assertEquals("Boarding", TransitSignText.stopsLabel(0, true));
-        assertEquals("Approaching", TransitSignText.stopsLabel(0, false));
+        assertEquals("BRD", TransitSignText.stopsLabel(0, true));
+        assertEquals("APPR", TransitSignText.stopsLabel(0, false),
+            "abbreviated the way a real board does — it was the longest phrase here and the "
+                + "one that still forced a row to page");
         assertEquals("1 stop", TransitSignText.stopsLabel(1, false));
         assertEquals("3 stops", TransitSignText.stopsLabel(3, false));
         assertNull(TransitSignText.stopsLabel(-1, false), "a service that never reaches here");
@@ -83,10 +85,10 @@ class TransitSignTextTest {
     @Test
     @DisplayName("a board names the berth only for a train due at this very station")
     void stopsLabelNamesTheBerth() {
-        assertEquals("Boarding (2)",
+        assertEquals("BRD (2)",
             TransitSignText.stopsLabel(0, true, "2", "OUTBOUND"),
             "a train berthed here is at a berth this board can send you to");
-        assertEquals("Approaching (2)",
+        assertEquals("APPR (2)",
             TransitSignText.stopsLabel(0, false, "2", "OUTBOUND"),
             "so is one whose next stop is here");
 
@@ -99,10 +101,10 @@ class TransitSignTextTest {
         assertEquals("3 stops",
             TransitSignText.stopsLabel(3, false, "2", "OUTBOUND"));
 
-        assertEquals("Boarding", TransitSignText.stopsLabel(0, true, "", "OUTBOUND"),
+        assertEquals("BRD", TransitSignText.stopsLabel(0, true, "", "OUTBOUND"),
             "a single-platform station labels nothing, so there is nothing to add");
-        assertEquals("Boarding", TransitSignText.stopsLabel(0, true, null, "OUTBOUND"));
-        assertEquals("Boarding", TransitSignText.stopsLabel(0, true, "Outbound", "OUTBOUND"),
+        assertEquals("BRD", TransitSignText.stopsLabel(0, true, null, "OUTBOUND"));
+        assertEquals("BRD", TransitSignText.stopsLabel(0, true, "Outbound", "OUTBOUND"),
             "a berth named after the direction only repeats the heading the row sits under");
         assertNull(TransitSignText.stopsLabel(-1, false, "2", "OUTBOUND"),
             "a service that never reaches here has no row at all, berth or no berth");
