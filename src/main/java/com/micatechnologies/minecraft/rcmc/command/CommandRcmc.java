@@ -738,9 +738,9 @@ public class CommandRcmc extends CommandBase {
                 return;
             }
             case "doors": {
-                // Manual override for the automatic detection — a platform that is not built out
-                // of RCMC's own blocks cannot be found by looking, and an island platform served
-                // on one side only is a legitimate thing to want.
+                // Manual override for the automatic detection — an island platform served on one
+                // side only is a legitimate thing to want, and detection reads the world as built
+                // rather than as intended, so the builder gets the last word.
                 if (args.length < 4) {
                     throw new CommandException("/rcmc station doors <name> <left|right|both|auto>");
                 }

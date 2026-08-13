@@ -151,10 +151,13 @@ removes block signalling with `off`. Reports the safe train count for the divisi
 /rcmc station doors <name> <left|right|both|auto>     which side the doors open
 ```
 
-**Door side** is normally worked out for you: placing a station, or laying a platform, looks for
-platform blocks either side of the track and records what it finds. `doors` is the override — use
-it for a platform built out of something other than RCMC's own blocks, or for an island platform
-you only want served on one side. `auto` re-runs the detection.
+**Door side** is normally worked out for you: placing a station, or laying a platform, looks either
+side of the track for something a passenger could step out onto — a surface at car-floor height
+with two blocks clear above it — and records what it finds. RCMC's own platform blocks always
+count; so does a platform you built by hand out of anything else. A tunnel wall does not, because
+it is solid all the way up. `doors` is the override — use it for an island platform you only want
+served on one side, or anywhere the world as built is not what you meant. `auto` re-runs the
+detection.
 
 Left and right are **as a train running forward along the track sees them**, so the answer does not
 change when a service reverses. Announcements convert it to the rider's own left and right.
