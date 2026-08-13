@@ -18,6 +18,18 @@ import java.util.List;
  *       reversal. The "outbound" label reads as the direction of increasing station index.</li>
  * </ul>
  *
+ * <p><b>How an out-and-back line turns round</b> is a separate question from its service pattern,
+ * and {@link #turnsBackOnLoop()} is the answer. A stub terminus is a dead end: the train stops,
+ * changes ends, and leaves the way it came, on the same track and the same platform. A
+ * <b>turnback loop</b> is what most real metros actually have — inbound and outbound are separate
+ * tracks joined by a turning loop at each terminus, so the train never reverses at all. It keeps
+ * driving forward, round the loop, and comes back on the other track, which is what lets inbound
+ * and outbound run at the same time instead of taking turns down one rail.</p>
+ *
+ * <p>The service pattern is identical either way — stations in order, then back in reverse — so
+ * this changes exactly one thing: whether the train's <em>physical</em> direction of travel flips
+ * with the service direction. See {@code LineService.advanceToNextStop}.</p>
+ *
  * <p>This is deliberately only the <em>service</em> model — which stops exist, in what order,
  * under what names. Track topology (which sections, which switches) is the network's business;
  * the route between consecutive stations is discovered by walking the track
@@ -32,6 +44,7 @@ public final class TransitLine {
     private final String name;
     private final List<TransitStation> stations;
     private final boolean loop;
+    private final boolean turnbackLoop;
     private final String inboundLabel;
     private final String outboundLabel;
 
@@ -48,6 +61,16 @@ public final class TransitLine {
      */
     public TransitLine(String name, List<TransitStation> stations, boolean loop,
                        String inboundLabel, String outboundLabel) {
+        this(name, stations, loop, false, inboundLabel, outboundLabel);
+    }
+
+    /**
+     * @param turnbackLoop whether an out-and-back line's termini are turning loops rather than
+     *                     stub ends — see {@link #turnsBackOnLoop()}. Meaningless, and forced
+     *                     false, on a {@code loop} line, which never reaches a terminus at all
+     */
+    public TransitLine(String name, List<TransitStation> stations, boolean loop,
+                       boolean turnbackLoop, String inboundLabel, String outboundLabel) {
         if (name == null || name.isEmpty()) {
             throw new IllegalArgumentException("a line needs a name");
         }
@@ -61,6 +84,7 @@ public final class TransitLine {
         this.name = name;
         this.stations = Collections.unmodifiableList(new ArrayList<>(stations));
         this.loop = loop;
+        this.turnbackLoop = !loop && turnbackLoop;
         this.inboundLabel = inboundLabel;
         this.outboundLabel = outboundLabel;
     }
@@ -96,6 +120,20 @@ public final class TransitLine {
 
     public boolean isLoop() {
         return loop;
+    }
+
+    /**
+     * Whether this out-and-back line turns round on a loop rather than reversing in the platform.
+     *
+     * <p>True means the two directions run on separate tracks joined by a turning loop at each
+     * terminus — so a train keeps driving forward through the terminus and comes back on the other
+     * track, and the berth it reaches at every station is the one on that track. That is what makes
+     * a two-platform station mean anything, and what lets inbound and outbound run at once.</p>
+     *
+     * <p>False is a stub terminus: one track, one platform, and the train changes ends.</p>
+     */
+    public boolean turnsBackOnLoop() {
+        return turnbackLoop;
     }
 
     /** Display label for travel in service direction {@code -1} (toward lower indices). */

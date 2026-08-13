@@ -131,6 +131,25 @@ stored, so a line does not go stale when the track under it is rebuilt.
 velocity, and an overshoot guard — a stop point slid past reads as *negative remaining* via a short
 behind-probe, never as a lost station.
 
+### Two kinds of terminus
+
+An out-and-back line's service pattern is the same either way — stations in order, then back in
+reverse — but *how it turns round* is not, and `TransitLine.turnsBackOnLoop` is the switch.
+
+A **stub terminus** is a dead end. The train stops, changes ends, and leaves the way it came, on the
+same track and the same platform. Both the service direction and the train's physical facing flip.
+
+A **turnback loop** is what most real metros have. Inbound and outbound are separate tracks joined by
+a turning loop at each terminus, so the train never reverses — it keeps driving forward, round the
+loop, and comes back on the other track. Only the service direction flips; the wheels never do.
+
+That distinction is load-bearing rather than cosmetic, because it is what makes a **two-platform
+station** mean anything. On a turnback line the berth a train reaches at each station is the one on
+the track it happens to be on, which differs by direction — so `TransitStation.platformFor` has a
+real choice to make, the doors open on the right side for each, and inbound and outbound run at the
+same time instead of taking turns down one rail. Model the same circuit as a *loop* line instead and
+each place needs naming twice, because a loop train passes every second platform without stopping.
+
 ## `LineSignals` — movement authority
 
 ATO/ATP in shape rather than fixed-block-permission in shape. The signal system answers one

@@ -201,11 +201,19 @@ public final class LineService {
             return;
         }
         if (next < 0 || next >= line.stationCount()) {
-            // Terminus turnback: same platform, opposite direction. The facing flip happens here,
-            // while the train is stationary with its doors just closed — by the time it moves,
-            // the flipped facing is what the controller commands and the velocity sign follows.
             serviceDirection = -serviceDirection;
-            facing = -facing;
+            if (!line.turnsBackOnLoop()) {
+                // Stub terminus: a dead end, so the train changes ends and leaves the way it came,
+                // same track and same platform. The facing flip happens here, while the train is
+                // stationary with its doors just closed — by the time it moves, the flipped facing
+                // is what the controller commands and the velocity sign follows.
+                facing = -facing;
+            }
+            // On a turnback loop the facing deliberately does NOT flip. The train keeps driving
+            // forward, round the loop, and comes back on the other track — which is the whole
+            // reason a station has a berth per direction, and why inbound and outbound can run at
+            // the same time instead of taking turns down one rail. Only the service direction
+            // reverses; the wheels never do.
             next = stopIndex + serviceDirection;
         }
         stopIndex = next;

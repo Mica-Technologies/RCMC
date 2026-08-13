@@ -43,14 +43,16 @@ public final class TransitCodec {
      * v3 adds each station's door side; an absent key reads as {@code BOTH}, which is what every
      * station did before the field existed, so older saves need no migration. v4 moves the stop
      * point and door side into a list of platforms — a station read without one folds its single
-     * stop point into a single unlabelled platform, which is exactly what it was.
+     * stop point into a single unlabelled platform, which is exactly what it was. v5 adds a line's
+     * turnback style; absent reads as false, a stub terminus, which is what every out-and-back line
+     * did before turning loops existed.
      *
      * <p>Unlike {@link TrackCodec}, a future version is <b>not</b> refused here. Transit content is
      * additive decoration on a track that {@code TrackCodec} already version-guards: if a newer
      * save is opened by an older mod, that codec refuses first and this one never runs. Duplicating
      * the refusal would only add a second, less informative failure path.</p>
      */
-    static final int DATA_VERSION = 4;
+    static final int DATA_VERSION = 5;
 
     private static final String KEY_VERSION = "TransitVersion";
     private static final String KEY_STATIONS = "TransitStations";
@@ -60,6 +62,7 @@ public final class TransitCodec {
     private static final String KEY_SECTION = "Section";
     private static final String KEY_DISTANCE = "Distance";
     private static final String KEY_LOOP = "Loop";
+    private static final String KEY_TURNBACK_LOOP = "TurnbackLoop";
     private static final String KEY_IN_LABEL = "InboundLabel";
     private static final String KEY_OUT_LABEL = "OutboundLabel";
     private static final String KEY_STOPS = "Stops";
@@ -93,6 +96,7 @@ public final class TransitCodec {
             NBTTagCompound tag = new NBTTagCompound();
             tag.setString(KEY_NAME, line.name());
             tag.setBoolean(KEY_LOOP, line.isLoop());
+            tag.setBoolean(KEY_TURNBACK_LOOP, line.turnsBackOnLoop());
             tag.setString(KEY_IN_LABEL, line.inboundLabel());
             tag.setString(KEY_OUT_LABEL, line.outboundLabel());
             NBTTagList stops = new NBTTagList();
@@ -154,6 +158,7 @@ public final class TransitCodec {
             if (!tag.getString(KEY_NAME).isEmpty() && stations.size() >= 2) {
                 transit.addLine(new TransitLine(tag.getString(KEY_NAME), stations,
                     tag.getBoolean(KEY_LOOP),
+                    tag.getBoolean(KEY_TURNBACK_LOOP),
                     orDefault(tag.getString(KEY_IN_LABEL), "INBOUND"),
                     orDefault(tag.getString(KEY_OUT_LABEL), "OUTBOUND")));
             }
