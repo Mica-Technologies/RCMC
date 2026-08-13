@@ -70,6 +70,34 @@ class TransitSignTextTest {
     }
 
     @Test
+    @DisplayName("a board names the berth only for a train due at this very station")
+    void stopsLabelNamesTheBerth() {
+        assertEquals("Boarding (2)",
+            TransitSignText.stopsLabel(0, true, "2", "OUTBOUND"),
+            "a train berthed here is at a berth this board can send you to");
+        assertEquals("now approaching (2)",
+            TransitSignText.stopsLabel(0, false, "2", "OUTBOUND"),
+            "so is one whose next stop is here");
+
+        // The crux. A service resolves its berth at the stop it is running to, so for a train
+        // still stops away the label names a platform somewhere else on the line entirely.
+        // Printing it would march riders across the concourse on somebody else's platform number.
+        assertEquals("1 stop away",
+            TransitSignText.stopsLabel(1, false, "2", "OUTBOUND"),
+            "a train one stop out has resolved a berth at that other station, not at this one");
+        assertEquals("3 stops away",
+            TransitSignText.stopsLabel(3, false, "2", "OUTBOUND"));
+
+        assertEquals("Boarding", TransitSignText.stopsLabel(0, true, "", "OUTBOUND"),
+            "a single-platform station labels nothing, so there is nothing to add");
+        assertEquals("Boarding", TransitSignText.stopsLabel(0, true, null, "OUTBOUND"));
+        assertEquals("Boarding", TransitSignText.stopsLabel(0, true, "Outbound", "OUTBOUND"),
+            "a berth named after the direction only repeats the heading the row sits under");
+        assertNull(TransitSignText.stopsLabel(-1, false, "2", "OUTBOUND"),
+            "a service that never reaches here has no row at all, berth or no berth");
+    }
+
+    @Test
     @DisplayName("in-car announcements name the stop the train is running to / has reached")
     void inCarAnnouncements() {
         assertEquals("Next stop: Alewife.",

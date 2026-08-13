@@ -17,6 +17,13 @@ public final class RcmcBlocks {
     public static BlockPlatformEdge platformEdge;
     public static com.micatechnologies.minecraft.rcmc.block.sign.BlockStationSign stationSign;
     public static com.micatechnologies.minecraft.rcmc.block.sign.BlockArrivalBoard arrivalBoard;
+
+    /**
+     * The filler blocks of an arrival board's footprint. Deliberately has no {@code ItemBlock}: it
+     * is not a thing you carry, it is the rest of the board you already placed.
+     */
+    public static com.micatechnologies.minecraft.rcmc.block.sign.BlockArrivalBoardPart
+        arrivalBoardPart;
     public static com.micatechnologies.minecraft.rcmc.block.sign.BlockStationSpeaker stationSpeaker;
 
     private RcmcBlocks() {
@@ -31,6 +38,8 @@ public final class RcmcBlocks {
             new com.micatechnologies.minecraft.rcmc.block.sign.BlockStationSign());
         arrivalBoard = RcmcRegistry.addBlock(
             new com.micatechnologies.minecraft.rcmc.block.sign.BlockArrivalBoard());
+        arrivalBoardPart = RcmcRegistry.addBlock(
+            new com.micatechnologies.minecraft.rcmc.block.sign.BlockArrivalBoardPart());
         stationSpeaker = RcmcRegistry.addBlock(
             new com.micatechnologies.minecraft.rcmc.block.sign.BlockStationSpeaker());
 
@@ -59,6 +68,10 @@ public final class RcmcBlocks {
         net.minecraftforge.fml.common.registry.GameRegistry.registerTileEntity(
             com.micatechnologies.minecraft.rcmc.block.sign.TileArrivalBoard.class,
             new net.minecraft.util.ResourceLocation(RcmcConstants.MOD_NAMESPACE, "arrival_board"));
+        net.minecraftforge.fml.common.registry.GameRegistry.registerTileEntity(
+            com.micatechnologies.minecraft.rcmc.block.sign.TileArrivalBoardPart.class,
+            new net.minecraft.util.ResourceLocation(RcmcConstants.MOD_NAMESPACE,
+                "arrival_board_part"));
         net.minecraftforge.fml.common.registry.GameRegistry.registerTileEntity(
             com.micatechnologies.minecraft.rcmc.block.sign.TileStationSpeaker.class,
             new net.minecraft.util.ResourceLocation(RcmcConstants.MOD_NAMESPACE, "station_speaker"));

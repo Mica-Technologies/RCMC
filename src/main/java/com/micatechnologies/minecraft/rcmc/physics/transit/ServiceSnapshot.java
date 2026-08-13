@@ -34,16 +34,36 @@ public final class ServiceSnapshot {
      */
     private final DoorSide doorSide;
 
+    /**
+     * What the signage calls the berth this train is running to, or empty when the berth has no
+     * label — which is every station with a single platform, where there is nothing to
+     * disambiguate.
+     *
+     * <p><b>It names the berth at {@link #nextStopIndex}, and only there.</b> A train four stops
+     * out has a berth resolved at the station it is heading for, which says nothing about which
+     * platform it will pull into further down the line. A board may therefore only show this
+     * against a service that is due at that board's own station — everywhere else it would be
+     * naming somebody else's platform.</p>
+     */
+    private final String platformLabel;
+
     public ServiceSnapshot(int trainId, String lineName, int serviceDirection, int nextStopIndex,
                            boolean atPlatform, boolean doorsOpen, double doorFraction,
                            double distanceToNextStop) {
         this(trainId, lineName, serviceDirection, nextStopIndex, atPlatform, doorsOpen,
-            doorFraction, distanceToNextStop, DoorSide.BOTH);
+            doorFraction, distanceToNextStop, DoorSide.BOTH, "");
     }
 
     public ServiceSnapshot(int trainId, String lineName, int serviceDirection, int nextStopIndex,
                            boolean atPlatform, boolean doorsOpen, double doorFraction,
                            double distanceToNextStop, DoorSide doorSide) {
+        this(trainId, lineName, serviceDirection, nextStopIndex, atPlatform, doorsOpen,
+            doorFraction, distanceToNextStop, doorSide, "");
+    }
+
+    public ServiceSnapshot(int trainId, String lineName, int serviceDirection, int nextStopIndex,
+                           boolean atPlatform, boolean doorsOpen, double doorFraction,
+                           double distanceToNextStop, DoorSide doorSide, String platformLabel) {
         if (lineName == null || lineName.isEmpty()) {
             throw new IllegalArgumentException("lineName is required");
         }
@@ -62,6 +82,7 @@ public final class ServiceSnapshot {
         this.doorFraction = Math.max(0.0D, Math.min(1.0D, doorFraction));
         this.distanceToNextStop = distanceToNextStop;
         this.doorSide = doorSide == null ? DoorSide.BOTH : doorSide;
+        this.platformLabel = platformLabel == null ? "" : platformLabel;
     }
 
     /**
@@ -71,11 +92,24 @@ public final class ServiceSnapshot {
      *                 is the only layer holding the station registry needed to look it up
      */
     public static ServiceSnapshot of(int trainId, LineService service, DoorSide doorSide) {
+        return of(trainId, service, doorSide, "");
+    }
+
+    /**
+     * Snapshot of a live service, naming the berth it is running to.
+     *
+     * @param doorSide      the current stop's TRACK-relative door side — resolved by the caller,
+     *                      which is the only layer holding the station registry needed to look it up
+     * @param platformLabel that berth's label, from the same lookup — see {@link #platformLabel()}
+     *                      for the one place a board may show it
+     */
+    public static ServiceSnapshot of(int trainId, LineService service, DoorSide doorSide,
+                                     String platformLabel) {
         return new ServiceSnapshot(trainId, service.line().name(), service.serviceDirection(),
             service.currentStopIndex(),
             service.controller().phase() != TransitStopController.Phase.APPROACHING,
             service.controller().doorsOpen(), service.controller().doorFraction(),
-            service.distanceToNextStop(), doorSide);
+            service.distanceToNextStop(), doorSide, platformLabel);
     }
 
     /** The train running this service — how an in-car sign finds its own. */
@@ -122,6 +156,17 @@ public final class ServiceSnapshot {
     /** Which side of the track the doors open at the current stop. Never null. */
     public DoorSide doorSide() {
         return doorSide;
+    }
+
+    /**
+     * What the signage calls the berth at {@link #nextStopIndex}, or empty when it has none.
+     *
+     * <p>Only meaningful to a board at that very station. See the field's note: it is the berth
+     * this train is running <em>to</em>, not the berth it will use wherever you happen to be
+     * standing.</p>
+     */
+    public String platformLabel() {
+        return platformLabel;
     }
 
     public double distanceToNextStop() {

@@ -204,7 +204,13 @@ opens that platform's side.
 
 Until the second berth exists, only one track is a station at all. That is why an arrival board at
 an island shows one direction and leaves the other blank: there is nothing on the other side for it
-to resolve.
+to resolve. Add the second berth and the board fills both — which is the point of the exercise.
+
+Once a station has more than one berth and the berths are labelled, a board also puts the platform
+in brackets against a train that is **due here** — `Boarding (1)`, `now approaching (2)`. It appears
+only on those rows, and deliberately: a train still stops away has picked its platform at the
+station it is running to, not at this one, so a number against it would send you to the wrong side
+of the island on the strength of somebody else's platform.
 
 Useful for a platform built out of other blocks, which the detector cannot see, or for an island
 platform you only want served on one side. `auto` re-runs the detection.
@@ -218,7 +224,7 @@ right door when it opens. A rider can only walk out through a door that actually
 | Block | What it shows |
 | --- | --- |
 | `rcmc:station_sign` | Post-mounted line map: the linked line's stops in order, with a "you are here" marker. Right-click cycles lines at an interchange |
-| `rcmc:arrival_board` | Ceiling-hung amber-on-black board: per-direction "N stops away" rows, "Boarding" while a train is berthed |
+| `rcmc:arrival_board` | Ceiling-hung amber-on-black board: per-direction "N stops away" rows, "Boarding" while a train is berthed. Hang it under a ceiling with **5 blocks of clearance across and 2 down** — the panel is physically the size it looks |
 | `rcmc:station_speaker` | Wall- or ceiling-mounted PA that announces approaching trains |
 
 All three **auto-link to the nearest station** when placed, and store only that station's *name*.

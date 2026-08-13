@@ -156,8 +156,10 @@ public final class TransitSystem {
     public java.util.List<ServiceSnapshot> serviceSnapshots() {
         java.util.List<ServiceSnapshot> snapshots = new java.util.ArrayList<>(services.size());
         for (Map.Entry<Integer, LineService> entry : services.entrySet()) {
+            TransitPlatform berth = berthFor(entry.getValue());
             snapshots.add(ServiceSnapshot.of(entry.getKey(), entry.getValue(),
-                doorSideFor(entry.getValue())));
+                berth == null ? DoorSide.BOTH : berth.doorSide(),
+                berth == null ? "" : berth.label()));
         }
         return snapshots;
     }
@@ -172,29 +174,51 @@ public final class TransitSystem {
      * Rendering therefore wants this answer as-is. Only the things said to a <em>person</em> want
      * it converted, and those call {@link DoorSide#asSeenFrom} at the point of use.</p>
      *
-     * <p><b>Resolved against the station registry, not against the line's own copy.</b> A
-     * {@link TransitLine} snapshots its stations by value — which is what lets a line survive its
-     * stations being renamed or deleted — so a door side authored after the line was created lives
-     * only in the registry, and reading the line's copy would quietly serve the old answer forever.
-     * The line's copy is the fallback for a station that has since been removed from the registry
-     * altogether.</p>
+     * <p>The side belongs to the berth this train is pulling into, not to the station — see
+     * {@link #berthFor}, which is where that is worked out.</p>
      */
     public DoorSide doorSideFor(LineService service) {
+        TransitPlatform berth = berthFor(service);
+        return berth == null ? DoorSide.BOTH : berth.doorSide();
+    }
+
+    /**
+     * The berth {@code service} is running to.
+     *
+     * <p>Everything that is a property of the <em>track</em> rather than of the station — which
+     * side the doors open, what the signage calls the platform — is read off this one answer, so
+     * two of them can never end up describing different platforms of the same station.</p>
+     *
+     * <p><b>Resolved against the station registry, not against the line's own copy.</b> A
+     * {@link TransitLine} snapshots its stations by value — which is what lets a line survive its
+     * stations being renamed or deleted — so a berth authored, relabelled or re-sided after the
+     * line was created lives only in the registry, and reading the line's copy would quietly serve
+     * the old answer forever. The service's own berth is matched back in by stop point; the line's
+     * copy is the fallback for a station since removed from the registry altogether, and the
+     * primary platform the fallback for a service that has not resolved a berth yet.</p>
+     *
+     * <p><b>This is the berth at the service's current stop, and nowhere else.</b> A train four
+     * stops out has resolved a berth at the station it is running to, which says nothing about
+     * which platform it will use anywhere further along — see {@code RenderArrivalBoard}, which
+     * shows the label only on rows whose service is due at the board's own station.</p>
+     *
+     * @return {@code null} only for a {@code null} service
+     */
+    public TransitPlatform berthFor(LineService service) {
         if (service == null) {
-            return DoorSide.BOTH;
+            return null;
         }
         TransitStation stop = service.line().station(service.currentStopIndex());
         TransitStation authoritative = station(stop.name());
         TransitStation resolved = authoritative == null ? stop : authoritative;
-        // The berth this train is actually pulling into, matched into the authoritative station by
-        // stop point. Reading the station's own side would answer for whichever platform happens to
-        // be listed first, which at an island is a coin flip that opens the doors at the wall.
+        // Reading the station's own first platform would answer for whichever berth happens to be
+        // listed first, which at an island is a coin flip that opens the doors at the tunnel wall.
         TransitPlatform berth = service.currentBerth();
-        if (berth != null) {
-            TransitPlatform current = resolved.platformAt(berth.stopPoint());
-            return (current == null ? berth : current).doorSide();
+        if (berth == null) {
+            return resolved.primary();
         }
-        return resolved.doorSide();
+        TransitPlatform current = resolved.platformAt(berth.stopPoint());
+        return current == null ? berth : current;
     }
 
     // --- Services. -----------------------------------------------------------------------------

@@ -48,8 +48,10 @@ public class PacketServiceSync implements IMessage {
             float doorFraction = buf.readFloat();
             float distanceToNextStop = buf.readFloat();
             int doorSide = buf.readInt();
+            String platformLabel = ByteBufUtils.readUTF8String(buf);
             snapshots.add(new ServiceSnapshot(trainId, lineName, direction, nextStop, atPlatform,
-                doorsOpen, doorFraction, distanceToNextStop, DoorSide.byOrdinal(doorSide)));
+                doorsOpen, doorFraction, distanceToNextStop, DoorSide.byOrdinal(doorSide),
+                platformLabel));
         }
     }
 
@@ -68,6 +70,11 @@ public class PacketServiceSync implements IMessage {
             // Track-relative, which is the form the car model is drawn in — a client needs no
             // station registry and no facing arithmetic to know which doors to animate.
             buf.writeInt(snapshot.doorSide().ordinal());
+            // Which berth of its next stop this train is pulling into — the platform number a
+            // board at that station puts against the row. Sent rather than derived because a
+            // client cannot walk the track to work out which of an island's two berths a train
+            // will reach.
+            ByteBufUtils.writeUTF8String(buf, snapshot.platformLabel());
         }
     }
 
