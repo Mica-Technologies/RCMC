@@ -76,20 +76,25 @@ public class RenderArrivalBoard extends TileEntitySpecialRenderer<TileArrivalBoa
      * a row is about 44% taller than it was, which is the difference between reading it from the
      * far platform edge and walking up to it.</p>
      */
-    private static final float TEXT_SCALE = 0.026F;
+    private static final float MAX_TEXT_SCALE = 0.026F;
+
+    /**
+     * The smallest the text may shrink to before rows are dropped instead.
+     *
+     * <p>A board is read from across a platform, so there is a size below which fitting more on is
+     * pointless — it fits, and nobody can read it. Half the preferred scale is about where that
+     * lands; past it, losing the last row beats shrinking the first five.</p>
+     */
+    private static final float MIN_TEXT_SCALE = 0.013F;
 
     /** Height of the first line's top, below the panel's own top edge. */
     private static final double TEXT_TOP = PANEL_TOP - 0.08D;
 
     /**
-     * How many lines fit on the screen. Two lines and four groups is more than a four-by-two panel
-     * can hold, and the overflow does not stop at the panel — it carries on down past the bottom
-     * edge and hangs in the air below the board, which reads as a glitch rather than as a full
-     * board. Computed from the panel and the font rather than counted by hand, so raising the text
-     * scale again cannot silently reintroduce it.
+     * Clear space kept either side of the text, so a full-width row stops short of the bezel rather
+     * than running into it.
      */
-    private static final int MAX_LINES =
-        (int) ((TEXT_TOP - (PANEL_TOP - PANEL_HEIGHT)) / (10.0D * TEXT_SCALE));
+    private static final double SIDE_MARGIN = 0.12D;
 
     @Override
     public void render(TileArrivalBoard board, double x, double y, double z,
@@ -101,21 +106,26 @@ public class RenderArrivalBoard extends TileEntitySpecialRenderer<TileArrivalBoa
         SignPanels.drawPanel(PANEL_HALF_WIDTH, PANEL_TOP - PANEL_HEIGHT, PANEL_TOP,
             PANEL_HALF_THICKNESS, 0.05F, 0.05F, 0.06F);
 
-        List<String> lines = new ArrayList<>();
-        buildRows(board, lines);
-        // Truncated at the end rather than while building, because the rows come out in order of
-        // what a rider needs first — the station, then each direction's soonest train — so the
-        // ones that fall off the bottom are the ones worth losing.
-        if (lines.size() > MAX_LINES) {
-            lines = lines.subList(0, MAX_LINES);
-        }
-        String[] text = lines.toArray(new String[0]);
+        List<String> rows = new ArrayList<>();
+        buildRows(board, rows);
+        // Wrapped and scaled to the panel rather than drawn at a fixed size. An interchange's rows
+        // are nearly three times the width of an ordinary station's, and the same screen has to
+        // hold both — see SignTextFit for why it wraps before it shrinks. Rows come out in order of
+        // what a rider needs first, so anything that still will not fit is lost from the bottom.
+        final net.minecraft.client.gui.FontRenderer font = getFontRenderer();
+        SignTextFit.Layout layout = SignTextFit.fit(rows, font::getStringWidth,
+            2.0D * PANEL_HALF_WIDTH - 2.0D * SIDE_MARGIN,
+            TEXT_TOP - (PANEL_TOP - PANEL_HEIGHT),
+            MAX_TEXT_SCALE, MIN_TEXT_SCALE);
+
+        String[] text = layout.lines.toArray(new String[0]);
         int[] colours = new int[text.length];
         for (int i = 0; i < colours.length; i++) {
-            colours[i] = text[i].startsWith(" ") || Character.isDigit(text[i].charAt(0))
+            colours[i] = text[i].isEmpty() || text[i].startsWith(" ")
+                || Character.isDigit(text[i].charAt(0))
                 ? AMBER : (i == 0 ? MUTED_COLOUR : AMBER);
         }
-        SignPanels.drawLines(getFontRenderer(), text, colours, TEXT_TOP, TEXT_SCALE,
+        SignPanels.drawLines(font, text, colours, TEXT_TOP, layout.scale,
             PANEL_HALF_THICKNESS + 0.005D);
 
         GlStateManager.popMatrix();
