@@ -24,8 +24,10 @@ public class TileArrivalBoard extends TileTransitSignBase {
     @Override
     @SideOnly(Side.CLIENT)
     public AxisAlignedBB getRenderBoundingBox() {
+        // Must contain RenderArrivalBoard's panel, which is far larger than this block: a screen
+        // this much bigger than its own block is culled the moment the block itself leaves view.
         return new AxisAlignedBB(
-            pos.getX() - 1.6D, pos.getY() - 1.0D, pos.getZ() - 1.6D,
-            pos.getX() + 2.6D, pos.getY() + 1.5D, pos.getZ() + 2.6D);
+            pos.getX() - 2.1D, pos.getY() - 1.2D, pos.getZ() - 2.1D,
+            pos.getX() + 3.1D, pos.getY() + 1.5D, pos.getZ() + 3.1D);
     }
 }
