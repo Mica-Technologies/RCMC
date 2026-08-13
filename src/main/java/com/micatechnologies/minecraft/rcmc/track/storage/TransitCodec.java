@@ -4,6 +4,7 @@ import com.micatechnologies.minecraft.rcmc.physics.block.BlockSection;
 import com.micatechnologies.minecraft.rcmc.physics.transit.LineSignals;
 import com.micatechnologies.minecraft.rcmc.physics.transit.TransitLine;
 import com.micatechnologies.minecraft.rcmc.physics.transit.DoorSide;
+import com.micatechnologies.minecraft.rcmc.physics.transit.TransitPlatform;
 import com.micatechnologies.minecraft.rcmc.physics.transit.TransitStation;
 import com.micatechnologies.minecraft.rcmc.physics.transit.TransitSystem;
 import com.micatechnologies.minecraft.rcmc.track.TrackRef;
@@ -40,14 +41,16 @@ public final class TransitCodec {
      * <p>v1 was stations and lines only, and was written with <em>no</em> version key at all —
      * which is why absent reads as 1 rather than as corrupt. v2 adds per-line block signalling.
      * v3 adds each station's door side; an absent key reads as {@code BOTH}, which is what every
-     * station did before the field existed, so older saves need no migration.
+     * station did before the field existed, so older saves need no migration. v4 moves the stop
+     * point and door side into a list of platforms — a station read without one folds its single
+     * stop point into a single unlabelled platform, which is exactly what it was.
      *
      * <p>Unlike {@link TrackCodec}, a future version is <b>not</b> refused here. Transit content is
      * additive decoration on a track that {@code TrackCodec} already version-guards: if a newer
      * save is opened by an older mod, that codec refuses first and this one never runs. Duplicating
      * the refusal would only add a second, less informative failure path.</p>
      */
-    static final int DATA_VERSION = 3;
+    static final int DATA_VERSION = 4;
 
     private static final String KEY_VERSION = "TransitVersion";
     private static final String KEY_STATIONS = "TransitStations";
@@ -61,6 +64,8 @@ public final class TransitCodec {
     private static final String KEY_OUT_LABEL = "OutboundLabel";
     private static final String KEY_STOPS = "Stops";
     private static final String KEY_DOOR_SIDE = "DoorSide";
+    private static final String KEY_PLATFORMS = "Platforms";
+    private static final String KEY_LABEL = "Label";
 
     private static final String KEY_SIGNALS = "TransitSignals";
     private static final String KEY_LINE = "Line";
@@ -184,9 +189,22 @@ public final class TransitCodec {
     private static NBTTagCompound writeStation(TransitStation station) {
         NBTTagCompound tag = new NBTTagCompound();
         tag.setString(KEY_NAME, station.name());
+        // The primary platform is also written in the pre-v4 shape. Not for this mod to read back —
+        // readStation prefers the list — but so that a save opened by anything reading the old
+        // format still finds a station where it expects one, rather than a name with no position.
         tag.setInteger(KEY_SECTION, station.stopPoint().sectionId());
         tag.setDouble(KEY_DISTANCE, station.stopPoint().distance());
         tag.setInteger(KEY_DOOR_SIDE, station.doorSide().ordinal());
+        NBTTagList platforms = new NBTTagList();
+        for (TransitPlatform platform : station.platforms()) {
+            NBTTagCompound entry = new NBTTagCompound();
+            entry.setInteger(KEY_SECTION, platform.stopPoint().sectionId());
+            entry.setDouble(KEY_DISTANCE, platform.stopPoint().distance());
+            entry.setInteger(KEY_DOOR_SIDE, platform.doorSide().ordinal());
+            entry.setString(KEY_LABEL, platform.label());
+            platforms.appendTag(entry);
+        }
+        tag.setTag(KEY_PLATFORMS, platforms);
         return tag;
     }
 
@@ -200,8 +218,23 @@ public final class TransitCodec {
         // absent key is read as BOTH rather than as LEFT (ordinal 0).
         DoorSide side = tag.hasKey(KEY_DOOR_SIDE)
             ? DoorSide.byOrdinal(tag.getInteger(KEY_DOOR_SIDE)) : DoorSide.BOTH;
-        return new TransitStation(name,
-            new TrackRef(tag.getInteger(KEY_SECTION), tag.getDouble(KEY_DISTANCE)), side);
+        List<TransitPlatform> platforms = new ArrayList<>();
+        NBTTagList list = tag.getTagList(KEY_PLATFORMS, 10);
+        for (int i = 0; i < list.tagCount(); i++) {
+            NBTTagCompound entry = list.getCompoundTagAt(i);
+            platforms.add(new TransitPlatform(
+                new TrackRef(entry.getInteger(KEY_SECTION), entry.getDouble(KEY_DISTANCE)),
+                entry.hasKey(KEY_DOOR_SIDE)
+                    ? DoorSide.byOrdinal(entry.getInteger(KEY_DOOR_SIDE)) : DoorSide.BOTH,
+                entry.getString(KEY_LABEL)));
+        }
+        if (platforms.isEmpty()) {
+            // Pre-v4: the station's one stop point IS its one platform, unlabelled because there
+            // was never anything to disambiguate it from.
+            return new TransitStation(name,
+                new TrackRef(tag.getInteger(KEY_SECTION), tag.getDouble(KEY_DISTANCE)), side);
+        }
+        return new TransitStation(name, platforms);
     }
 
     private static String orDefault(String value, String fallback) {

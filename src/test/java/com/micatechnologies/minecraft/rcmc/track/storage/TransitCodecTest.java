@@ -171,4 +171,54 @@ class TransitCodecTest {
         assertEquals(com.micatechnologies.minecraft.rcmc.physics.transit.DoorSide.BOTH,
             out.station("North").doorSide());
     }
+
+    @Test
+    @DisplayName("a multi-platform station round-trips every berth")
+    void multiPlatformStationRoundTrips() {
+        TransitSystem transit = new TransitSystem();
+        transit.addStation(new TransitStation("Central", Arrays.asList(
+            new com.micatechnologies.minecraft.rcmc.physics.transit.TransitPlatform(
+                new TrackRef(1, 180.0D),
+                com.micatechnologies.minecraft.rcmc.physics.transit.DoorSide.RIGHT, "Inbound"),
+            new com.micatechnologies.minecraft.rcmc.physics.transit.TransitPlatform(
+                new TrackRef(1, 184.0D),
+                com.micatechnologies.minecraft.rcmc.physics.transit.DoorSide.LEFT, "Outbound"))));
+        NBTTagCompound tag = new NBTTagCompound();
+        TransitCodec.write(transit, tag);
+
+        TransitStation out = TransitCodec.read(tag).station("Central");
+
+        assertEquals(2, out.platformCount());
+        assertEquals(180.0D, out.platform(0).stopPoint().distance(), 1e-9D);
+        assertEquals("Inbound", out.platform(0).label());
+        assertEquals(com.micatechnologies.minecraft.rcmc.physics.transit.DoorSide.RIGHT,
+            out.platform(0).doorSide());
+        assertEquals(184.0D, out.platform(1).stopPoint().distance(), 1e-9D);
+        assertEquals("Outbound", out.platform(1).label());
+        assertEquals(com.micatechnologies.minecraft.rcmc.physics.transit.DoorSide.LEFT,
+            out.platform(1).doorSide());
+    }
+
+    /**
+     * The migration that matters: every world saved before platforms existed has a station written
+     * as one stop point and one door side, with no platform list at all. It has to come back as the
+     * one-platform station it always was, not as a station with nowhere to berth.
+     */
+    @Test
+    @DisplayName("a pre-v4 station without a platform list reads as one platform")
+    void legacyStationBecomesOnePlatform() {
+        NBTTagCompound tag = new NBTTagCompound();
+        TransitCodec.write(sample(), tag);
+        for (int i = 0; i < tag.getTagList("TransitStations", 10).tagCount(); i++) {
+            tag.getTagList("TransitStations", 10).getCompoundTagAt(i).removeTag("Platforms");
+        }
+        tag.setInteger("TransitVersion", 3);
+
+        TransitStation out = TransitCodec.read(tag).station("Centre");
+
+        assertNotNull(out, "a station that lost its platform list must not vanish");
+        assertEquals(1, out.platformCount());
+        assertEquals(220.5D, out.stopPoint().distance(), 1e-9D);
+        assertEquals("", out.primary().label());
+    }
 }
