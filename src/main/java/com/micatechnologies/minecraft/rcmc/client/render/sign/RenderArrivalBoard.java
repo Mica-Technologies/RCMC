@@ -18,16 +18,17 @@ import net.minecraft.client.renderer.tileentity.TileEntitySpecialRenderer;
  * Draws the ceiling-hung arrival board:
  *
  * <pre>
- *   INBOUND/Ashmont    Approaching (2)
+ *   IN/Ashmont              APPR (2)
  *                      3 stops away
- *   OUTBOUND/Alewife   Boarding (1)
+ *   OUT/Alewife              BRD (1)
  * </pre>
  *
  * <p>Rows come from the synced {@link ServiceSnapshot}s: for every line serving the linked
  * station, each running service's distance is {@link ArrivalEstimator}'s stops-away, replayed
  * over the service pattern — exact and deterministic, no wall clock. A train counted zero stops
- * away is displayed as "1 stop away" (it still has this station to reach), or "Boarding" once
- * it is berthed here with its doors cycling. Amber-on-black because every real one is.</p>
+ * away reads "APPR" (it still has this station to reach), or "BRD" once it is berthed here with
+ * its doors cycling — abbreviated as every real board abbreviates them. Amber-on-black because
+ * every real one is.</p>
  *
  * <p><b>Both directions, and which berth.</b> A station is several platforms now, so a service
  * running down either side of an island targets this same named place and fills its own direction
@@ -206,10 +207,10 @@ public class RenderArrivalBoard extends TileEntitySpecialRenderer<TileArrivalBoa
     }
 
     private static int sortKey(String row) {
-        if (row.startsWith("Boarding")) {
+        if (row.startsWith("BRD")) {
             return -1;
         }
-        if (row.startsWith("Approaching")) {
+        if (row.startsWith("APPR")) {
             return 0;
         }
         int space = row.indexOf(' ');
