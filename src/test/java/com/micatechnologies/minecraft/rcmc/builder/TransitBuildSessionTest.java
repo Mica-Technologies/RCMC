@@ -41,11 +41,27 @@ class TransitBuildSessionTest {
             "a full cycle must return to where it started, or the tool has a dead end");
     }
 
+    /**
+     * A session in line mode, reached by cycling rather than by counting cycles. These tests are
+     * about stops surviving (or not surviving) a mode change, not about the order the modes come
+     * in — hard-coding "one cycle from the default is LINE" made them fail the moment a mode was
+     * inserted ahead of it, which is a test asserting the implementation instead of the rule.
+     */
+    private static TransitBuildSession inLineMode() {
+        TransitBuildSession session = new TransitBuildSession();
+        for (int i = 0; i < TransitBuildSession.Mode.values().length; i++) {
+            if (session.mode() == TransitBuildSession.Mode.LINE) {
+                return session;
+            }
+            session.cycleMode();
+        }
+        throw new AssertionError("line mode is not reachable by cycling");
+    }
+
     @Test
     @DisplayName("changing mode abandons the half-built line rather than carrying it over")
     void cyclingModeClearsPending() {
-        TransitBuildSession session = new TransitBuildSession();
-        session.cycleMode();
+        TransitBuildSession session = inLineMode();
         session.addStop("North");
         session.addStop("South");
         assertTrue(session.canCommitLine());
@@ -151,8 +167,7 @@ class TransitBuildSessionTest {
     @Test
     @DisplayName("clearing forgets the pending work but keeps the mode")
     void clearPendingKeepsMode() {
-        TransitBuildSession session = new TransitBuildSession();
-        session.cycleMode();
+        TransitBuildSession session = inLineMode();
         session.addStop("North");
 
         session.clearPending();
