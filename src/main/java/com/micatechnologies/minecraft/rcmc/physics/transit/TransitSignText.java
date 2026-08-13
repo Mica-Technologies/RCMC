@@ -68,6 +68,36 @@ public final class TransitSignText {
     }
 
     /**
+     * {@link #stopsLabel(int, boolean)} with the berth the train is pulling into named after it —
+     * {@code "Boarding (2)"} — for a board at an island platform, where "which side of the island"
+     * is the question a rider actually needs answered.
+     *
+     * <p>The berth is appended only when {@code rawStopsAway} is zero, because that is the only
+     * count for which it is <em>this</em> station's berth: a service's platform is resolved at the
+     * stop it is running to, so for a train further out the label names a platform somewhere else
+     * on the line. Showing it anyway would send riders across the concourse on the strength of a
+     * number about a different station.</p>
+     *
+     * <p>It is also dropped when it only repeats the direction the row is already grouped under —
+     * a berth labelled {@code Outbound} beneath an {@code OUTBOUND/Alewife} heading is a word of
+     * screen width bought for nothing.</p>
+     *
+     * @param platformLabel the berth's label, or empty/{@code null} when it has none
+     * @param directionLabel what the row is already grouped under, from
+     *                       {@link TransitLine#labelFor(int)}
+     */
+    public static String stopsLabel(int rawStopsAway, boolean atPlatform, String platformLabel,
+                                    String directionLabel) {
+        String phrase = stopsLabel(rawStopsAway, atPlatform);
+        if (phrase == null || rawStopsAway != 0
+            || platformLabel == null || platformLabel.isEmpty()
+            || platformLabel.equalsIgnoreCase(directionLabel)) {
+            return phrase;
+        }
+        return phrase + " (" + platformLabel + ")";
+    }
+
+    /**
      * The in-car announcement made shortly after departure, naming the station the train is now
      * running to: {@code "Next stop: Alewife."} The station name is the one the service is bound
      * for next, resolved by the caller.

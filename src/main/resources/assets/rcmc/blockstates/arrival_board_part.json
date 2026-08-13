@@ -1,0 +1,6 @@
+{
+  "variants": {
+    "axis=x": { "model": "rcmc:arrival_board_part" },
+    "axis=z": { "model": "rcmc:arrival_board_part" }
+  }
+}

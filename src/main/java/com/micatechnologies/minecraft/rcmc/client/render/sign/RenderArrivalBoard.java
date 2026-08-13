@@ -18,9 +18,9 @@ import net.minecraft.client.renderer.tileentity.TileEntitySpecialRenderer;
  * Draws the ceiling-hung arrival board:
  *
  * <pre>
- *   INBOUND   1 stop away
- *             3 stops away
- *   OUTBOUND  3 stops away
+ *   INBOUND/Ashmont    now approaching (2)
+ *                      3 stops away
+ *   OUTBOUND/Alewife   Boarding (1)
  * </pre>
  *
  * <p>Rows come from the synced {@link ServiceSnapshot}s: for every line serving the linked
@@ -28,6 +28,13 @@ import net.minecraft.client.renderer.tileentity.TileEntitySpecialRenderer;
  * over the service pattern — exact and deterministic, no wall clock. A train counted zero stops
  * away is displayed as "1 stop away" (it still has this station to reach), or "Boarding" once
  * it is berthed here with its doors cycling. Amber-on-black because every real one is.</p>
+ *
+ * <p><b>Both directions, and which berth.</b> A station is several platforms now, so a service
+ * running down either side of an island targets this same named place and fills its own direction
+ * group — which is what an island platform's board was always supposed to show, and could not
+ * while a station had one stop point. The berth in brackets is the snapshot's own, shown only
+ * against a train whose next stop is this station; {@code TransitSignText.stopsLabel} owns that
+ * rule and explains it.</p>
  */
 public class RenderArrivalBoard extends TileEntitySpecialRenderer<TileArrivalBoard> {
 
@@ -41,17 +48,21 @@ public class RenderArrivalBoard extends TileEntitySpecialRenderer<TileArrivalBoa
      * Screen size, in blocks. A real concourse board is a big panel read from across a platform,
      * and the first cut was under a block wide — legible only with your nose against it, which is
      * not what a board is for. 4 × 2 hanging from its ceiling mount reads from down the platform,
-     * and is the footprint the multiblock form will occupy. Drawn on both faces, like every real
-     * one.
+     * and is the footprint the board's blocks now occupy — see {@code ArrivalBoardStructure}, which
+     * claims five columns so that a screen centred on the master is contained by whole blocks.
+     * Drawn on both faces, like every real one.
      *
      * <p>{@code TileArrivalBoard.getRenderBoundingBox} must contain these; a screen this much
-     * larger than its own block gets culled otherwise.</p>
+     * larger than its own block gets culled otherwise. The height is {@code PANEL_TOP} less a
+     * whole block, which puts the bottom edge exactly on the boundary below the board's second row
+     * of blocks — the art stops where {@code ArrivalBoardStructure}'s footprint stops.</p>
      */
     private static final double PANEL_HALF_WIDTH = 2.0D;
-    private static final double PANEL_HEIGHT = 2.0D;
 
     /** Top of the screen, just under the ceiling mount so the stub still meets it. */
     private static final double PANEL_TOP = 0.97D;
+
+    private static final double PANEL_HEIGHT = PANEL_TOP + 1.0D;
 
     private static final double PANEL_HALF_THICKNESS = 0.06D;
 
@@ -67,6 +78,19 @@ public class RenderArrivalBoard extends TileEntitySpecialRenderer<TileArrivalBoa
      */
     private static final float TEXT_SCALE = 0.026F;
 
+    /** Height of the first line's top, below the panel's own top edge. */
+    private static final double TEXT_TOP = PANEL_TOP - 0.08D;
+
+    /**
+     * How many lines fit on the screen. Two lines and four groups is more than a four-by-two panel
+     * can hold, and the overflow does not stop at the panel — it carries on down past the bottom
+     * edge and hangs in the air below the board, which reads as a glitch rather than as a full
+     * board. Computed from the panel and the font rather than counted by hand, so raising the text
+     * scale again cannot silently reintroduce it.
+     */
+    private static final int MAX_LINES =
+        (int) ((TEXT_TOP - (PANEL_TOP - PANEL_HEIGHT)) / (10.0D * TEXT_SCALE));
+
     @Override
     public void render(TileArrivalBoard board, double x, double y, double z,
                        float partialTicks, int destroyStage, float alpha) {
@@ -79,13 +103,19 @@ public class RenderArrivalBoard extends TileEntitySpecialRenderer<TileArrivalBoa
 
         List<String> lines = new ArrayList<>();
         buildRows(board, lines);
+        // Truncated at the end rather than while building, because the rows come out in order of
+        // what a rider needs first — the station, then each direction's soonest train — so the
+        // ones that fall off the bottom are the ones worth losing.
+        if (lines.size() > MAX_LINES) {
+            lines = lines.subList(0, MAX_LINES);
+        }
         String[] text = lines.toArray(new String[0]);
         int[] colours = new int[text.length];
         for (int i = 0; i < colours.length; i++) {
             colours[i] = text[i].startsWith(" ") || Character.isDigit(text[i].charAt(0))
                 ? AMBER : (i == 0 ? MUTED_COLOUR : AMBER);
         }
-        SignPanels.drawLines(getFontRenderer(), text, colours, PANEL_TOP - 0.08D, TEXT_SCALE,
+        SignPanels.drawLines(getFontRenderer(), text, colours, TEXT_TOP, TEXT_SCALE,
             PANEL_HALF_THICKNESS + 0.005D);
 
         GlStateManager.popMatrix();
@@ -123,7 +153,12 @@ public class RenderArrivalBoard extends TileEntitySpecialRenderer<TileArrivalBoa
                 }
                 int stops = ArrivalEstimator.stopsAway(line, snapshot.serviceDirection(),
                     snapshot.nextStopIndex(), stationIndex);
-                String text = TransitSignText.stopsLabel(stops, snapshot.atPlatform());
+                // The berth rides along on the snapshot, and stopsLabel shows it only for a train
+                // whose next stop is this station — the one case where the berth it resolved is
+                // one of ours. That is what turns an island's two rows from "a train is coming"
+                // into "a train is coming, and it is the far side you want".
+                String text = TransitSignText.stopsLabel(stops, snapshot.atPlatform(),
+                    snapshot.platformLabel(), line.labelFor(snapshot.serviceDirection()));
                 if (text == null) {
                     continue;
                 }

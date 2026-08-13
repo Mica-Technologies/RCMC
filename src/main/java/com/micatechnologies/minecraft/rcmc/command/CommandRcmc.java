@@ -105,7 +105,7 @@ public class CommandRcmc extends CommandBase {
         }
         if (args.length == 4 && "station".equalsIgnoreCase(args[0])
             && "platform".equalsIgnoreCase(args[1])) {
-            return getListOfStringsMatchingLastWord(args, "add", "remove", "list");
+            return getListOfStringsMatchingLastWord(args, "add", "remove", "list", "label");
         }
         if (args.length == 2 && "build".equalsIgnoreCase(args[0])) {
             return getListOfStringsMatchingLastWord(args, "bank", "circuit", "status", "cancel");
@@ -758,7 +758,7 @@ public class CommandRcmc extends CommandBase {
         throws CommandException {
         if (args.length < 4) {
             throw new CommandException(
-                "/rcmc station platform <station> <add|remove|list> [label]");
+                "/rcmc station platform <station> <add|remove|list|label> [label]");
         }
         com.micatechnologies.minecraft.rcmc.physics.transit.TransitStation station =
             transit.station(args[2]);
@@ -837,6 +837,27 @@ public class CommandRcmc extends CommandBase {
                     "Removed " + removed + " from " + station.name() + ".");
                 return;
             }
+            case "label": {
+                // Renaming a berth is not the same as re-adding it. A platform is identified by its
+                // stop point everywhere else in the system — a service holds one, and the door side
+                // is matched back through it — so remove-and-re-add would have to hit the same point
+                // exactly, and would drop the door side on the way past. This edits the label alone.
+                if (args.length < 6) {
+                    throw new CommandException("/rcmc station platform " + station.name()
+                        + " label <label|number> <new label>");
+                }
+                int index = platformIndex(station, args[4]);
+                String was = platformLabel(station, index);
+                String label = args[5].equalsIgnoreCase("none") ? "" : args[5];
+                transit.addStation(station.withPlatformAt(index,
+                    station.platform(index).withLabel(label)));
+                state.markTrackDirty(world);
+                RcmcNetwork.sendToAllIn(new com.micatechnologies.minecraft.rcmc.net.PacketTransitSync(transit), world.provider.getDimension());
+                reply(sender, TextFormatting.GREEN, was + " at " + station.name() + " is now "
+                    + (label.isEmpty() ? "unlabelled" : "'" + label + "'")
+                    + ". Boards name it against a train due here.");
+                return;
+            }
             default:
                 throw new CommandException("Unknown platform subcommand " + args[3]);
         }
@@ -851,7 +872,7 @@ public class CommandRcmc extends CommandBase {
         if (args.length < 2) {
             throw new CommandException("/rcmc station <name> | list | remove <name> | "
                 + "doors <name> [platform] <left|right|both|auto> | "
-                + "platform <name> <add|remove|list> [label]");
+                + "platform <name> <add|remove|list|label> [label]");
         }
         com.micatechnologies.minecraft.rcmc.physics.transit.TransitSystem transit = state.transit();
         switch (args[1].toLowerCase(java.util.Locale.ROOT)) {

@@ -96,12 +96,23 @@ gives them its own meaning:
 | `rcmc:platform` | Station platform decking |
 | `rcmc:platform_edge` | Platform edge with the tactile warning strip; faces the track |
 | `rcmc:station_sign` | Post-mounted line map: the line's stops in order with a "you are here" marker. Right-click cycles lines at an interchange |
-| `rcmc:arrival_board` | Ceiling-hung amber-on-black board, 3.2 × 1.5, double-sided. Per-direction "N stops away", "Boarding" while berthed |
+| `rcmc:arrival_board` | Ceiling-hung amber-on-black board, double-sided. Per-direction "N stops away", "Boarding" while berthed, with the platform in brackets for a train due here. A **multiblock**: needs 5 blocks across, centred on where you place it, and 2 down |
 | `rcmc:station_speaker` | Wall- or ceiling-mounted PA announcing approaching trains. Mounts on the face you click |
 
 The three signage blocks **auto-link to the nearest station** on placement — including via
 `/setblock` — and store only that station's name, resolving against the live registry every frame.
 They cannot go stale.
+
+!!! note "The arrival board fills the space it looks like it fills"
+
+    The board's screen is four blocks wide and two tall, so the board claims that space: the block
+    you place becomes the top-centre of a ten-block panel, and the other nine fill in around it as
+    `rcmc:arrival_board_part`. Those are not an item and never appear in the creative tab — break
+    any of them, or the one you placed, and the whole board comes down as a single item.
+
+    Placement is refused outright if the footprint is not clear, and the item is handed back. Boards
+    placed before this existed stay one block and keep working exactly as they did; re-place one to
+    give it the footprint.
 
 !!! note "Track itself is not a block"
 

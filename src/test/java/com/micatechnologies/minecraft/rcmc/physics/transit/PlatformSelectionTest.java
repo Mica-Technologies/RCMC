@@ -181,6 +181,38 @@ class PlatformSelectionTest {
         assertEquals(DoorSide.LEFT, transit.doorSideFor(service));
     }
 
+    /**
+     * An arrival board never sees a {@code LineService} — it renders from the synced snapshots. So
+     * the berth has to survive the trip onto the wire, and it has to be the berth the train is
+     * pulling into: the primary here is "Inbound", and a board that reported it would put a
+     * platform number in front of riders that sends them to the far side of the island.
+     */
+    @Test
+    @DisplayName("the synced snapshot names the berth the train is pulling into")
+    void snapshotCarriesTheServedBerth() {
+        TrackNetwork network = ring();
+        TransitSystem transit = lineOn(network);
+        double length = network.section(1).totalLength();
+
+        Train train = trainAt(length * 0.60D);
+        serviceFrom(transit, network, train);
+
+        List<ServiceSnapshot> snapshots = transit.serviceSnapshots();
+        assertEquals(1, snapshots.size(), "one train in service, one snapshot");
+        assertEquals("Outbound", snapshots.get(0).platformLabel(),
+            "the berth on this train's own track, not the station's first");
+        assertEquals(DoorSide.LEFT, snapshots.get(0).doorSide(),
+            "and the side that berth opens on, from the same lookup");
+
+        // Renaming the berth to a platform number is an ordinary thing to do to a live station,
+        // and the line's frozen copy will never hear about it. Boards must read the registry.
+        TransitStation central = transit.station("Central");
+        transit.addStation(central.withPlatformAt(1, central.platform(1).withLabel("2")));
+
+        assertEquals("2", transit.serviceSnapshots().get(0).platformLabel(),
+            "the label comes from the registry, not from the line's copy of the station");
+    }
+
     @Test
     @DisplayName("a single-platform station still answers exactly as it always did")
     void singlePlatformIsUnchanged() {

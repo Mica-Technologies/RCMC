@@ -152,6 +152,7 @@ removes block signalling with `off`. Reports the safe train count for the divisi
 /rcmc station platform <name> add [label]             add a berth at the track you are standing by
 /rcmc station platform <name> remove <label|number>
 /rcmc station platform <name> list
+/rcmc station platform <name> label <label|number> <new label>    rename a berth; 'none' clears it
 ```
 
 **Platforms** are the berths at a station — one per track through it. A station has one by default,
@@ -170,7 +171,17 @@ Berths are addressed by label or by number (`1` is the first authored):
 /rcmc station platform Central add Outbound
 /rcmc station doors Central Outbound left
 /rcmc station doors Central 2 auto
+/rcmc station platform Central label Outbound 2
 ```
+
+Renaming a berth edits the label alone, rather than removing and re-adding it. A berth is identified
+everywhere else by its stop point — a running service holds one, and the door side is matched back
+through it — so re-adding would have to hit the same point exactly and would lose the door side on
+the way past.
+
+Labels are worth setting on an island, because an arrival board names the berth a train is pulling
+into: `Boarding (2)`. A label that only repeats the direction the row already sits under is left off
+the board, so prefer `1` and `2` over `Inbound` and `Outbound` if you want it to show.
 
 **Door side** is normally worked out for you: placing a station, or laying a platform, looks either
 side of the track for something a passenger could step out onto — a surface at car-floor height
