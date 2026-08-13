@@ -209,7 +209,7 @@ public final class TransitSystem {
         double bestDistance = Double.POSITIVE_INFINITY;
         double bestFacing = 1.0D;
         for (int i = 0; i < line.stationCount(); i++) {
-            for (double facing : new double[] {1.0D, -1.0D}) {
+            for (double facing : candidateFacings(train)) {
                 double d = TrackWalk.distanceTo(network, train.reference(), facing,
                     line.station(i).stopPoint(), 10_000.0D);
                 if (d < bestDistance) {
@@ -232,6 +232,30 @@ public final class TransitSystem {
         // the recovery: setHeld(true) both marks the intent and clears the stall, per Train.
         train.setHeld(true);
         return service;
+    }
+
+    /**
+     * The facings {@link #enterService} is allowed to consider for this train.
+     *
+     * <p>A train at rest may be sent either way, so both are open and the nearest station wins.
+     * <b>A train already running may not.</b> {@link LineService#tick} resyncs facing from the
+     * velocity sign on its very first tick, so a facing chosen against the direction of travel is
+     * discarded immediately — while the service direction derived from it survives, leaving the
+     * schedule counting one way round the line and the train driving the other. On a loop that is
+     * the "metro skips stations" report: it serves one station per lap and drives past the rest,
+     * and nothing ever corrects it.</p>
+     *
+     * <p>Searching only the direction the train is genuinely going costs nothing an operator would
+     * want: a train doing line speed was never going to stop and reverse for a station behind it.
+     * Trains spawn at rest, so this narrows the choice only for a service entered on a moving
+     * train — which is what resuming a save made mid-run does.</p>
+     */
+    private static double[] candidateFacings(Train train) {
+        double velocity = train.velocity();
+        if (Math.abs(velocity) > LineService.FACING_SPEED) {
+            return new double[] {velocity >= 0.0D ? 1.0D : -1.0D};
+        }
+        return new double[] {1.0D, -1.0D};
     }
 
     /**

@@ -32,8 +32,14 @@ import com.micatechnologies.minecraft.rcmc.track.TrackWalk;
  */
 public final class LineService {
 
-    /** Above this speed the velocity sign is trusted as the current facing. */
-    private static final double FACING_SPEED = 0.1D;
+    /**
+     * Above this speed the velocity sign is trusted as the current facing.
+     *
+     * <p>Package-visible because {@link TransitSystem#enterService} has to apply the same
+     * threshold: it is choosing a facing that {@link #tick} will overwrite from the velocity sign
+     * on the very first tick if the train is moving faster than this.</p>
+     */
+    static final double FACING_SPEED = 0.1D;
 
     /** How far ahead the route walk will look for the target station before giving up. */
     private static final double ROUTE_HORIZON = 10_000.0D;
