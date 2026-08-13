@@ -57,7 +57,7 @@ Item: **`rcmc:transit_tool`**.
 
 | Action | Effect |
 | --- | --- |
-| ++g++ | Cycle mode: **station → line → switch → track style** |
+| ++g++ | Cycle mode: **station → platform → line → switch → track style** |
 | Right-click track | Do this mode's thing at the point aimed at |
 | ++c++ | Commit what is being assembled (create the line, throw the switch) |
 | ++v++ | In line mode, toggle loop / shuttle |
@@ -184,10 +184,18 @@ Override it when you need to:
 A station is a *place*, and a place can have more than one track through it. An island platform —
 decking with a running line down each side — is one station with two **platforms**, one per track.
 
+In **platform** mode (++g++), right-click the *other* track at a station and it gains a berth there;
+sneak+click a berth to remove it. As with stations, the tool's own name becomes the berth's label,
+so renaming it to `Outbound` in an anvil labels the next one. By command:
+
 ```
 /rcmc station Central                       the first berth, at the track you are standing by
 /rcmc station platform Central add Outbound  now stand beside the other track
 ```
+
+The tool finds "this station" by **world distance**, not along the rails — the far side of an island
+can be hundreds of blocks away by track while being six blocks away across the decking, and it is
+obviously the same station to anyone standing on it.
 
 Each berth keeps its own door side, because the two tracks look out at the same decking from
 opposite hands: what is *left* to an inbound train is *right* to an outbound one. You do not have to

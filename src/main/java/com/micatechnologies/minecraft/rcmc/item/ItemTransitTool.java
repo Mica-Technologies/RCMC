@@ -38,7 +38,7 @@ import net.minecraftforge.fml.relauncher.SideOnly;
  *
  * <p>Controls:</p>
  * <ul>
- *   <li><b>G</b> — cycle mode: station → line → switch → track style.</li>
+ *   <li><b>G</b> — cycle mode: station → platform → line → switch → track style.</li>
  *   <li><b>Right-click track</b> — do this mode's thing at the point aimed at.</li>
  *   <li><b>C</b> — commit what is being assembled (create the line, throw in the switch).</li>
  *   <li><b>V</b> — in line mode, toggle loop/shuttle.</li>
@@ -148,6 +148,9 @@ public class ItemTransitTool extends Item {
             case STATION:
                 station(player, world, state, hit);
                 return;
+            case PLATFORM:
+                platform(player, world, state, hit);
+                return;
             case LINE:
                 pickStop(player, state, session, hit);
                 return;
@@ -189,6 +192,139 @@ public class ItemTransitTool extends Item {
             say(player, TextFormatting.DARK_GRAY,
                 "  Rename this tool in an anvil to name the next station.");
         }
+    }
+
+    // --- Platform mode. ------------------------------------------------------------------------
+
+    /**
+     * Adds a berth to the station this track belongs to, or removes the one clicked.
+     *
+     * <p>The berth's whole purpose is to be on a <em>different</em> track from the station's first
+     * one, so "which station is this?" cannot be answered along the rails the way station mode
+     * answers it: the other side of an island can be hundreds of blocks away by track even though
+     * it is six blocks away across the platform. It is answered in world space instead, which is
+     * the same thing a builder means by "this station" and the same rule the platform signs use to
+     * link themselves.</p>
+     */
+    private static void platform(EntityPlayer player, World world, RcmcWorldState state,
+                                 TrackPicker.Hit hit) {
+        TransitSystem transit = state.transit();
+        TransitStation station = nearestStationInWorld(state, hit.ref);
+        if (station == null) {
+            say(player, TextFormatting.GRAY,
+                "No station near there. Switch to station mode with G and place one first.");
+            return;
+        }
+        if (player.isSneaking()) {
+            int index = nearestPlatformIndex(state, station, hit.ref);
+            if (station.platformCount() == 1) {
+                say(player, TextFormatting.GRAY, station.name()
+                    + " has only one platform — remove the station itself in station mode.");
+                return;
+            }
+            java.util.List<com.micatechnologies.minecraft.rcmc.physics.transit.TransitPlatform>
+                kept = new ArrayList<>(station.platforms());
+            kept.remove(index);
+            transit.addStation(new TransitStation(station.name(), kept));
+            syncTransit(world, state);
+            say(player, TextFormatting.YELLOW,
+                "Removed a platform from " + station.name() + " — " + kept.size() + " left.");
+            return;
+        }
+        if (station.platformAt(hit.ref) != null) {
+            say(player, TextFormatting.GRAY,
+                station.name() + " already has a platform at exactly that point.");
+            return;
+        }
+        String label = chosenName(player, "", station.platformCount() + 1).trim();
+        com.micatechnologies.minecraft.rcmc.physics.transit.TransitPlatform added =
+            new com.micatechnologies.minecraft.rcmc.physics.transit.TransitPlatform(hit.ref,
+                com.micatechnologies.minecraft.rcmc.physics.transit.DoorSide.BOTH, label);
+        com.micatechnologies.minecraft.rcmc.physics.transit.DoorSide detected =
+            com.micatechnologies.minecraft.rcmc.world.PlatformSide.detect(
+                world, state.network(), added);
+        if (detected != null) {
+            added = added.withDoorSide(detected);
+        }
+        transit.addStation(station.withPlatform(added));
+        syncTransit(world, state);
+        say(player, TextFormatting.GREEN, "Added platform " + (label.isEmpty() ? "" : "'" + label
+            + "' ") + "to " + station.name() + " — section " + hit.ref.sectionId() + " @ "
+            + String.format("%.1f", hit.ref.distance())
+            + (detected == null ? "" : ", doors "
+                + detected.name().toLowerCase(java.util.Locale.ROOT)));
+        if (detected == null) {
+            say(player, TextFormatting.DARK_GRAY,
+                "  No decking found beside it — set the side with /rcmc station doors.");
+        }
+    }
+
+    /** World-space distance from a track point to the nearest of a station's berths, squared. */
+    private static double worldDistanceSq(RcmcWorldState state, TransitStation station,
+                                          TrackRef ref) {
+        TrackNetwork network = state.network();
+        if (!network.hasSection(ref.sectionId())) {
+            return Double.POSITIVE_INFINITY;
+        }
+        Vec3 at = network.frameAt(ref).position;
+        double best = Double.POSITIVE_INFINITY;
+        for (com.micatechnologies.minecraft.rcmc.physics.transit.TransitPlatform platform
+            : station.platforms()) {
+            if (!network.hasSection(platform.stopPoint().sectionId())) {
+                continue;
+            }
+            Vec3 p = network.frameAt(platform.stopPoint()).position;
+            double dx = p.x - at.x;
+            double dy = p.y - at.y;
+            double dz = p.z - at.z;
+            double d = dx * dx + dy * dy + dz * dz;
+            if (d < best) {
+                best = d;
+            }
+        }
+        return best;
+    }
+
+    /** The station physically nearest a clicked track point, or {@code null} if none is close. */
+    private static TransitStation nearestStationInWorld(RcmcWorldState state, TrackRef ref) {
+        TransitStation best = null;
+        double bestDistance = Double.POSITIVE_INFINITY;
+        for (TransitStation station : state.transit().stations()) {
+            double d = worldDistanceSq(state, station, ref);
+            if (d < bestDistance) {
+                bestDistance = d;
+                best = station;
+            }
+        }
+        // Generous next to station mode's 16: the far side of a wide island, plus the length of a
+        // platform, is a long way from the stop point it belongs to and still obviously the same
+        // station to anyone standing on it.
+        return bestDistance <= 48.0D * 48.0D ? best : null;
+    }
+
+    /** Which of a station's berths is physically nearest a clicked point. */
+    private static int nearestPlatformIndex(RcmcWorldState state, TransitStation station,
+                                            TrackRef ref) {
+        TrackNetwork network = state.network();
+        Vec3 at = network.frameAt(ref).position;
+        int best = 0;
+        double bestDistance = Double.POSITIVE_INFINITY;
+        for (int i = 0; i < station.platformCount(); i++) {
+            TrackRef stop = station.platform(i).stopPoint();
+            if (!network.hasSection(stop.sectionId())) {
+                continue;
+            }
+            Vec3 p = network.frameAt(stop).position;
+            double dx = p.x - at.x;
+            double dy = p.y - at.y;
+            double dz = p.z - at.z;
+            double d = dx * dx + dy * dy + dz * dz;
+            if (d < bestDistance) {
+                bestDistance = d;
+                best = i;
+            }
+        }
+        return best;
     }
 
     /** The authored station nearest a clicked point, on the same section, or {@code null}. */
@@ -375,6 +511,7 @@ public class ItemTransitTool extends Item {
                 commitSwitch(player, world, state, session);
                 return;
             case STATION:
+            case PLATFORM:
             case STYLE:
             default:
                 say(player, TextFormatting.GRAY, session.mode().label()
@@ -436,7 +573,7 @@ public class ItemTransitTool extends Item {
     @Override
     @SideOnly(Side.CLIENT)
     public void addInformation(ItemStack stack, World world, List<String> tooltip, ITooltipFlag flag) {
-        tooltip.add(TextFormatting.GRAY + "G: mode — station, line, switch, track style");
+        tooltip.add(TextFormatting.GRAY + "G: mode — station, platform, line, switch, track style");
         tooltip.add(TextFormatting.GRAY + "Right-click track: apply the current mode");
         tooltip.add(TextFormatting.GRAY + "C: create the line / switch being assembled");
         tooltip.add(TextFormatting.GRAY + "V: loop or shuttle (line mode)");
