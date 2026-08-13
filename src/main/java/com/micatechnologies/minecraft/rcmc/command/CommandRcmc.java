@@ -97,11 +97,15 @@ public class CommandRcmc extends CommandBase {
             return getListOfStringsMatchingLastWord(args, "start", "end");
         }
         if (args.length == 2 && "station".equalsIgnoreCase(args[0])) {
-            return getListOfStringsMatchingLastWord(args, "list", "remove", "doors");
+            return getListOfStringsMatchingLastWord(args, "list", "remove", "doors", "platform");
         }
         if (args.length == 4 && "station".equalsIgnoreCase(args[0])
             && "doors".equalsIgnoreCase(args[1])) {
             return getListOfStringsMatchingLastWord(args, "left", "right", "both", "auto");
+        }
+        if (args.length == 4 && "station".equalsIgnoreCase(args[0])
+            && "platform".equalsIgnoreCase(args[1])) {
+            return getListOfStringsMatchingLastWord(args, "add", "remove", "list");
         }
         if (args.length == 2 && "build".equalsIgnoreCase(args[0])) {
             return getListOfStringsMatchingLastWord(args, "bank", "circuit", "status", "cancel");
@@ -712,6 +716,132 @@ public class CommandRcmc extends CommandBase {
         return new TrackNetwork.SectionEnd(sectionId, end);
     }
 
+    /** How a berth is named in output: its label, or its position when it has none. */
+    private static String platformLabel(
+        com.micatechnologies.minecraft.rcmc.physics.transit.TransitStation station, int index) {
+        return station.platform(index).hasLabel()
+            ? station.platform(index).label() : "platform " + (index + 1);
+    }
+
+    /** Resolves a platform argument — a label, or a 1-based index — to an index. */
+    private static int platformIndex(
+        com.micatechnologies.minecraft.rcmc.physics.transit.TransitStation station, String argument)
+        throws CommandException {
+        for (int i = 0; i < station.platformCount(); i++) {
+            if (station.platform(i).label().equalsIgnoreCase(argument)) {
+                return i;
+            }
+        }
+        try {
+            int index = Integer.parseInt(argument) - 1;
+            if (index >= 0 && index < station.platformCount()) {
+                return index;
+            }
+        }
+        catch (NumberFormatException ignored) {
+            // Not a number, and matched no label — fall through to the same error either way.
+        }
+        throw new CommandException("Station " + station.name() + " has no platform '" + argument
+            + "' — try /rcmc station platform " + station.name() + " list");
+    }
+
+    /**
+     * {@code /rcmc station platform <station> add|remove|list [label]} — the berths at a station.
+     *
+     * <p>A second berth is what turns a name into a place: an island platform is one station with a
+     * running line down each side, and until both tracks have a berth only one of them can be
+     * served, announced or shown on a board.</p>
+     */
+    private void stationPlatform(ICommandSender sender, World world, RcmcWorldState state,
+                                 com.micatechnologies.minecraft.rcmc.physics.transit.TransitSystem transit,
+                                 String[] args)
+        throws CommandException {
+        if (args.length < 4) {
+            throw new CommandException(
+                "/rcmc station platform <station> <add|remove|list> [label]");
+        }
+        com.micatechnologies.minecraft.rcmc.physics.transit.TransitStation station =
+            transit.station(args[2]);
+        if (station == null) {
+            throw new CommandException("No station named " + args[2]);
+        }
+        switch (args[3].toLowerCase(java.util.Locale.ROOT)) {
+            case "list": {
+                reply(sender, TextFormatting.AQUA,
+                    station.name() + " — " + station.platformCount() + " platform"
+                        + (station.platformCount() == 1 ? "" : "s"));
+                for (int i = 0; i < station.platformCount(); i++) {
+                    reply(sender, TextFormatting.GRAY, "  " + platformLabel(station, i)
+                        + " — section " + station.platform(i).stopPoint().sectionId() + " @ "
+                        + fmt(station.platform(i).stopPoint().distance()) + ", doors "
+                        + station.platform(i).doorSide().name().toLowerCase(java.util.Locale.ROOT));
+                }
+                return;
+            }
+            case "add": {
+                EntityPlayer player = getCommandSenderAsPlayer(sender);
+                com.micatechnologies.minecraft.rcmc.track.TrackPicker.Hit hit =
+                    com.micatechnologies.minecraft.rcmc.track.TrackPicker.pick(state.network(),
+                        new Vec3(player.posX, player.posY, player.posZ), 16.0D);
+                if (hit == null) {
+                    throw new CommandException(
+                        "No track within 16 blocks — stand beside the other platform's track");
+                }
+                if (station.platformAt(hit.ref) != null) {
+                    throw new CommandException(station.name()
+                        + " already has a platform at exactly that point");
+                }
+                String label = args.length > 4 ? args[4] : "";
+                com.micatechnologies.minecraft.rcmc.physics.transit.TransitPlatform added =
+                    new com.micatechnologies.minecraft.rcmc.physics.transit.TransitPlatform(
+                        hit.ref,
+                        com.micatechnologies.minecraft.rcmc.physics.transit.DoorSide.BOTH, label);
+                // Detected from what is already built, exactly as creating a station does — the
+                // builder answered this by putting decking somewhere.
+                com.micatechnologies.minecraft.rcmc.physics.transit.DoorSide detected =
+                    com.micatechnologies.minecraft.rcmc.world.PlatformSide.detect(
+                        world, state.network(), added);
+                if (detected != null) {
+                    added = added.withDoorSide(detected);
+                }
+                transit.addStation(station.withPlatform(added));
+                state.markTrackDirty(world);
+                RcmcNetwork.sendToAllIn(new com.micatechnologies.minecraft.rcmc.net.PacketTransitSync(transit), world.provider.getDimension());
+                reply(sender, TextFormatting.GREEN, "Added platform"
+                    + (label.isEmpty() ? "" : " '" + label + "'") + " to " + station.name()
+                    + " at section " + hit.ref.sectionId() + " @ " + fmt(hit.ref.distance())
+                    + (detected == null ? " (no decking found — set doors explicitly)."
+                        : ". Doors: " + detected.name().toLowerCase(java.util.Locale.ROOT) + "."));
+                return;
+            }
+            case "remove": {
+                if (args.length < 5) {
+                    throw new CommandException(
+                        "/rcmc station platform " + station.name() + " remove <label|number>");
+                }
+                if (station.platformCount() == 1) {
+                    throw new CommandException("A station needs at least one platform — remove the "
+                        + "station itself with /rcmc station remove " + station.name());
+                }
+                int index = platformIndex(station, args[4]);
+                String removed = platformLabel(station, index);
+                java.util.List<com.micatechnologies.minecraft.rcmc.physics.transit.TransitPlatform>
+                    kept = new ArrayList<>(station.platforms());
+                kept.remove(index);
+                transit.addStation(
+                    new com.micatechnologies.minecraft.rcmc.physics.transit.TransitStation(
+                        station.name(), kept));
+                state.markTrackDirty(world);
+                RcmcNetwork.sendToAllIn(new com.micatechnologies.minecraft.rcmc.net.PacketTransitSync(transit), world.provider.getDimension());
+                reply(sender, TextFormatting.GREEN,
+                    "Removed " + removed + " from " + station.name() + ".");
+                return;
+            }
+            default:
+                throw new CommandException("Unknown platform subcommand " + args[3]);
+        }
+    }
+
     /**
      * {@code /rcmc station <name>} — creates (or moves) a named transit station at the track
      * point nearest the player. Also {@code list} and {@code remove <name>}.
@@ -719,8 +849,9 @@ public class CommandRcmc extends CommandBase {
     private void station(ICommandSender sender, World world, RcmcWorldState state, String[] args)
         throws CommandException {
         if (args.length < 2) {
-            throw new CommandException(
-                "/rcmc station <name> | list | remove <name> | doors <name> <left|right|both|auto>");
+            throw new CommandException("/rcmc station <name> | list | remove <name> | "
+                + "doors <name> [platform] <left|right|both|auto> | "
+                + "platform <name> <add|remove|list> [label]");
         }
         com.micatechnologies.minecraft.rcmc.physics.transit.TransitSystem transit = state.transit();
         switch (args[1].toLowerCase(java.util.Locale.ROOT)) {
@@ -731,10 +862,25 @@ public class CommandRcmc extends CommandBase {
                 }
                 for (com.micatechnologies.minecraft.rcmc.physics.transit.TransitStation s
                     : transit.stations()) {
-                    reply(sender, TextFormatting.AQUA, s.name() + " — section "
-                        + s.stopPoint().sectionId() + " @ " + fmt(s.stopPoint().distance())
-                        + ", doors " + s.doorSide().name().toLowerCase(java.util.Locale.ROOT));
+                    if (s.platformCount() == 1) {
+                        reply(sender, TextFormatting.AQUA, s.name() + " — section "
+                            + s.stopPoint().sectionId() + " @ " + fmt(s.stopPoint().distance())
+                            + ", doors " + s.doorSide().name().toLowerCase(java.util.Locale.ROOT));
+                        continue;
+                    }
+                    reply(sender, TextFormatting.AQUA,
+                        s.name() + " — " + s.platformCount() + " platforms");
+                    for (int i = 0; i < s.platformCount(); i++) {
+                        reply(sender, TextFormatting.GRAY, "  " + platformLabel(s, i) + " — section "
+                            + s.platform(i).stopPoint().sectionId() + " @ "
+                            + fmt(s.platform(i).stopPoint().distance()) + ", doors "
+                            + s.platform(i).doorSide().name().toLowerCase(java.util.Locale.ROOT));
+                    }
                 }
+                return;
+            }
+            case "platform": {
+                stationPlatform(sender, world, state, transit, args);
                 return;
             }
             case "doors": {
@@ -742,34 +888,64 @@ public class CommandRcmc extends CommandBase {
                 // side only is a legitimate thing to want, and detection reads the world as built
                 // rather than as intended, so the builder gets the last word.
                 if (args.length < 4) {
-                    throw new CommandException("/rcmc station doors <name> <left|right|both|auto>");
+                    throw new CommandException(
+                        "/rcmc station doors <name> [platform] <left|right|both|auto>");
                 }
                 com.micatechnologies.minecraft.rcmc.physics.transit.TransitStation station =
                     transit.station(args[2]);
                 if (station == null) {
                     throw new CommandException("No station named " + args[2]);
                 }
-                com.micatechnologies.minecraft.rcmc.physics.transit.DoorSide side;
-                if ("auto".equalsIgnoreCase(args[3])) {
-                    side = com.micatechnologies.minecraft.rcmc.world.PlatformSide.detect(
-                        world, state.network(), station);
-                    if (side == null) {
-                        throw new CommandException("No platform found either side of " + args[2]
+                // With a platform argument the side applies to that berth alone; without one it
+                // applies to every berth, which is what it always meant and is still right for the
+                // single-platform stations that are most of them.
+                String sideArg = args[args.length - 1];
+                int only = -1;
+                if (args.length > 4) {
+                    only = platformIndex(station, args[3]);
+                }
+                com.micatechnologies.minecraft.rcmc.physics.transit.TransitStation updated;
+                com.micatechnologies.minecraft.rcmc.physics.transit.DoorSide reported;
+                if ("auto".equalsIgnoreCase(sideArg)) {
+                    updated = station;
+                    reported = null;
+                    for (int i = 0; i < station.platformCount(); i++) {
+                        if (only >= 0 && i != only) {
+                            continue;
+                        }
+                        com.micatechnologies.minecraft.rcmc.physics.transit.DoorSide found =
+                            com.micatechnologies.minecraft.rcmc.world.PlatformSide.detect(
+                                world, state.network(), station.platform(i));
+                        if (found == null) {
+                            continue;
+                        }
+                        updated = updated.withPlatformAt(i, updated.platform(i).withDoorSide(found));
+                        reported = found;
+                        reply(sender, TextFormatting.GREEN, "Doors at " + station.name() + " "
+                            + platformLabel(station, i) + " open on the "
+                            + found.name().toLowerCase(java.util.Locale.ROOT) + " of the track.");
+                    }
+                    if (reported == null) {
+                        throw new CommandException("No platform found beside " + args[2]
                             + " — build one, or set the side explicitly");
                     }
                 }
                 else {
-                    side = com.micatechnologies.minecraft.rcmc.physics.transit.DoorSide.parse(args[3]);
+                    com.micatechnologies.minecraft.rcmc.physics.transit.DoorSide side =
+                        com.micatechnologies.minecraft.rcmc.physics.transit.DoorSide.parse(sideArg);
                     if (side == null) {
                         throw new CommandException("Side must be left, right, both or auto");
                     }
+                    updated = only < 0 ? station.withDoorSide(side)
+                        : station.withPlatformAt(only, station.platform(only).withDoorSide(side));
+                    reply(sender, TextFormatting.GREEN, "Doors at " + station.name()
+                        + (only < 0 ? "" : " " + platformLabel(station, only)) + " open on the "
+                        + side.name().toLowerCase(java.util.Locale.ROOT)
+                        + " of the track (as a train running forward sees it).");
                 }
-                transit.addStation(station.withDoorSide(side));
+                transit.addStation(updated);
                 state.markTrackDirty(world);
                 RcmcNetwork.sendToAllIn(new com.micatechnologies.minecraft.rcmc.net.PacketTransitSync(transit), world.provider.getDimension());
-                reply(sender, TextFormatting.GREEN, "Doors at " + station.name() + " open on the "
-                    + side.name().toLowerCase(java.util.Locale.ROOT)
-                    + " of the track (as a train running forward sees it).");
                 return;
             }
             case "remove": {
@@ -1005,7 +1181,14 @@ public class CommandRcmc extends CommandBase {
         java.util.LinkedHashSet<Integer> sectionIds = new java.util.LinkedHashSet<>();
         for (com.micatechnologies.minecraft.rcmc.physics.transit.TransitStation station
             : line.stations()) {
-            sectionIds.add(station.stopPoint().sectionId());
+            // Every berth, not just the primary. A station whose platforms sit on different
+            // sections — an island on a double-track alignment is exactly that — would otherwise
+            // have one of its tracks left unsignalled, which reads in-game as signalling that
+            // mysteriously only works in one direction.
+            for (com.micatechnologies.minecraft.rcmc.physics.transit.TransitPlatform platform
+                : station.platforms()) {
+                sectionIds.add(platform.stopPoint().sectionId());
+            }
         }
 
         List<BlockSection> blocks = new ArrayList<>();
