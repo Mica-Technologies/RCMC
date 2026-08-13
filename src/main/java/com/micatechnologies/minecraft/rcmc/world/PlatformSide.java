@@ -8,6 +8,7 @@ import com.micatechnologies.minecraft.rcmc.track.TrackNetwork;
 import com.micatechnologies.minecraft.rcmc.track.math.TrackFrame;
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
+import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 
@@ -17,8 +18,8 @@ import net.minecraft.world.World;
  * <p><b>Why detect rather than declare.</b> A builder has already answered this question by putting
  * a platform somewhere — asking them to say it a second time in a command is the kind of duplicate
  * authoring the transit tool exists to remove, and the two answers could then disagree. Reading the
- * world means a platform laid by {@code /rcmc platform}, and one built by hand out of the same
- * blocks, are treated identically.</p>
+ * world means a platform laid by {@code /rcmc platform} and one built by hand are treated
+ * identically — see {@link #isDecking} for what counts, which is a shape rather than a block.</p>
  *
  * <p>Lives in {@code world} because it needs a {@link World}; {@code physics.transit} stays free of
  * Minecraft types and only ever handles the {@link DoorSide} that comes out.</p>
@@ -44,6 +45,16 @@ public final class PlatformSide {
      */
     private static final double SAMPLE_REACH = 12.0D;
     private static final int SAMPLES = 5;
+
+    /**
+     * How much clear space a deck needs above it to count as one, in blocks.
+     *
+     * <p>This is the whole test that separates a platform from a wall. Both are solid at car-floor
+     * height — a tunnel's side wall passes through that level just as decking does — but a wall
+     * carries on upwards and a platform has a passenger standing on it. Two blocks is the space
+     * that passenger occupies, and it is the smallest opening anyone would build to walk through.</p>
+     */
+    private static final int HEADROOM = 2;
 
     private PlatformSide() {
         throw new AssertionError("No instances.");
@@ -109,12 +120,46 @@ public final class PlatformSide {
             if (!world.isBlockLoaded(pos)) {
                 continue;
             }
-            IBlockState state = world.getBlockState(pos);
-            Block block = state.getBlock();
-            if (block == RcmcBlocks.platform || block == RcmcBlocks.platformEdge) {
+            if (isDecking(world, pos)) {
                 return true;
             }
         }
         return false;
+    }
+
+    /**
+     * Whether the block at {@code pos} is something a passenger could step out onto.
+     *
+     * <p>RCMC's own platform blocks are decking by definition. Anything else has to earn it, and
+     * the test is a solid top face with {@link #HEADROOM} clear above: a surface you can stand on,
+     * with room to stand. That is deliberately generous about <em>material</em> — a platform built
+     * from quartz, stone slabs or concrete is a platform, and the demo alignments and most
+     * hand-built stations are not made of RCMC blocks at all — while staying strict about
+     * <em>shape</em>, which is what actually distinguishes decking from the tunnel wall running
+     * past at the same height.</p>
+     *
+     * <p>Nothing else nearby passes both halves. A neighbouring track's bed sits at rail level,
+     * two blocks below a car floor, so it is never solid at the height this probes. A wall is
+     * solid here and solid above. Only a walkable surface is solid here and open above.</p>
+     */
+    private static boolean isDecking(World world, BlockPos pos) {
+        IBlockState state = world.getBlockState(pos);
+        Block block = state.getBlock();
+        if (block == RcmcBlocks.platform || block == RcmcBlocks.platformEdge) {
+            return true;
+        }
+        if (!world.isSideSolid(pos, EnumFacing.UP)) {
+            return false;
+        }
+        for (int up = 1; up <= HEADROOM; up++) {
+            BlockPos above = pos.up(up);
+            // An unloaded neighbour is unknown, not clear — refusing to guess here keeps a
+            // chunk boundary from inventing a platform out of a wall.
+            if (!world.isBlockLoaded(above)
+                || world.getBlockState(above).getMaterial().blocksMovement()) {
+                return false;
+            }
+        }
+        return true;
     }
 }

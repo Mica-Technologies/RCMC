@@ -165,10 +165,13 @@ tactile warning strip and a facing that points at the track.
 ### The platform decides which doors open
 
 **Where you put the platform is how the train knows which side to open.** Placing a station, or
-laying a platform, looks for platform blocks either side of the track and records what it finds —
-so a platform on one side gives you doors on one side, and platforms on both give you both. Nothing
-extra to author, and a platform you built by hand out of the same blocks is read exactly the same
-way.
+laying a platform, looks either side of the track and records what it finds — so a platform on one
+side gives you doors on one side, and platforms on both give you both. Nothing extra to author.
+
+What counts is a shape, not a block: a surface at car-floor height with two blocks clear above it,
+which is to say somewhere a passenger could stand. The two blocks above are what tell a platform
+apart from the tunnel wall running past at the same height. So a platform you built by hand out of
+quartz, slabs or concrete is read exactly like one laid from `rcmc:platform`.
 
 Override it when you need to:
 
