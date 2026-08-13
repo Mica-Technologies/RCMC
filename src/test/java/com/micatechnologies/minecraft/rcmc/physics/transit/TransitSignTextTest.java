@@ -45,10 +45,21 @@ class TransitSignTextTest {
     @Test
     @DisplayName("board groups by direction and destination")
     void destinationLabel() {
-        assertEquals("OUTBOUND/Alewife", TransitSignText.destinationLabel(redLine(), 1));
-        assertEquals("INBOUND/Ashmont", TransitSignText.destinationLabel(redLine(), -1));
-        assertEquals("OUTBOUND", TransitSignText.destinationLabel(loopLine(), 1),
+        assertEquals("OUT/Alewife", TransitSignText.destinationLabel(redLine(), 1),
+            "the direction is cut to its stem so the terminus gets the room");
+        assertEquals("IN/Ashmont", TransitSignText.destinationLabel(redLine(), -1));
+        assertEquals("OUT", TransitSignText.destinationLabel(loopLine(), 1),
             "a loop falls back to the bare direction label");
+    }
+
+    @Test
+    @DisplayName("a direction label that is not <X>BOUND is left exactly as authored")
+    void unusualDirectionLabelsAreNotGuessedAt() {
+        List<TransitStation> stops = Arrays.asList(station("Downtown"), station("Airport"));
+        TransitLine line = new TransitLine("Express", stops, false, "toward Downtown",
+            "toward Airport");
+        assertEquals("toward Airport/Airport", TransitSignText.destinationLabel(line, 1),
+            "there is no rule that shortens this without guessing, so it is not shortened");
     }
 
     @Test
@@ -63,9 +74,9 @@ class TransitSignTextTest {
     @DisplayName("stop-count phrasing matches across the board's raw scale")
     void stopsLabel() {
         assertEquals("Boarding", TransitSignText.stopsLabel(0, true));
-        assertEquals("now approaching", TransitSignText.stopsLabel(0, false));
-        assertEquals("1 stop away", TransitSignText.stopsLabel(1, false));
-        assertEquals("3 stops away", TransitSignText.stopsLabel(3, false));
+        assertEquals("Approaching", TransitSignText.stopsLabel(0, false));
+        assertEquals("1 stop", TransitSignText.stopsLabel(1, false));
+        assertEquals("3 stops", TransitSignText.stopsLabel(3, false));
         assertNull(TransitSignText.stopsLabel(-1, false), "a service that never reaches here");
     }
 
@@ -75,17 +86,17 @@ class TransitSignTextTest {
         assertEquals("Boarding (2)",
             TransitSignText.stopsLabel(0, true, "2", "OUTBOUND"),
             "a train berthed here is at a berth this board can send you to");
-        assertEquals("now approaching (2)",
+        assertEquals("Approaching (2)",
             TransitSignText.stopsLabel(0, false, "2", "OUTBOUND"),
             "so is one whose next stop is here");
 
         // The crux. A service resolves its berth at the stop it is running to, so for a train
         // still stops away the label names a platform somewhere else on the line entirely.
         // Printing it would march riders across the concourse on somebody else's platform number.
-        assertEquals("1 stop away",
+        assertEquals("1 stop",
             TransitSignText.stopsLabel(1, false, "2", "OUTBOUND"),
             "a train one stop out has resolved a berth at that other station, not at this one");
-        assertEquals("3 stops away",
+        assertEquals("3 stops",
             TransitSignText.stopsLabel(3, false, "2", "OUTBOUND"));
 
         assertEquals("Boarding", TransitSignText.stopsLabel(0, true, "", "OUTBOUND"),
