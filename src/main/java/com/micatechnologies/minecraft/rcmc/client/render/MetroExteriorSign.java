@@ -62,7 +62,10 @@ public final class MetroExteriorSign {
         if (line == null) {
             return;
         }
-        FontRenderer font = Minecraft.getMinecraft().fontRenderer;
+        // The dot-matrix face, not the game's: this is a lit display on a train, and it
+        // reads in the same typeface as the platform board it is answering.
+        FontRenderer font =
+            com.micatechnologies.minecraft.rcmc.client.render.sign.RcmcFonts.dotMatrix();
         if (font == null) {
             return;
         }

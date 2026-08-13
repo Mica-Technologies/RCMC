@@ -121,7 +121,7 @@ public class RenderArrivalBoard extends TileEntitySpecialRenderer<TileArrivalBoa
         // Sized to the panel rather than drawn at a fixed size, and anything still too wide takes
         // turns in place instead of running off the edge — see SignTextFit. An interchange's rows
         // are nearly three times the width of an ordinary station's and the same screen holds both.
-        final net.minecraft.client.gui.FontRenderer font = getFontRenderer();
+        final net.minecraft.client.gui.FontRenderer font = RcmcFonts.dotMatrix();
         SignTextFit.Layout layout = SignTextFit.fit(rows, font::getStringWidth,
             2.0D * PANEL_HALF_WIDTH - 2.0D * SIDE_MARGIN,
             TEXT_TOP - (PANEL_TOP - PANEL_HEIGHT),
