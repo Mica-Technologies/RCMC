@@ -30,14 +30,37 @@ the exact `/rcmc train` line to run next.
 ### `/rcmc metrodemo`
 
 ```
-/rcmc metrodemo [underground|loop|subway]
+/rcmc metrodemo [underground|network|loop|subway]
 ```
 
 With no argument: a flat, catenary-styled, roughly 469-block alignment with three named stations
 and a line called **Metro**, registered and ready for a train.
 
-With `underground` (or the synonyms `loop` / `subway`): a closed, flat, tunnel-styled **double-track
-loop** with a line called **Subway**.
+With `underground` (or the synonyms `network` / `loop` / `subway`): the whole two-line underground
+network, built at your feet — track, tunnel, platforms, decking, signage, stations and lines in one
+command. It places on the order of a hundred thousand blocks, so expect a pause.
+
+| | **Circle** | **Airport** |
+| --- | --- | --- |
+| Track | Closed circuit, two tracks 8 apart | Single track, one level down |
+| Termini | Turning loops — the train never reverses | Stub ends — the train changes ends |
+| Stops | Kingsway, Guildhall, Riverside, Exchange, Foundry, Lakeshore | Airfield, Docklands, Exchange, Parkway |
+| Platforms | Islands, side platforms, and one three-berth interchange | Side, plus decking on both sides at Docklands |
+
+**Exchange** is the interchange: one named place, three berths, two lines, on two levels. Its
+arrival board shows both lines' trains.
+
+!!! note "Why the Circle line's track is a loop but its service is not"
+
+    Line names are single words because Minecraft's command parser splits on spaces and
+    ignores quotes, and `/rcmc line start <name> <trainId>` ends with the train id.
+
+    A metro does not stop inbound service while an outbound train runs — inbound and outbound are
+    separate tracks, joined by a turning loop at each terminus. So the track is a closed circuit
+    while the *service* is out-and-back: stations are listed once, each has a berth per direction,
+    and a train drives forward for ever, out along one track and back along the other. That is what
+    the line property in [`turnsBackOnLoop`](../design/TRANSIT.md) selects, and it is what makes a
+    two-platform station mean anything.
 
 ---
 
@@ -105,11 +128,17 @@ Steps back and forward through track edits, server-side.
 ### `/rcmc train`
 
 ```
-/rcmc train <sectionId> <cars> <startSpeed> [coaster|metro|metrocompact|metrolong]
+/rcmc train <sectionId> <cars> <startSpeed> [coaster|metro|metrocompact|metrolong] [distance]
 ```
 
 Spawns a train on a section. Defaults to the coaster car style. A train parked in a station
 dispatches itself.
+
+`distance` places the train at a point along the section instead of at its first station stop point.
+On a metro circuit whose two directions are its two tracks, *where* a train starts is *which way* it
+runs — so this is how you get an inbound and an outbound service running at the same time, rather
+than two trains nose to tail on the same track. `/rcmc info` reports section lengths and
+`/rcmc station list` reports each berth's distance along one.
 
 | Style | Based on | Body length |
 | --- | --- | --- |

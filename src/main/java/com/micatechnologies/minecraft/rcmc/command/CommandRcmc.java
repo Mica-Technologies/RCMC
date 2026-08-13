@@ -303,15 +303,27 @@ public class CommandRcmc extends CommandBase {
         int carCount = args.length > 2 ? parseInt(args[2], 1, 12) : 5;
         double speed = args.length > 3 ? parseDouble(args[3], 0.0D, 60.0D) : 0.0D;
         String style = args.length > 4 ? args[4].toLowerCase(java.util.Locale.ROOT) : "coaster";
-        // Start inside the station if there is one, so a train spawns where a ride would load it
-        // rather than at whatever point the geometry happens to call distance zero.
-        double startDistance = state.elements().elements().stream()
-            .filter(e -> e.sectionId() == sectionId && e instanceof StationPlatform)
-            // Exactly ON the stop point, not short of it. A station brakes an arriving train but
-            // never pushes one, so a train spawned at rest before the stop point simply sits there
-            // forever instead of dwelling and dispatching.
-            .mapToDouble(e -> ((StationPlatform) e).stopDistance())
-            .findFirst().orElse(0.0D);
+
+        // Where along the section to put it. Without this a second train on a circuit always lands
+        // on top of the first, which makes the one arrangement a metro most needs impossible to
+        // set up: a service running each way at the same time. On a line whose two directions are
+        // separate tracks of one circuit, "which direction" IS "where on the circuit", so placing a
+        // train on the inbound side is the only way to get an inbound service running.
+        double startDistance;
+        if (args.length > 5) {
+            startDistance = parseDouble(args[5], 0.0D, section.totalLength());
+        }
+        else {
+            // Start inside the station if there is one, so a train spawns where a ride would load it
+            // rather than at whatever point the geometry happens to call distance zero.
+            startDistance = state.elements().elements().stream()
+                .filter(e -> e.sectionId() == sectionId && e instanceof StationPlatform)
+                // Exactly ON the stop point, not short of it. A station brakes an arriving train but
+                // never pushes one, so a train spawned at rest before the stop point simply sits
+                // there forever instead of dwelling and dispatching.
+                .mapToDouble(e -> ((StationPlatform) e).stopDistance())
+                .findFirst().orElse(0.0D);
+        }
 
         TrainSpec spec;
         switch (style) {
@@ -353,7 +365,8 @@ public class CommandRcmc extends CommandBase {
         RcmcNetwork.sendToAllIn(new PacketTrainSync(trainId, train), world.provider.getDimension());
 
         reply(sender, TextFormatting.GREEN, "Spawned train #" + trainId + " — " + carCount
-            + " cars on section " + sectionId + " at " + speed + " blocks/s.");
+            + " cars on section " + sectionId + " @ " + fmt(startDistance) + " at " + speed
+            + " blocks/s.");
     }
 
     /**
@@ -367,12 +380,14 @@ public class CommandRcmc extends CommandBase {
         EntityPlayer player = getCommandSenderAsPlayer(sender);
         boolean underground = args.length > 1
             && ("underground".equalsIgnoreCase(args[1]) || "loop".equalsIgnoreCase(args[1])
-                || "subway".equalsIgnoreCase(args[1]));
+                || "subway".equalsIgnoreCase(args[1]) || "network".equalsIgnoreCase(args[1]));
+        if (underground) {
+            buildUndergroundNetwork(sender, world, state, player);
+            return;
+        }
         int id = state.network().allocateSectionId();
         Vec3 origin = new Vec3(player.posX, player.posY, player.posZ);
-        DemoMetro.Result demo = underground
-            ? DemoMetro.buildUndergroundLoop(id, origin)
-            : DemoMetro.build(id, origin);
+        DemoMetro.Result demo = DemoMetro.build(id, origin);
         state.network().addSection(demo.section);
 
         com.micatechnologies.minecraft.rcmc.physics.transit.TransitSystem transit = state.transit();
@@ -400,6 +415,90 @@ public class CommandRcmc extends CommandBase {
             + "), " + (underground ? "loop " : "") + "line '" + lineName + "'.");
         reply(sender, TextFormatting.GRAY, "Run /rcmc train " + id + " 3 0 metro, then /rcmc line start "
             + lineName + " <trainId> to begin service.");
+    }
+
+    /**
+     * {@code /rcmc metrodemo underground} — builds the whole two-line underground network at the
+     * player: track, tunnel, platforms, signage, stations and lines, in one command.
+     *
+     * <p>Order matters here. The fabric is laid <em>before</em> the stations are registered, because
+     * each berth's door side is detected from decking that has to already exist — the same rule a
+     * builder gets when they lay a platform by hand and then create the station. Registering first
+     * and detecting later would default every berth to {@code BOTH} and open the doors at the
+     * tunnel wall.</p>
+     */
+    private void buildUndergroundNetwork(ICommandSender sender, World world, RcmcWorldState state,
+                                         EntityPlayer player)
+        throws CommandException {
+        // allocateSectionId answers "the next free id", so calling it twice before adding anything
+        // would hand back the same number. The network is empty of both until they are added, so
+        // the pair is taken up front from one allocation.
+        int ringId = state.network().allocateSectionId();
+        int airportId = ringId + 1;
+        // Snapped to whole blocks, because the layout is reasoned about in blocks: a platform is a
+        // rectangle of decking placed a fixed offset from a track, and half a block of drift is
+        // enough to push an island's edge into the space the car body occupies.
+        Vec3 origin = new Vec3(Math.floor(player.posX), Math.floor(player.posY),
+            Math.floor(player.posZ));
+        com.micatechnologies.minecraft.rcmc.debug.DemoUnderground.Plan plan =
+            com.micatechnologies.minecraft.rcmc.debug.DemoUnderground
+                .build(ringId, airportId, origin);
+        for (com.micatechnologies.minecraft.rcmc.track.TrackSection section : plan.sections) {
+            state.network().addSection(section);
+        }
+
+        int blocks = com.micatechnologies.minecraft.rcmc.world.MetroFabric.build(
+            world, state.network(), plan, origin);
+
+        com.micatechnologies.minecraft.rcmc.physics.transit.TransitSystem transit = state.transit();
+        for (com.micatechnologies.minecraft.rcmc.debug.DemoUnderground.Stop stop : plan.stops) {
+            java.util.List<com.micatechnologies.minecraft.rcmc.physics.transit.TransitPlatform>
+                platforms = new ArrayList<>();
+            for (com.micatechnologies.minecraft.rcmc.debug.DemoUnderground.Berth berth : stop.berths) {
+                com.micatechnologies.minecraft.rcmc.physics.transit.TransitPlatform built =
+                    new com.micatechnologies.minecraft.rcmc.physics.transit.TransitPlatform(
+                        new TrackRef(berth.sectionId, berth.distance),
+                        com.micatechnologies.minecraft.rcmc.physics.transit.DoorSide.BOTH,
+                        berth.label);
+                com.micatechnologies.minecraft.rcmc.physics.transit.DoorSide detected =
+                    com.micatechnologies.minecraft.rcmc.world.PlatformSide.detect(
+                        world, state.network(), built);
+                platforms.add(detected == null ? built : built.withDoorSide(detected));
+            }
+            transit.addStation(
+                new com.micatechnologies.minecraft.rcmc.physics.transit.TransitStation(
+                    stop.name, platforms));
+        }
+
+        for (com.micatechnologies.minecraft.rcmc.debug.DemoUnderground.Line line : plan.lines) {
+            java.util.List<com.micatechnologies.minecraft.rcmc.physics.transit.TransitStation> stops =
+                new ArrayList<>();
+            for (String name : line.stops) {
+                stops.add(transit.station(name));
+            }
+            transit.addLine(new com.micatechnologies.minecraft.rcmc.physics.transit.TransitLine(
+                line.name, stops, line.loop, line.turnbackLoop,
+                line.inboundLabel, line.outboundLabel));
+        }
+
+        state.markTrackDirty(world);
+        broadcastTrack(world, state);
+        RcmcNetwork.sendToAllIn(new com.micatechnologies.minecraft.rcmc.net.PacketTransitSync(transit),
+            world.provider.getDimension());
+
+        reply(sender, TextFormatting.GREEN, "Built the underground network — " + plan.stops.size()
+            + " stations, " + plan.lines.size() + " lines, " + blocks + " blocks placed.");
+        reply(sender, TextFormatting.GRAY, "Circle Line turns back on a loop at each terminus, so "
+            + "inbound and outbound run at once on their own tracks. Exchange is the interchange.");
+        // The second Circle train is spawned onto the inbound track by distance. On a circuit whose
+        // two directions are its two straights, where a train starts IS which way it runs — so this
+        // is what puts a service on each track at once, which is the point of the line's shape.
+        double inbound = plan.stop("Guildhall").berths.get(1).distance - 40.0D;
+        reply(sender, TextFormatting.GRAY, "Circle: /rcmc train " + ringId + " 3 0 metro then "
+            + "/rcmc line start Circle <id>. For a train each way, spawn a second at "
+            + fmt(inbound) + " — /rcmc train " + ringId + " 3 0 metro " + fmt(inbound) + ".");
+        reply(sender, TextFormatting.GRAY, "Airport: /rcmc train " + airportId + " 3 0 metro then "
+            + "/rcmc line start Airport <id>.");
     }
 
     /**
@@ -717,6 +816,18 @@ public class CommandRcmc extends CommandBase {
     }
 
     /** How a berth is named in output: its label, or its position when it has none. */
+    /** Everything from {@code index} on, rejoined with spaces — a name that contains them. */
+    private static String joinFrom(String[] args, int index) {
+        StringBuilder joined = new StringBuilder();
+        for (int i = index; i < args.length; i++) {
+            if (joined.length() > 0) {
+                joined.append(' ');
+            }
+            joined.append(args[i]);
+        }
+        return joined.toString();
+    }
+
     private static String platformLabel(
         com.micatechnologies.minecraft.rcmc.physics.transit.TransitStation station, int index) {
         return station.platform(index).hasLabel()
@@ -1099,12 +1210,17 @@ public class CommandRcmc extends CommandBase {
                 if (args.length < 3) {
                     throw new CommandException("/rcmc line remove <name>");
                 }
-                if (transit.removeLine(args[2]) == null) {
-                    throw new CommandException("No line named " + args[2]);
+                // Everything after the verb is the name. Minecraft's parser splits on spaces and
+                // does not honour quotes, so a line called "Circle Line" was impossible to name
+                // here at all — created happily, then unremovable. The name is the last argument,
+                // so joining the rest is unambiguous.
+                String lineName = joinFrom(args, 2);
+                if (transit.removeLine(lineName) == null) {
+                    throw new CommandException("No line named " + lineName);
                 }
                 state.markTrackDirty(world);
                 RcmcNetwork.sendToAllIn(new com.micatechnologies.minecraft.rcmc.net.PacketTransitSync(transit), world.provider.getDimension());
-                reply(sender, TextFormatting.GREEN, "Removed line " + args[2] + ".");
+                reply(sender, TextFormatting.GREEN, "Removed line " + lineName + ".");
                 return;
             }
             case "start": {
