@@ -221,7 +221,7 @@ public final class TransitSystem {
             for (double facing : candidateFacings(train)) {
                 // Nearest berth of this station, not the primary's: an island's two platforms are
                 // on different tracks, and only one of them is the one this train can pull into.
-                double d = line.station(i).distanceToNearestPlatform(
+                double d = live(line.station(i)).distanceToNearestPlatform(
                     network, train.reference(), facing, 10_000.0D);
                 if (d < bestDistance) {
                     bestDistance = d;
@@ -235,7 +235,8 @@ public final class TransitSystem {
                 + " cannot reach any station of line " + line.name() + " — is it on this line's track?");
         }
         LineService service = new LineService(line, controller, bestIndex,
-            serviceDirectionFrom(line, network, train.reference(), bestFacing, bestIndex), bestFacing);
+            serviceDirectionFrom(line, network, train.reference(), bestFacing, bestIndex), bestFacing,
+            this::station);
         services.put(trainId, service);
         // A train sitting at rest before service has usually already latched VALLEYED (zero
         // force, zero speed, nothing claiming it) — and TrainManager skips faulted trains before
@@ -291,8 +292,21 @@ public final class TransitSystem {
      * also a small improvement: it used to start toward {@code +1} from the far end and rely on the
      * turnback to correct itself on arrival.</p>
      */
-    private static int serviceDirectionFrom(TransitLine line, TrackNetwork network, TrackRef from,
-                                            double facing, int index) {
+    /**
+     * A line's frozen copy of a station, refreshed from the registry when it still exists there.
+     *
+     * <p>A line snapshots its stations by value so it survives them being renamed or deleted; the
+     * registry is where a station's <em>current</em> shape lives. A berth added after the line was
+     * created exists only in the registry, and routing that read the frozen copy would never see
+     * the second platform of an island.</p>
+     */
+    private TransitStation live(TransitStation snapshot) {
+        TransitStation authoritative = station(snapshot.name());
+        return authoritative == null ? snapshot : authoritative;
+    }
+
+    private int serviceDirectionFrom(TransitLine line, TrackNetwork network, TrackRef from,
+                                     double facing, int index) {
         if (line.stationCount() < 2) {
             return 1;
         }
@@ -305,8 +319,8 @@ public final class TransitSystem {
     }
 
     /** Distance to the station at {@code index}, wrapping on a loop; infinite if there is none. */
-    private static double neighbourDistance(TransitLine line, TrackNetwork network, TrackRef from,
-                                            double facing, int index) {
+    private double neighbourDistance(TransitLine line, TrackNetwork network, TrackRef from,
+                                     double facing, int index) {
         int resolved = index;
         if (line.isLoop()) {
             resolved = Math.floorMod(index, line.stationCount());
@@ -314,7 +328,8 @@ public final class TransitSystem {
         else if (index < 0 || index >= line.stationCount()) {
             return Double.POSITIVE_INFINITY;
         }
-        return line.station(resolved).distanceToNearestPlatform(network, from, facing, 10_000.0D);
+        return live(line.station(resolved))
+            .distanceToNearestPlatform(network, from, facing, 10_000.0D);
     }
 
     /** Takes a train out of service. The train keeps rolling under whatever else controls it. */

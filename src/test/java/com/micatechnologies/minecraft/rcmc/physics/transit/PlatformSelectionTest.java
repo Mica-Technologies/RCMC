@@ -146,6 +146,41 @@ class PlatformSelectionTest {
         throw new AssertionError("the train never berthed");
     }
 
+    /**
+     * A line snapshots its stations by value, so its copy of a station is frozen at the moment the
+     * line was created. A berth authored afterwards — which is exactly what
+     * {@code /rcmc station platform add} does — exists only in the registry, and a service reading
+     * its own line's copy would never see the second platform of an island: it would keep berthing
+     * on the first track forever, from either direction.
+     */
+    @Test
+    @DisplayName("a berth added after the line was created is still served")
+    void berthAddedAfterTheLineIsSeen() {
+        TrackNetwork network = ring();
+        double length = network.section(1).totalLength();
+
+        // The line is built while Central has one berth, on the inbound side only.
+        TransitSystem transit = new TransitSystem();
+        TransitStation central =
+            new TransitStation("Central", new TrackRef(1, length * 0.25D), DoorSide.RIGHT);
+        TransitStation fairview =
+            new TransitStation("Fairview", new TrackRef(1, length * 0.5D), DoorSide.RIGHT);
+        transit.addStation(central);
+        transit.addStation(fairview);
+        transit.addLine(new TransitLine("Loop", Arrays.asList(central, fairview), true));
+
+        // Then the outbound berth is authored, into the registry only.
+        transit.addStation(central.withPlatform(
+            new TransitPlatform(new TrackRef(1, length * 0.75D), DoorSide.LEFT, "Outbound")));
+
+        Train train = trainAt(length * 0.60D);
+        LineService service = serviceFrom(transit, network, train);
+
+        assertEquals("Outbound", service.currentBerth().label(),
+            "the service has to read the registry, not the line's frozen copy");
+        assertEquals(DoorSide.LEFT, transit.doorSideFor(service));
+    }
+
     @Test
     @DisplayName("a single-platform station still answers exactly as it always did")
     void singlePlatformIsUnchanged() {
