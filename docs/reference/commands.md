@@ -148,7 +148,28 @@ removes block signalling with `off`. Reports the safe train count for the divisi
 /rcmc station <name>                                  create or move a station at the track you are aiming at
 /rcmc station list
 /rcmc station remove <name>
-/rcmc station doors <name> <left|right|both|auto>     which side the doors open
+/rcmc station doors <name> [platform] <left|right|both|auto>    which side the doors open
+/rcmc station platform <name> add [label]             add a berth at the track you are standing by
+/rcmc station platform <name> remove <label|number>
+/rcmc station platform <name> list
+```
+
+**Platforms** are the berths at a station — one per track through it. A station has one by default,
+which is every ordinary single-track stop. An **island platform** has a running line down each side,
+so it is *one* station with *two* berths: add the second with `platform … add`, standing beside the
+other track.
+
+That matters beyond tidiness. Each berth carries its own door side, because the two tracks look out
+at the same decking from opposite hands. A train berths at whichever platform it can actually reach
+on the track it is running on, so it opens the correct side automatically once both exist. Give them
+labels — `Inbound`, `Outbound`, `1`, `2` — and signage can name them.
+
+Berths are addressed by label or by number (`1` is the first authored):
+
+```
+/rcmc station platform Central add Outbound
+/rcmc station doors Central Outbound left
+/rcmc station doors Central 2 auto
 ```
 
 **Door side** is normally worked out for you: placing a station, or laying a platform, looks either
@@ -157,7 +178,8 @@ with two blocks clear above it — and records what it finds. RCMC's own platfor
 count; so does a platform you built by hand out of anything else. A tunnel wall does not, because
 it is solid all the way up. `doors` is the override — use it for an island platform you only want
 served on one side, or anywhere the world as built is not what you meant. `auto` re-runs the
-detection.
+detection — per berth, so at an island each track gets its own answer. With no platform argument the
+side applies to every berth at the station.
 
 Left and right are **as a train running forward along the track sees them**, so the answer does not
 change when a service reverses. Announcements convert it to the rider's own left and right.

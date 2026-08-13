@@ -3,6 +3,7 @@ package com.micatechnologies.minecraft.rcmc.world;
 import com.micatechnologies.minecraft.rcmc.block.RcmcBlocks;
 import com.micatechnologies.minecraft.rcmc.physics.CarSeating;
 import com.micatechnologies.minecraft.rcmc.physics.transit.DoorSide;
+import com.micatechnologies.minecraft.rcmc.physics.transit.TransitPlatform;
 import com.micatechnologies.minecraft.rcmc.physics.transit.TransitStation;
 import com.micatechnologies.minecraft.rcmc.track.TrackNetwork;
 import com.micatechnologies.minecraft.rcmc.track.math.TrackFrame;
@@ -68,19 +69,34 @@ public final class PlatformSide {
      * answer with a guess.</p>
      */
     public static DoorSide detect(World world, TrackNetwork network, TransitStation station) {
-        if (world == null || network == null || station == null) {
+        if (station == null) {
             return null;
         }
-        if (!network.hasSection(station.stopPoint().sectionId())) {
+        return detect(world, network, station.primary());
+    }
+
+    /**
+     * The side {@code platform}'s decking is on, or {@code null} if none can be found.
+     *
+     * <p>Per berth rather than per station, because at an island the two tracks look out at the
+     * same decking from opposite hands — one answer cannot serve both, and asking the station is
+     * really asking about whichever platform happens to be listed first.</p>
+     */
+    public static DoorSide detect(World world, TrackNetwork network, TransitPlatform platform) {
+        if (world == null || network == null || platform == null) {
+            return null;
+        }
+        int sectionId = platform.stopPoint().sectionId();
+        if (!network.hasSection(sectionId)) {
             return null;
         }
         boolean left = false;
         boolean right = false;
-        double base = station.stopPoint().distance();
+        double base = platform.stopPoint().distance();
         for (int i = 0; i < SAMPLES; i++) {
             double offset = SAMPLES == 1 ? 0.0D
                 : -SAMPLE_REACH + 2.0D * SAMPLE_REACH * i / (SAMPLES - 1);
-            TrackFrame frame = frameAt(network, station, base + offset);
+            TrackFrame frame = frameAt(network, sectionId, base + offset);
             if (frame == null) {
                 continue;
             }
@@ -96,10 +112,10 @@ public final class PlatformSide {
         return right ? DoorSide.RIGHT : null;
     }
 
-    private static TrackFrame frameAt(TrackNetwork network, TransitStation station, double distance) {
+    private static TrackFrame frameAt(TrackNetwork network, int sectionId, double distance) {
         try {
-            return network.frameAt(new com.micatechnologies.minecraft.rcmc.track.TrackRef(
-                station.stopPoint().sectionId(), distance));
+            return network.frameAt(
+                new com.micatechnologies.minecraft.rcmc.track.TrackRef(sectionId, distance));
         }
         catch (RuntimeException e) {
             // Sampled past the end of an open section. Nothing there to find; not an error.

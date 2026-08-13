@@ -176,8 +176,27 @@ quartz, slabs or concrete is read exactly like one laid from `rcmc:platform`.
 Override it when you need to:
 
 ```
-/rcmc station doors <name> <left|right|both|auto>
+/rcmc station doors <name> [platform] <left|right|both|auto>
 ```
+
+### Island platforms: one station, two berths
+
+A station is a *place*, and a place can have more than one track through it. An island platform —
+decking with a running line down each side — is one station with two **platforms**, one per track.
+
+```
+/rcmc station Central                       the first berth, at the track you are standing by
+/rcmc station platform Central add Outbound  now stand beside the other track
+```
+
+Each berth keeps its own door side, because the two tracks look out at the same decking from
+opposite hands: what is *left* to an inbound train is *right* to an outbound one. You do not have to
+work that out — a train berths at whichever platform it can reach on the track it is running on, and
+opens that platform's side.
+
+Until the second berth exists, only one track is a station at all. That is why an arrival board at
+an island shows one direction and leaves the other blank: there is nothing on the other side for it
+to resolve.
 
 Useful for a platform built out of other blocks, which the detector cannot see, or for an island
 platform you only want served on one side. `auto` re-runs the detection.
