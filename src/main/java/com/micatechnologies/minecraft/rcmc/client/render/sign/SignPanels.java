@@ -88,6 +88,70 @@ public final class SignPanels {
             lastBrightnessX, lastBrightnessY);
     }
 
+    /**
+     * Draws {@code lines} the way a real platform board does: what the train <em>is</em> flush left,
+     * when it gets here flush right, and the gap between them doing the work of separating them.
+     *
+     * <p>The split is the double space a row was composed with. Centring every line, as
+     * {@link #drawLines} does, wastes the width a four-block panel has — a short arrival phrase
+     * pulls the destination in from the edge, and rows of differing length sit ragged with nothing
+     * to scan down. Justifying puts every destination on one margin and every arrival on the other,
+     * so the eye finds its row and then its answer in two straight lines. That is why departure
+     * boards have looked like this for a century.</p>
+     *
+     * <p>A line without that seam — a station name, a status message — is centred, which is what a
+     * heading wants. A line that is only a seam and a right part, which is how a second train under
+     * the same destination is written, comes out right-aligned under the first one's time.</p>
+     *
+     * <p>No swap is needed for the back face. Each face is drawn after its own rotation, so glyph
+     * order runs from the viewer's left in both cases, and the low-x margin is the left margin to
+     * whoever is reading it.</p>
+     *
+     * @param halfWidth usable half-width of the panel, in world units — the margin the columns sit on
+     */
+    public static void drawJustifiedLines(FontRenderer font, String[] lines, int[] colours,
+                                          double yTop, float scale, double zFace, double halfWidth) {
+        float lastBrightnessX = net.minecraft.client.renderer.OpenGlHelper.lastBrightnessX;
+        float lastBrightnessY = net.minecraft.client.renderer.OpenGlHelper.lastBrightnessY;
+        net.minecraft.client.renderer.OpenGlHelper.setLightmapTextureCoords(
+            net.minecraft.client.renderer.OpenGlHelper.lightmapTexUnit, 240.0F, 240.0F);
+        GlStateManager.disableLighting();
+        int margin = (int) (halfWidth / scale);
+        for (int face = 0; face < 2; face++) {
+            GlStateManager.pushMatrix();
+            if (face == 1) {
+                GlStateManager.rotate(180.0F, 0.0F, 1.0F, 0.0F);
+            }
+            GlStateManager.translate(0.0D, yTop, zFace);
+            GlStateManager.scale(scale, -scale, scale);
+            for (int i = 0; i < lines.length; i++) {
+                String line = lines[i];
+                if (line == null || line.isEmpty()) {
+                    continue;
+                }
+                int colour = 0xFF000000 | colours[i];
+                int seam = line.indexOf("  ");
+                if (seam < 0) {
+                    font.drawString(line, -font.getStringWidth(line) / 2, i * 10, colour);
+                    continue;
+                }
+                String left = line.substring(0, seam);
+                String right = line.substring(seam).trim();
+                if (!left.isEmpty()) {
+                    font.drawString(left, -margin, i * 10, colour);
+                }
+                if (!right.isEmpty()) {
+                    font.drawString(right, margin - font.getStringWidth(right), i * 10, colour);
+                }
+            }
+            GlStateManager.popMatrix();
+        }
+        GlStateManager.enableLighting();
+        net.minecraft.client.renderer.OpenGlHelper.setLightmapTextureCoords(
+            net.minecraft.client.renderer.OpenGlHelper.lightmapTexUnit,
+            lastBrightnessX, lastBrightnessY);
+    }
+
     private static void box(BufferBuilder buffer, double x1, double y1, double z1,
                             double x2, double y2, double z2, float r, float g, float b) {
         quad(buffer, x1, y1, z1, x1, y2, z1, x2, y2, z1, x2, y1, z1, r, g, b, 0.85F);

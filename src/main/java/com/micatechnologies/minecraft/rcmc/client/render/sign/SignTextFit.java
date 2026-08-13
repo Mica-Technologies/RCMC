@@ -1,32 +1,34 @@
 package com.micatechnologies.minecraft.rcmc.client.render.sign;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.function.ToIntFunction;
 
 /**
- * Fits a block of sign text to the panel it has to live on: wraps what is too wide, shrinks what is
- * then too tall, and never lets either run off the edge.
+ * Fits a block of sign text to the panel it has to live on: sizes it to the rows it must show, and
+ * <b>pages</b> anything still too wide rather than letting it run off the edge.
  *
- * <h2>Why a fit pass rather than a fixed scale</h2>
+ * <h2>Why paging rather than wrapping</h2>
  *
  * <p>A board's content is not known when its size is chosen. One station's row reads
- * {@code "INBOUND  --"}; an interchange's reads {@code "NORTHBOUND/Airfield  3 stops away"}, which is
- * nearly three times as wide, and the same panel has to hold both. A fixed scale can serve one or
- * the other, and picking the larger meant a busy board painted its rows straight off the sides —
- * text hanging in the tunnel air either side of the screen.</p>
+ * {@code "INBOUND  --"}; an interchange's reads {@code "NORTHBOUND/Airfield  2 stops"}, and the same
+ * panel has to hold both. Wrapping the long one onto a second line works, but it costs height that
+ * a busy board does not have, and it reads as a ragged paragraph rather than as a departure
+ * board.</p>
  *
- * <h2>Wrap first, shrink second</h2>
+ * <p>So a row too wide to fit is split into <em>pages</em> that take turns in the same place — which
+ * is what a real dot-matrix board does, alternating between a destination and its calling time. The
+ * row keeps its line and its full text size; only the moment at which you read each part changes.
+ * A board with nothing to page is completely still.</p>
  *
- * <p>Deliberately in that order. Shrinking to fit the widest row punishes every other row for it,
- * and a board that goes tiny because one destination has a long name is worse than one that spends
- * a second line on it. So each candidate scale wraps the rows to the width it affords, and the
- * first scale whose wrapped result also fits the height wins. Bigger text is tried first, so the
- * answer is always the largest that works rather than merely one that does.</p>
+ * <h2>What decides the scale</h2>
  *
- * <p>The two budgets interact, which is why this iterates instead of solving directly: shrinking
- * buys width, which removes wraps, which buys back height. A closed form would have to model that
- * feedback; stepping through a couple of dozen candidates measures it.</p>
+ * <p>Height alone. The number of rows is fixed by how many services a station has, and none of them
+ * can be paged away, so the text is as large as the row count allows. Width no longer feeds back
+ * into it — that was true while wide rows became extra lines, and paging is what breaks the
+ * coupling. Below a size worth reading, rows are dropped from the bottom instead: fitting more onto
+ * a sign nobody can read is not fitting it on.</p>
  *
  * <p>No Minecraft types — width arrives as a {@link ToIntFunction} over strings, which is a font
  * renderer at runtime and a fake in the tests.</p>
@@ -39,18 +41,48 @@ public final class SignTextFit {
     /** How many scales to try between the largest and the smallest, inclusive of both ends. */
     private static final int STEPS = 24;
 
-    /** Continuation lines are indented, so a wrapped row reads as one row rather than two. */
-    private static final String CONTINUATION_INDENT = "  ";
+    /** The gap a row's fields are joined by, and the seam pages are broken at first. */
+    private static final String FIELD_GAP = "  ";
 
-    /** The chosen scale and the lines to draw at it. */
+    /** A fitted board: the size to draw at, and each row's pages. */
     public static final class Layout {
 
         public final float scale;
-        public final List<String> lines;
+        private final List<List<String>> rows;
 
-        Layout(float scale, List<String> lines) {
+        Layout(float scale, List<List<String>> rows) {
             this.scale = scale;
-            this.lines = lines;
+            this.rows = rows;
+        }
+
+        /** How many pages the board cycles through; 1 when nothing needs paging. */
+        public int pageCount() {
+            int pages = 1;
+            for (List<String> row : rows) {
+                pages = Math.max(pages, row.size());
+            }
+            return pages;
+        }
+
+        /**
+         * The lines to draw for one page.
+         *
+         * <p>Every row advances on the same beat, so the board changes as a unit rather than each
+         * row flickering to its own clock. A row with fewer pages than the board simply repeats —
+         * a short row holds still while a long one alternates beside it, which is what makes the
+         * movement read as deliberate.</p>
+         */
+        public List<String> frame(int page) {
+            List<String> out = new ArrayList<>(rows.size());
+            for (List<String> row : rows) {
+                out.add(row.get(Math.floorMod(page, row.size())));
+            }
+            return out;
+        }
+
+        /** Every page of every row, for tests and for reasoning about what a board can show. */
+        public List<List<String>> rows() {
+            return Collections.unmodifiableList(rows);
         }
     }
 
@@ -59,109 +91,118 @@ public final class SignTextFit {
     }
 
     /**
-     * The largest scale at which {@code lines}, wrapped to fit, also fits the panel.
+     * The largest scale at which {@code rows} fit the panel's height, with each row split into as
+     * many pages as its width needs.
      *
-     * @param widthOf  measures a string in font pixels
-     * @param maxWidth usable panel width, in world units
+     * @param widthOf   measures a string in font pixels
+     * @param maxWidth  usable panel width, in world units
      * @param maxHeight usable panel height, in world units
-     * @param maxScale world units per font pixel to prefer
-     * @param minScale the smallest that is still worth reading; at this point anything that still
-     *                 does not fit is cut rather than allowed off the edge
+     * @param maxScale  world units per font pixel to prefer
+     * @param minScale  the smallest still worth reading; past it, rows are dropped instead
      */
-    public static Layout fit(List<String> lines, ToIntFunction<String> widthOf,
+    public static Layout fit(List<String> rows, ToIntFunction<String> widthOf,
                              double maxWidth, double maxHeight,
                              float maxScale, float minScale) {
         for (int step = 0; step <= STEPS; step++) {
             float scale = maxScale + (minScale - maxScale) * step / STEPS;
-            int widthBudget = (int) Math.floor(maxWidth / scale);
             int lineBudget = (int) Math.floor(maxHeight / (LINE_HEIGHT * scale));
-            List<String> wrapped = wrap(lines, widthOf, widthBudget);
             boolean last = step == STEPS;
-            // Both budgets, not just the height. Wrapping breaks at spaces, so it cannot always
-            // reach the width budget — one long word has nowhere to break — and checking only the
-            // line count accepted exactly that case at full size, which is the overflow this class
-            // exists to stop.
-            if (!last && wrapped.size() <= lineBudget && widest(wrapped, widthOf) <= widthBudget) {
-                return new Layout(scale, wrapped);
+            if (rows.size() > lineBudget && !last) {
+                continue;
             }
-            if (last) {
-                // Out of room to shrink. Drop the rows that will not fit rather than paint them
-                // past the bottom edge, and cut anything still too wide — a single unbreakable word
-                // longer than the whole panel has no honest layout, and hanging it off the side is
-                // the one outcome that reads as a fault rather than as a full board.
-                if (wrapped.size() > lineBudget) {
-                    wrapped = new ArrayList<>(wrapped.subList(0, Math.max(0, lineBudget)));
-                }
-                for (int i = 0; i < wrapped.size(); i++) {
-                    wrapped.set(i, clamp(wrapped.get(i), widthOf, widthBudget));
-                }
-                return new Layout(scale, wrapped);
+            // Rows come out in the order a rider needs them — the station, then each direction's
+            // soonest train — so anything that will not fit is lost from the bottom.
+            List<String> visible = rows.size() <= lineBudget
+                ? rows : rows.subList(0, Math.max(0, lineBudget));
+            int widthBudget = (int) Math.floor(maxWidth / scale);
+            List<List<String>> paged = new ArrayList<>(visible.size());
+            for (String row : visible) {
+                paged.add(pages(row, widthOf, widthBudget));
             }
+            return new Layout(scale, paged);
         }
         throw new AssertionError("the final step always returns");
     }
 
-    private static int widest(List<String> lines, ToIntFunction<String> widthOf) {
-        int widest = 0;
-        for (String line : lines) {
-            if (line != null) {
-                widest = Math.max(widest, widthOf.applyAsInt(line));
+    /**
+     * One row split into pages, none of which exceeds {@code budgetPx}.
+     *
+     * <p><b>Broken at the seam it was built with, not at just any space.</b> A board row is a
+     * destination and an arrival phrase joined by a wide gap — {@code "NORTHBOUND/Airfield  3
+     * stops"} — and breaking it anywhere else produces pages like {@code "NORTHBOUND/Airfield 3"}
+     * followed by {@code "stops"}, which is worse than the overflow it replaced: it reads as a
+     * different, wrong sentence. Splitting on the double space first keeps each page a whole
+     * thought, which is exactly what makes the alternation legible.</p>
+     *
+     * <p>Ordinary spaces are the fallback, for a single field still too wide to stand alone.</p>
+     */
+    private static List<String> pages(String row, ToIntFunction<String> widthOf, int budgetPx) {
+        List<String> out = new ArrayList<>(1);
+        if (row == null || row.isEmpty() || widthOf.applyAsInt(row) <= budgetPx) {
+            out.add(row == null ? "" : row);
+            return out;
+        }
+        // A continuation row's leading spaces are what tie it to the group above, so every page it
+        // turns into keeps them.
+        String indent = leadingSpaces(row);
+        String[] fields = row.substring(indent.length()).split("\\s{2,}");
+
+        List<String> grouped = new ArrayList<>();
+        String current = null;
+        for (String field : fields) {
+            if (field.isEmpty()) {
+                continue;
+            }
+            String candidate = current == null ? indent + field : current + FIELD_GAP + field;
+            if (current != null && widthOf.applyAsInt(candidate) > budgetPx) {
+                grouped.add(current);
+                current = indent + field;
+            }
+            else {
+                current = candidate;
             }
         }
-        return widest;
-    }
+        if (current != null) {
+            grouped.add(current);
+        }
 
-    /** Every line, broken at spaces so that none exceeds {@code budgetPx}. */
-    private static List<String> wrap(List<String> lines, ToIntFunction<String> widthOf,
-                                     int budgetPx) {
-        List<String> out = new ArrayList<>(lines.size());
-        for (String line : lines) {
-            wrapInto(line, widthOf, budgetPx, out);
+        for (String page : grouped) {
+            if (widthOf.applyAsInt(page) <= budgetPx) {
+                out.add(page);
+            }
+            else {
+                splitOnSpaces(page, indent, widthOf, budgetPx, out);
+            }
+        }
+        if (out.isEmpty()) {
+            out.add("");
         }
         return out;
     }
 
-    private static void wrapInto(String line, ToIntFunction<String> widthOf, int budgetPx,
-                                 List<String> out) {
-        if (line == null || line.isEmpty() || widthOf.applyAsInt(line) <= budgetPx) {
-            out.add(line);
-            return;
-        }
-        // The row's own leading spaces are its indent already — a continuation of an indented row
-        // stays indented, so the board's two-level structure survives wrapping.
-        String lead = leadingSpaces(line);
-        String indent = lead + CONTINUATION_INDENT;
-        String[] words = line.trim().split("\\s+");
-        if (words.length == 0) {
-            out.add(line);
-            return;
-        }
-        StringBuilder current = new StringBuilder(lead);
-        boolean started = false;
-        for (String word : words) {
-            String candidate = started ? current + " " + word : current + word;
-            if (started && widthOf.applyAsInt(candidate) > budgetPx) {
-                out.add(current.toString());
-                current = new StringBuilder(indent).append(word);
+    /** Last resort: break one over-wide field at ordinary spaces, cutting a word that will not fit. */
+    private static void splitOnSpaces(String page, String indent, ToIntFunction<String> widthOf,
+                                      int budgetPx, List<String> out) {
+        String current = null;
+        for (String word : page.trim().split("\\s+")) {
+            if (word.isEmpty()) {
+                continue;
+            }
+            String candidate = current == null
+                ? indent + clamp(word, widthOf, budgetPx) : current + " " + word;
+            if (current != null && widthOf.applyAsInt(candidate) > budgetPx) {
+                out.add(current);
+                // A word wider than the whole panel has nowhere to break, so it is cut. Hanging it
+                // off the side is the one outcome that reads as a fault rather than as a board.
+                current = indent + clamp(word, widthOf, budgetPx);
             }
             else {
-                current = new StringBuilder(candidate);
+                current = candidate;
             }
-            started = true;
         }
-        out.add(current.toString());
-    }
-
-    /** Cuts a line down to what fits. Only ever reached at the smallest scale. */
-    private static String clamp(String line, ToIntFunction<String> widthOf, int budgetPx) {
-        if (line == null || widthOf.applyAsInt(line) <= budgetPx) {
-            return line;
+        if (current != null) {
+            out.add(current);
         }
-        String cut = line;
-        while (!cut.isEmpty() && widthOf.applyAsInt(cut) > budgetPx) {
-            cut = cut.substring(0, cut.length() - 1);
-        }
-        return cut;
     }
 
     private static String leadingSpaces(String line) {
@@ -170,5 +211,13 @@ public final class SignTextFit {
             i++;
         }
         return line.substring(0, i);
+    }
+
+    private static String clamp(String word, ToIntFunction<String> widthOf, int budgetPx) {
+        String cut = word;
+        while (!cut.isEmpty() && widthOf.applyAsInt(cut) > budgetPx) {
+            cut = cut.substring(0, cut.length() - 1);
+        }
+        return cut;
     }
 }

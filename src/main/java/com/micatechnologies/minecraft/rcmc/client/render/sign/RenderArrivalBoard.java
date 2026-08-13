@@ -18,7 +18,7 @@ import net.minecraft.client.renderer.tileentity.TileEntitySpecialRenderer;
  * Draws the ceiling-hung arrival board:
  *
  * <pre>
- *   INBOUND/Ashmont    now approaching (2)
+ *   INBOUND/Ashmont    Approaching (2)
  *                      3 stops away
  *   OUTBOUND/Alewife   Boarding (1)
  * </pre>
@@ -96,6 +96,15 @@ public class RenderArrivalBoard extends TileEntitySpecialRenderer<TileArrivalBoa
      */
     private static final double SIDE_MARGIN = 0.12D;
 
+    /**
+     * How long each page holds, in ticks — two and a half seconds.
+     *
+     * <p>Slow enough to finish reading a row before it changes, brisk enough that a rider glancing
+     * up does not have to wait for the half they wanted. It is the cadence a real dot-matrix board
+     * alternates at, for the same reason.</p>
+     */
+    private static final int PAGE_TICKS = 50;
+
     @Override
     public void render(TileArrivalBoard board, double x, double y, double z,
                        float partialTicks, int destroyStage, float alpha) {
@@ -108,25 +117,29 @@ public class RenderArrivalBoard extends TileEntitySpecialRenderer<TileArrivalBoa
 
         List<String> rows = new ArrayList<>();
         buildRows(board, rows);
-        // Wrapped and scaled to the panel rather than drawn at a fixed size. An interchange's rows
-        // are nearly three times the width of an ordinary station's, and the same screen has to
-        // hold both — see SignTextFit for why it wraps before it shrinks. Rows come out in order of
-        // what a rider needs first, so anything that still will not fit is lost from the bottom.
+        // Sized to the panel rather than drawn at a fixed size, and anything still too wide takes
+        // turns in place instead of running off the edge — see SignTextFit. An interchange's rows
+        // are nearly three times the width of an ordinary station's and the same screen holds both.
         final net.minecraft.client.gui.FontRenderer font = getFontRenderer();
         SignTextFit.Layout layout = SignTextFit.fit(rows, font::getStringWidth,
             2.0D * PANEL_HALF_WIDTH - 2.0D * SIDE_MARGIN,
             TEXT_TOP - (PANEL_TOP - PANEL_HEIGHT),
             MAX_TEXT_SCALE, MIN_TEXT_SCALE);
 
-        String[] text = layout.lines.toArray(new String[0]);
+        // Paged off world time, not a client clock: every board in the world turns over on the same
+        // beat, and two players standing at one board see the same page. A board with nothing to
+        // page never moves, because pageCount is then 1 and this is always zero.
+        long now = board.getWorld() == null ? 0L : board.getWorld().getTotalWorldTime();
+        int page = (int) Math.floorMod(now / PAGE_TICKS, (long) layout.pageCount());
+        String[] text = layout.frame(page).toArray(new String[0]);
         int[] colours = new int[text.length];
         for (int i = 0; i < colours.length; i++) {
             colours[i] = text[i].isEmpty() || text[i].startsWith(" ")
                 || Character.isDigit(text[i].charAt(0))
                 ? AMBER : (i == 0 ? MUTED_COLOUR : AMBER);
         }
-        SignPanels.drawLines(font, text, colours, TEXT_TOP, layout.scale,
-            PANEL_HALF_THICKNESS + 0.005D);
+        SignPanels.drawJustifiedLines(font, text, colours, TEXT_TOP, layout.scale,
+            PANEL_HALF_THICKNESS + 0.005D, PANEL_HALF_WIDTH - SIDE_MARGIN);
 
         GlStateManager.popMatrix();
     }
@@ -196,7 +209,7 @@ public class RenderArrivalBoard extends TileEntitySpecialRenderer<TileArrivalBoa
         if (row.startsWith("Boarding")) {
             return -1;
         }
-        if (row.startsWith("now approaching")) {
+        if (row.startsWith("Approaching")) {
             return 0;
         }
         int space = row.indexOf(' ');
