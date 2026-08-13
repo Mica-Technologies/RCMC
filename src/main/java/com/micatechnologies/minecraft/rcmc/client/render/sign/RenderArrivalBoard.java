@@ -40,14 +40,15 @@ public class RenderArrivalBoard extends TileEntitySpecialRenderer<TileArrivalBoa
     /**
      * Screen size, in blocks. A real concourse board is a big panel read from across a platform,
      * and the first cut was under a block wide — legible only with your nose against it, which is
-     * not what a board is for. 3.2 × 1.5 hanging from its ceiling mount reads from down the
-     * platform. Drawn on both faces, like every real one.
+     * not what a board is for. 4 × 2 hanging from its ceiling mount reads from down the platform,
+     * and is the footprint the multiblock form will occupy. Drawn on both faces, like every real
+     * one.
      *
      * <p>{@code TileArrivalBoard.getRenderBoundingBox} must contain these; a screen this much
      * larger than its own block gets culled otherwise.</p>
      */
-    private static final double PANEL_HALF_WIDTH = 1.6D;
-    private static final double PANEL_HEIGHT = 1.5D;
+    private static final double PANEL_HALF_WIDTH = 2.0D;
+    private static final double PANEL_HEIGHT = 2.0D;
 
     /** Top of the screen, just under the ceiling mount so the stub still meets it. */
     private static final double PANEL_TOP = 0.97D;
@@ -58,8 +59,13 @@ public class RenderArrivalBoard extends TileEntitySpecialRenderer<TileArrivalBoa
      * World units per font pixel, sized so the tallest layout — a station name, then two direction
      * groups of a label and {@link #ROWS_PER_DIRECTION} rows each — fits the panel height. Font
      * lines are 10px, so the pitch is {@code 10 × scale}.
+     *
+     * <p>Raised with the panel: the extra height went to legibility rather than to more rows,
+     * because the complaint about this board was never that it showed too little at once. At 0.026
+     * a row is about 44% taller than it was, which is the difference between reading it from the
+     * far platform edge and walking up to it.</p>
      */
-    private static final float TEXT_SCALE = 0.018F;
+    private static final float TEXT_SCALE = 0.026F;
 
     @Override
     public void render(TileArrivalBoard board, double x, double y, double z,
