@@ -1,6 +1,8 @@
 package com.micatechnologies.minecraft.rcmc.physics.transit;
 
+import com.micatechnologies.minecraft.rcmc.track.TrackNetwork;
 import com.micatechnologies.minecraft.rcmc.track.TrackRef;
+import com.micatechnologies.minecraft.rcmc.track.TrackWalk;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -78,6 +80,72 @@ public final class TransitStation {
      */
     public TransitPlatform primary() {
         return platforms.get(0);
+    }
+
+    /**
+     * The berth a train at {@code from} would actually reach, driving the way it is pointed.
+     *
+     * <p>This is the question every per-train caller is really asking, and on an island platform it
+     * is not the same as {@link #primary()}: a service running down the other side of the same
+     * island reaches the other berth, and opening the primary's doors would open them at the tunnel
+     * wall. Nearest-in-the-direction-of-travel is the whole rule — the berth on a train's own track
+     * is a few tens of blocks ahead, while the one across the island is unreachable, or most of a
+     * lap away on a loop where both tracks are one section.</p>
+     *
+     * <p>Resolve this once per target rather than every tick. A train sitting <em>at</em> its berth
+     * has already passed it, so measuring forward from there finds the far one — which is why the
+     * driver caches the answer from when the target was set, back when the train was still
+     * approaching and the question had an unambiguous answer.</p>
+     *
+     * <p>Falls back to {@link #primary()} when no berth is reachable at all, so a caller mid-tick
+     * gets a usable stop point rather than a null: a station on track the train cannot get to is a
+     * routing problem, not something to crash the world tick over.</p>
+     *
+     * @param facing {@code +1} along increasing distance on {@code from}'s section, {@code -1}
+     *               against it
+     */
+    public TransitPlatform platformFor(TrackNetwork network, TrackRef from, double facing,
+                                       double horizon) {
+        TransitPlatform best = null;
+        double bestDistance = Double.POSITIVE_INFINITY;
+        for (TransitPlatform platform : platforms) {
+            double d = TrackWalk.distanceTo(network, from, facing, platform.stopPoint(), horizon);
+            if (d < bestDistance) {
+                bestDistance = d;
+                best = platform;
+            }
+        }
+        return best == null ? primary() : best;
+    }
+
+    /**
+     * The shortest distance from {@code from} to any of this station's berths, or infinite if none
+     * is reachable within {@code horizon}. The counterpart to {@link #platformFor} for callers
+     * choosing between whole stations rather than between berths.
+     */
+    public double distanceToNearestPlatform(TrackNetwork network, TrackRef from, double facing,
+                                            double horizon) {
+        double best = Double.POSITIVE_INFINITY;
+        for (TransitPlatform platform : platforms) {
+            double d = TrackWalk.distanceTo(network, from, facing, platform.stopPoint(), horizon);
+            if (d < best) {
+                best = d;
+            }
+        }
+        return best;
+    }
+
+    /** The berth at this exact stop point, or {@code null} — how a caller re-finds a cached berth. */
+    public TransitPlatform platformAt(TrackRef stopPoint) {
+        if (stopPoint == null) {
+            return null;
+        }
+        for (TransitPlatform platform : platforms) {
+            if (platform.stopPoint().equals(stopPoint)) {
+                return platform;
+            }
+        }
+        return null;
     }
 
     /** The berth with this label, or {@code null}. Case-insensitive; empty matches nothing. */

@@ -185,7 +185,16 @@ public final class TransitSystem {
         }
         TransitStation stop = service.line().station(service.currentStopIndex());
         TransitStation authoritative = station(stop.name());
-        return (authoritative == null ? stop : authoritative).doorSide();
+        TransitStation resolved = authoritative == null ? stop : authoritative;
+        // The berth this train is actually pulling into, matched into the authoritative station by
+        // stop point. Reading the station's own side would answer for whichever platform happens to
+        // be listed first, which at an island is a coin flip that opens the doors at the wall.
+        TransitPlatform berth = service.currentBerth();
+        if (berth != null) {
+            TransitPlatform current = resolved.platformAt(berth.stopPoint());
+            return (current == null ? berth : current).doorSide();
+        }
+        return resolved.doorSide();
     }
 
     // --- Services. -----------------------------------------------------------------------------
@@ -210,8 +219,10 @@ public final class TransitSystem {
         double bestFacing = 1.0D;
         for (int i = 0; i < line.stationCount(); i++) {
             for (double facing : candidateFacings(train)) {
-                double d = TrackWalk.distanceTo(network, train.reference(), facing,
-                    line.station(i).stopPoint(), 10_000.0D);
+                // Nearest berth of this station, not the primary's: an island's two platforms are
+                // on different tracks, and only one of them is the one this train can pull into.
+                double d = line.station(i).distanceToNearestPlatform(
+                    network, train.reference(), facing, 10_000.0D);
                 if (d < bestDistance) {
                     bestDistance = d;
                     bestIndex = i;
@@ -303,8 +314,7 @@ public final class TransitSystem {
         else if (index < 0 || index >= line.stationCount()) {
             return Double.POSITIVE_INFINITY;
         }
-        return TrackWalk.distanceTo(network, from, facing, line.station(resolved).stopPoint(),
-            10_000.0D);
+        return line.station(resolved).distanceToNearestPlatform(network, from, facing, 10_000.0D);
     }
 
     /** Takes a train out of service. The train keeps rolling under whatever else controls it. */
