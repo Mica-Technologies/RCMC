@@ -62,6 +62,17 @@ public final class LineService {
     private double facing;
     private int servedSeen;
 
+    /**
+     * Which berth of the current target station this train is running to.
+     *
+     * <p>Resolved once when the target is set and held until it changes, rather than re-derived
+     * each tick. See {@link TransitStation#platformFor}: the question "which berth would this train
+     * reach" only has an unambiguous answer while the train is still approaching. Once it is
+     * berthed it has passed the stop point, and measuring forward again would pick the berth across
+     * the island — flipping the door side at the worst possible moment.</p>
+     */
+    private TransitPlatform berth;
+
     /** Remaining distance to the current target station, from the last {@link #tick}. */
     private double stationRemaining = Double.POSITIVE_INFINITY;
 
@@ -102,8 +113,10 @@ public final class LineService {
      * is unreachable both ways, which means the train simply is not on this line's track.
      */
     public static double facingToward(TrackNetwork network, TrackRef from, TransitStation station) {
-        double forward = TrackWalk.distanceTo(network, from, 1.0D, station.stopPoint(), ROUTE_HORIZON);
-        double backward = TrackWalk.distanceTo(network, from, -1.0D, station.stopPoint(), ROUTE_HORIZON);
+        // Across every berth, not just the primary: the nearest way to "the station" is the nearest
+        // way to any of its platforms, and on an island the primary may be the far one.
+        double forward = station.distanceToNearestPlatform(network, from, 1.0D, ROUTE_HORIZON);
+        double backward = station.distanceToNearestPlatform(network, from, -1.0D, ROUTE_HORIZON);
         if (Double.isInfinite(forward) && Double.isInfinite(backward)) {
             throw new IllegalArgumentException(
                 "station " + station.name() + " is unreachable from " + from + " in either direction");
@@ -125,12 +138,16 @@ public final class LineService {
         }
 
         TransitStation target = line.station(stopIndex);
+        if (berth == null) {
+            berth = target.platformFor(network, train.reference(), facing, ROUTE_HORIZON);
+        }
+        TrackRef stop = berth.stopPoint();
         // Overshoot first — see OVERSHOOT_WINDOW. On a ring the two probes find the same point
         // from both sides, and the behind reading is the honest one.
         double behind = TrackWalk.distanceTo(
-            network, train.reference(), -facing, target.stopPoint(), OVERSHOOT_WINDOW);
+            network, train.reference(), -facing, stop, OVERSHOOT_WINDOW);
         double stationRemaining = Double.isInfinite(behind)
-            ? TrackWalk.distanceTo(network, train.reference(), facing, target.stopPoint(), ROUTE_HORIZON)
+            ? TrackWalk.distanceTo(network, train.reference(), facing, stop, ROUTE_HORIZON)
             : -behind;
         this.stationRemaining = stationRemaining;
 
@@ -146,6 +163,10 @@ public final class LineService {
 
     /** Steps the target station after a completed stop cycle, reversing at a terminus. */
     private void advanceToNextStop() {
+        // The new target's berth is resolved on the next tick, from where the train stands as it
+        // pulls away — far from the station it is now running to, which is the only position from
+        // which "which berth would it reach" has one answer.
+        berth = null;
         int next = stopIndex + serviceDirection;
         if (line.isLoop()) {
             stopIndex = Math.floorMod(next, line.stationCount());
@@ -178,6 +199,15 @@ public final class LineService {
     /** Index of the station currently being run to — what an M7 arrival board counts against. */
     public int currentStopIndex() {
         return stopIndex;
+    }
+
+    /**
+     * The berth of the current target this train is running to, or {@code null} before the first
+     * tick has resolved one. What the doors and the signage must read: at an island platform the
+     * station's own answer is only right for whichever track happens to be listed first.
+     */
+    public TransitPlatform currentBerth() {
+        return berth;
     }
 
     /** {@code +1} toward higher station indices, {@code -1} toward lower — see {@link TransitLine#labelFor}. */
