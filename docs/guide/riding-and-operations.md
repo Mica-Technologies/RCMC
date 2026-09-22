@@ -158,17 +158,17 @@ brakes to that limit the same way it brakes to a station.
 
 ## What happens when nobody is watching
 
-**Trains pause in place when a dimension has no players in it.** Not a shutdown — nothing advances
-at all, so a train holds its exact position and speed, a dwell timer holds its remaining ticks, and
-a service stays a service. When someone arrives it continues as though no time had passed.
+**Trains pause in place when nobody is online.** Not a shutdown — nothing advances at all, so a
+train holds its exact position and speed, a dwell timer holds its remaining ticks, and a service
+stays a service. When someone joins it continues as though no time had passed. One player anywhere
+on the server keeps the overworld's lines running, even from another dimension.
 
 **A train in unloaded chunks keeps running.** Its physics is one number advanced against saved
 geometry and never reads the world, so there is nothing to load. What it does not have out there is
 *car entities* — those exist only where the world is loaded enough to hold them, and are recreated
 from the train within a second of the chunks coming back. The train was never the entities.
 
-Between those two, a park costs a busy server almost nothing: no players in the dimension is no
-work, and the work when there are players is proportional to the number of trains rather than to the
+Between those two, a park costs a busy server almost nothing: an empty server is no work, and the work when there are players is proportional to the number of trains rather than to the
 size of the park.
 
 ## Performance notes

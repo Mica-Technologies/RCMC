@@ -221,9 +221,11 @@ check scale with a busy server's entity count.
 
 ### Pausing
 
-A world tick with **no players in that dimension does nothing at all** — trains freeze in place,
-holding position, velocity and dwell timers, and resume untouched when someone arrives. Per
-dimension, because that is the granularity a world tick has.
+A world tick with **nobody connected to the server** does nothing at all — trains freeze in place,
+holding position, velocity and dwell timers, and resume untouched when someone joins. Server-wide
+rather than per dimension, so a player in the Nether does not stop the overworld's lines. A
+non-overworld dimension that Forge has unloaded for being empty gets no world tick at all, so its
+lines hold until someone enters it.
 
 ## Sync: one format, two uses
 

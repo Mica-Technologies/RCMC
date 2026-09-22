@@ -370,6 +370,12 @@ public final class RcmcWorldState {
 
         private int tickCounter;
 
+        /** True when no player is connected to the server at all, in any dimension. */
+        private static boolean nobodyOnline(World world) {
+            net.minecraft.server.MinecraftServer server = world.getMinecraftServer();
+            return server == null || server.getPlayerList().getCurrentPlayerCount() == 0;
+        }
+
         /**
          * Brings a server world's state up as it loads, rather than whenever something first asks
          * for it.
@@ -452,16 +458,17 @@ public final class RcmcWorldState {
             if (state == null || state.trains.isEmpty()) {
                 return;
             }
-            if (!event.world.isRemote && event.world.playerEntities.isEmpty()) {
-                // Nobody here to see it: freeze, in place, exactly as it stands. Not a shutdown —
+            if (!event.world.isRemote && nobodyOnline(event.world)) {
+                // Nobody on the server: freeze, in place, exactly as it stands. Not a shutdown —
                 // skipping the tick advances nothing at all, so a train holds its position and
                 // velocity, a dwell timer holds its remaining ticks, and a service stays a service.
-                // When someone arrives it continues from that state as though no time had passed.
+                // When someone joins it continues from that state as though no time had passed.
                 //
-                // This is per DIMENSION, because that is what a world tick is. A metro in the
-                // overworld pauses while the only player online is in the nether — nobody can see
-                // it there either, and the alternative is burning tick time simulating a park with
-                // no observer. Change this to a server-wide player count if that ever reads wrong.
+                // SERVER-wide, not per dimension — the owner's call. A metro is a public service:
+                // with one player in the Nether, the overworld's lines still run, so a player
+                // coming back finds the trains where the timetable says, not where they were left.
+                // (A non-overworld dimension that Forge has unloaded for being empty gets no tick
+                // at all, so its lines still hold until someone enters it.)
                 return;
             }
             if (!event.world.isRemote && --state.carReconcileCountdown <= 0) {
