@@ -426,11 +426,39 @@ public final class RcmcWorldState {
         /** New arrivals need the track before any train state can mean anything. */
         @SubscribeEvent
         public void onPlayerJoin(net.minecraftforge.fml.common.gameevent.PlayerEvent.PlayerLoggedInEvent event) {
-            if (!(event.player instanceof net.minecraft.entity.player.EntityPlayerMP)) {
+            sendFullState(event.player);
+        }
+
+        /**
+         * A player changing dimension needs the whole state again, exactly as on login.
+         *
+         * <p>The client keeps its RCMC state per {@code World} instance, and a dimension change hands
+         * it a brand-new client world — so on the way back from the Nether it starts from nothing.
+         * Found in play: after one round trip through a portal every arrival board read
+         * {@code NO SERVICE} until the player relogged, because the only full send was at login.</p>
+         */
+        @SubscribeEvent
+        public void onPlayerChangedDimension(
+            net.minecraftforge.fml.common.gameevent.PlayerEvent.PlayerChangedDimensionEvent event) {
+            sendFullState(event.player);
+        }
+
+        /**
+         * Respawning can also give the client a new world (leaving the End always does), so it gets
+         * the full state too. Harmless when it does not: the packets replace state with the same.
+         */
+        @SubscribeEvent
+        public void onPlayerRespawn(
+            net.minecraftforge.fml.common.gameevent.PlayerEvent.PlayerRespawnEvent event) {
+            sendFullState(event.player);
+        }
+
+        private static void sendFullState(net.minecraft.entity.player.EntityPlayer eventPlayer) {
+            if (!(eventPlayer instanceof net.minecraft.entity.player.EntityPlayerMP)) {
                 return;
             }
             net.minecraft.entity.player.EntityPlayerMP player =
-                (net.minecraft.entity.player.EntityPlayerMP) event.player;
+                (net.minecraft.entity.player.EntityPlayerMP) eventPlayer;
             RcmcWorldState state = of(player.world);
             if (state == null) {
                 return;
