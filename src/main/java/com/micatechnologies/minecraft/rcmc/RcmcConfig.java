@@ -65,6 +65,12 @@ public final class RcmcConfig {
     public static boolean enableRideHud = true;
 
     /**
+     * Scales every coaster sound — rolling, chain, wind, brakes, tyres, launch — on this client.
+     * Zero turns coaster audio off. Stacks with Minecraft's own Blocks volume slider.
+     */
+    public static double coasterSoundVolume = 1.0D;
+
+    /**
      * Time constant, in seconds, of the low-pass filter {@code GForceSmoother} applies before
      * {@code GForceEffects} reacts to a G reading. Larger values make the screen effects slower
      * to ramp up (and slower to release) but more resistant to single-tick spikes; see
@@ -148,6 +154,10 @@ public final class RcmcConfig {
 
         enableRideHud = config.get(CATEGORY_CLIENT, "enableRideHud", enableRideHud,
             "Show the live speed/G-force/height readout while riding.").getBoolean();
+        coasterSoundVolume = config.get(CATEGORY_CLIENT, "coasterSoundVolume", coasterSoundVolume,
+            "Volume of coaster sounds (rolling, chain lift, wind, brakes, tyres, launches), 0 to 1. "
+                + "0 turns them off. Also follows Minecraft's Blocks volume.", 0.0D, 1.0D)
+            .getDouble();
         gForceSmoothingSeconds = config.get(CATEGORY_CLIENT, "gForceSmoothingSeconds",
             gForceSmoothingSeconds, "Time constant, in seconds, of the smoothing applied before "
                 + "G-force screen effects react. Higher is slower to ramp up and slower to "

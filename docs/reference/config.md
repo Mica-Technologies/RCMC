@@ -45,6 +45,7 @@ Values are read into static fields at load time — never queried per tick.
 | --- | --- | --- |
 | `enableCameraRoll` | `true` | Whether the rider camera rolls with banked track and inversions |
 | `enableRideHud` | `true` | The live speed / G-force / height readout while riding |
+| `coasterSoundVolume` | `1.0` | Volume of coaster sounds — rolling, chain lift, wind, brakes, drive tyres, launches — from 0 to 1. `0` turns them off. They also follow Minecraft's *Blocks* volume slider |
 
 ### G-force screen effects
 

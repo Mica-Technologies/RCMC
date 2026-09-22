@@ -9,7 +9,8 @@ import net.minecraft.util.SoundEvent;
 /**
  * The mod's sound events.
  *
- * <p><b>Every one of these is synthesised from scratch</b> by {@code tools/audio/synth_metro_sounds.py},
+ * <p><b>Every one of these is synthesised from scratch</b> by {@code tools/audio/synth_metro_sounds.py}
+ * and {@code tools/audio/synth_coaster_sounds.py},
  * which generates the waveforms mathematically and encodes them to Ogg Vorbis. No third-party
  * recording is sampled, filtered, or otherwise present — see the asset rule in {@code CLAUDE.md}.
  * Reference recordings supplied by the project owner were measured for <em>facts</em> only (a
@@ -38,6 +39,26 @@ public final class RcmcSounds {
 
     /** Air dumping from the brake pipe as a train releases and pulls away. */
     public static final SoundEvent METRO_BRAKE_RELEASE = create("metro_brake_release");
+
+    // --- Coaster. Synthesised by tools/audio/synth_coaster_sounds.py; all but the launch loop. ---
+
+    /** Wheels on rail. Looped, pitch and volume following the train's speed. */
+    public static final SoundEvent COASTER_ROLL = create("coaster_roll");
+
+    /** A chain lift: the anti-rollback dogs clacking over the chain and its motor. Looped. */
+    public static final SoundEvent COASTER_CHAIN = create("coaster_chain");
+
+    /** Air rushing past a rider. Looped, heard only on board. */
+    public static final SoundEvent COASTER_WIND = create("coaster_wind");
+
+    /** Brake fins biting. Looped while a brake run is actually slowing the train. */
+    public static final SoundEvent COASTER_BRAKE = create("coaster_brake");
+
+    /** Drive tyres pushing a train along. Looped. */
+    public static final SoundEvent COASTER_TYRES = create("coaster_tyres");
+
+    /** A linear-motor launch firing: one shot, a thump and a rising surge. */
+    public static final SoundEvent COASTER_LAUNCH = create("coaster_launch");
 
     private RcmcSounds() {
         throw new AssertionError("No instances.");
