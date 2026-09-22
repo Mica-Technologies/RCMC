@@ -638,6 +638,21 @@ public class EntityCoasterCar extends Entity {
                 "The doors are closed — board while the train is stopped at a platform.");
             return false;
         }
+        // A coaster boards only while its ride is open. Closed and testing rides run without
+        // guests; an e-stopped one runs nobody. Say which, for the same reason as the doors above.
+        if (state != null) {
+            com.micatechnologies.minecraft.rcmc.physics.Train train = state.trains().train(trainId());
+            com.micatechnologies.minecraft.rcmc.physics.ride.RideController ride = train == null
+                ? null : state.rides().get(train.reference().sectionId());
+            if (ride != null && !ride.ridersMayBoard()) {
+                say(player, net.minecraft.util.text.TextFormatting.YELLOW, ride.isEmergencyStopped()
+                    ? "This ride has been emergency-stopped."
+                    : ride.state() == com.micatechnologies.minecraft.rcmc.physics.ride.RideController.State.TESTING
+                        ? "This ride is being tested — no riders yet."
+                        : "This ride is closed.");
+                return false;
+            }
+        }
         player.startRiding(this);
         return true;
     }

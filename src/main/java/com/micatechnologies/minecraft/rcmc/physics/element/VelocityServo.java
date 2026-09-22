@@ -27,7 +27,7 @@ package com.micatechnologies.minecraft.rcmc.physics.element;
  * that limit can climb, the result is the train falling short of the target speed rather than the
  * servo pretending otherwise — the honest physical outcome, not a bug.</p>
  */
-final class VelocityServo {
+public final class VelocityServo {
 
     private VelocityServo() {
     }
@@ -41,7 +41,7 @@ final class VelocityServo {
      *                        positive
      * @return along-track acceleration, blocks/s²
      */
-    static double accelerationToHold(double currentVelocity, double targetVelocity,
+    public static double accelerationToHold(double currentVelocity, double targetVelocity,
                                       double maxAcceleration, double tickSeconds) {
         double desired = (targetVelocity - currentVelocity) / tickSeconds;
         if (desired > maxAcceleration) {

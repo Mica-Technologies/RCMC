@@ -85,14 +85,26 @@ public final class RideElementSet implements TrainManager.ExternalAcceleration {
     }
 
     /**
-     * {@inheritDoc}
-     *
-     * <p>Looks up the element (if any) covering {@code train}'s current position and delegates to
-     * it — see the class javadoc for what happens when more than one element could match.</p>
+     * The dispatch gate for each ride, by the section its station is on. {@link DispatchGate#ALWAYS}
+     * for a ride nobody is operating.
      */
+    private java.util.function.IntFunction<DispatchGate> gates = sectionId -> DispatchGate.ALWAYS;
+
+    /** Who decides, per ride, whether a waiting train may leave its station. */
+    public void setDispatchGates(java.util.function.IntFunction<DispatchGate> gates) {
+        this.gates = gates == null ? sectionId -> DispatchGate.ALWAYS : gates;
+    }
+
     /** The element each train was on last tick, so a train leaving a station can be noticed. */
     private final java.util.Map<Integer, RideElement> lastElement = new java.util.HashMap<>();
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Looks up the element (if any) covering {@code train}'s current position and delegates to
+     * it — see the class javadoc for what happens when more than one element could match. Also
+     * tells a station which train it is serving and who may dispatch it.</p>
+     */
     @Override
     public double forTrain(int trainId, Train train) {
         RideElement element = find(train.reference());
@@ -102,7 +114,9 @@ public final class RideElementSet implements TrainManager.ExternalAcceleration {
             ((StationPlatform) previous).release(trainId);
         }
         if (element instanceof StationPlatform) {
-            ((StationPlatform) element).claim(trainId);
+            StationPlatform station = (StationPlatform) element;
+            station.claim(trainId);
+            station.setGate(gates.apply(station.sectionId()));
         }
         return element == null ? 0.0D : element.accelerationFor(train);
     }

@@ -70,6 +70,14 @@ public class RcmcTrackData extends WorldSavedData {
      */
     private NBTTagCompound pendingServices;
 
+    /** Each ride's operating state. Saved beside the trains, outside the undo snapshot. */
+    private com.micatechnologies.minecraft.rcmc.physics.ride.RideControllers rides =
+        new com.micatechnologies.minecraft.rcmc.physics.ride.RideControllers();
+
+    public com.micatechnologies.minecraft.rcmc.physics.ride.RideControllers rides() {
+        return rides;
+    }
+
     /** Required by {@link WorldSavedData}'s reflective instantiation on load. */
     public RcmcTrackData() {
         super(DATA_NAME);
@@ -182,12 +190,14 @@ public class RcmcTrackData extends WorldSavedData {
             com.micatechnologies.minecraft.rcmc.RcmcConfig.airDrag,
             com.micatechnologies.minecraft.rcmc.RcmcConfig.maxSpeed));
         this.pendingServices = nbt;
+        this.rides = RideCodec.read(nbt);
     }
 
     @Override
     public NBTTagCompound writeToNBT(NBTTagCompound compound) {
         writeAuthored(compound);
         TrainCodec.write(trains, transit, compound);
+        RideCodec.write(rides, compound);
         return compound;
     }
 

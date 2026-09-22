@@ -215,6 +215,12 @@ public final class StationPlatform extends RideElementSpan {
             return VelocityServo.accelerationToHold(train.velocity(), 0.0D, brakeDeceleration,
                 tickSeconds);
         }
+        if (!gate.mayDispatch()) {
+            // Dwell served, but the operator has not released it: a closed ride, a manual ride
+            // waiting for DISPATCH, an emergency stop. Keep holding.
+            return VelocityServo.accelerationToHold(train.velocity(), 0.0D, brakeDeceleration,
+                tickSeconds);
+        }
         phase = Phase.DISPATCHING;
         return dispatchAcceleration;
     }
@@ -241,6 +247,18 @@ public final class StationPlatform extends RideElementSpan {
     public static final int NO_TRAIN = -1;
 
     private int servingTrain = NO_TRAIN;
+
+    private DispatchGate gate = DispatchGate.ALWAYS;
+
+    /** Who decides whether a train that has served its dwell may leave. See {@link DispatchGate}. */
+    public void setGate(DispatchGate gate) {
+        this.gate = gate == null ? DispatchGate.ALWAYS : gate;
+    }
+
+    /** Ticks of dwell still to serve before the train could be dispatched; 0 once it could go. */
+    public int dwellRemaining() {
+        return dwellRemaining;
+    }
 
     /**
      * Takes charge of {@code trainId}, starting a fresh arrival if it was serving any other train (or
