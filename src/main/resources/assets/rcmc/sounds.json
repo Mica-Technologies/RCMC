@@ -23,5 +23,35 @@
     "category": "neutral",
     "subtitle": "rcmc.subtitle.metro_brake_release",
     "sounds": [ { "name": "rcmc:metro_brake_release", "stream": false } ]
+  },
+  "coaster_roll": {
+    "category": "block",
+    "subtitle": "rcmc.subtitle.coaster_roll",
+    "sounds": [ { "name": "rcmc:coaster_roll", "stream": false } ]
+  },
+  "coaster_chain": {
+    "category": "block",
+    "subtitle": "rcmc.subtitle.coaster_chain",
+    "sounds": [ { "name": "rcmc:coaster_chain", "stream": false } ]
+  },
+  "coaster_wind": {
+    "category": "block",
+    "subtitle": "rcmc.subtitle.coaster_wind",
+    "sounds": [ { "name": "rcmc:coaster_wind", "stream": false } ]
+  },
+  "coaster_brake": {
+    "category": "block",
+    "subtitle": "rcmc.subtitle.coaster_brake",
+    "sounds": [ { "name": "rcmc:coaster_brake", "stream": false } ]
+  },
+  "coaster_tyres": {
+    "category": "block",
+    "subtitle": "rcmc.subtitle.coaster_tyres",
+    "sounds": [ { "name": "rcmc:coaster_tyres", "stream": false } ]
+  },
+  "coaster_launch": {
+    "category": "block",
+    "subtitle": "rcmc.subtitle.coaster_launch",
+    "sounds": [ { "name": "rcmc:coaster_launch", "stream": false } ]
   }
 }

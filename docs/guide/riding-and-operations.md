@@ -81,6 +81,25 @@ Tied to what the ride is actually doing to you, and all configurable or disablea
 Values are smoothed over a configurable window (`client.gForceSmoothingSeconds`) so a single
 frame's spike does not flash the screen.
 
+## Sound
+
+A coaster train sounds the way it is moving. Everything below follows the train's speed, so a
+train running faster rolls louder and higher:
+
+| Sound | When you hear it |
+| --- | --- |
+| Rolling | Whenever the train moves; carries up to about 40 blocks at speed |
+| Chain lift | While the train climbs a lift: the anti-rollback dogs clack four times a second at 5 blocks/s |
+| Brakes | Only while a brake run is actually slowing the train, louder the harder it brakes |
+| Drive tyres | While tyres are pushing the train |
+| Launch | Once, when a launch starts driving the train |
+| Wind | Riders only, once the train passes about 5 blocks/s |
+
+Riders hear their own train from inside it; everyone else hears it from where it is. Coaster sounds
+follow Minecraft's **Blocks** volume slider, and `coasterSoundVolume` in the
+[client config](../reference/config.md) scales or silences them. Metro trains have their own door,
+chime and brake sounds.
+
 ## Ratings — what have I built?
 
 ```
