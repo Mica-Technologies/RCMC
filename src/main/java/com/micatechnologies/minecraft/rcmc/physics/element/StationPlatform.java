@@ -35,23 +35,19 @@ import com.micatechnologies.minecraft.rcmc.physics.Train;
  * settles well short of or past {@code stopDistance} — the honest physical outcome of underpowered
  * brakes, not a bug.</p>
  *
- * <p><b>DWELLING</b> holds position (see zero force — correct on level track
- * acceleration, but not literally, for reasons that turn out to matter) for exactly
- * {@code dwellTicks} calls — the tick-driven part the task calls for. This assumes the platform
- * sits on track level enough that near-zero acceleration is actually enough to hold position; a
- * station built on a grade would need active holding too, which is out of scope here.</p>
+ * <p><b>DWELLING</b> holds the train at rest with the platform brakes closed — an active hold
+ * toward zero speed, not zero force — for exactly {@code dwellTicks} ticks. Zero force let a train
+ * on a platform with the slightest grade creep during the dwell.</p>
  *
  * <p><b>DISPATCHING</b> pushes the train with {@code dispatchAcceleration} (signed — its sign is
  * the dispatch direction) until the train reaches {@code dispatchSpeed}, then goes idle
  * ({@code DEPARTED}), handing off to whatever comes next (a lift, a launch, or just gravity).</p>
  *
- * <p><b>Reuse across arrivals is the caller's responsibility.</b> This element only ever sees "is
- * the train's reference inside my span", not "is this a new train" or "has enough of the platform
- * been vacated to start boarding the next one" — those are ride-control decisions (Phase 7.2:
- * block-section signalling owns exactly this kind of question) and this element cannot safely
- * infer them from position alone, especially since {@code DISPATCHING} and a following arrival can
- * legitimately overlap the same span in a busy station. Call {@link #reset()} once the controller
- * has decided this platform is ready to receive its next arrival.</p>
+ * <p><b>One train at a time.</b> The phase belongs to the train being served.
+ * {@link RideElementSet} calls {@link #claim} for every train found on the platform — a train the
+ * platform is not already serving starts a fresh arrival — and {@link #release} when that train
+ * leaves, so the next train is met at {@link Phase#ARRIVING}. The platform is in control (and says so
+ * through {@link #isHolding}) from arrival until the train has departed.</p>
  */
 public final class StationPlatform extends RideElementSpan {
 
@@ -165,7 +161,7 @@ public final class StationPlatform extends RideElementSpan {
             case ARRIVING:
                 return arriving(train);
             case DWELLING:
-                return dwelling();
+                return dwelling(train);
             case DISPATCHING:
                 return dispatching(train);
             case DEPARTED:
@@ -210,10 +206,14 @@ public final class StationPlatform extends RideElementSpan {
         return acceleration;
     }
 
-    private double dwelling() {
+    private double dwelling(Train train) {
         if (dwellRemaining > 0) {
             dwellRemaining--;
-            return 0.0D;
+            // The platform brakes stay closed through the dwell. Applying nothing let a train on a
+            // platform with the faintest grade creep — backwards, on the demo — and the dispatch that
+            // followed then had to reverse it through zero.
+            return VelocityServo.accelerationToHold(train.velocity(), 0.0D, brakeDeceleration,
+                tickSeconds);
         }
         phase = Phase.DISPATCHING;
         return dispatchAcceleration;
@@ -237,14 +237,56 @@ public final class StationPlatform extends RideElementSpan {
         dwellRemaining = dwellTicks;
     }
 
+    /** No train is being served. */
+    public static final int NO_TRAIN = -1;
+
+    private int servingTrain = NO_TRAIN;
+
+    /**
+     * Takes charge of {@code trainId}, starting a fresh arrival if it was serving any other train (or
+     * none). Called by {@link RideElementSet} for every train found on this platform.
+     *
+     * <p>Without this the phase was one-shot: a station dispatched its first train, went to DEPARTED,
+     * and stayed there — every later train rolled through at speed, and one that reached it slowly
+     * stopped with nothing holding it and latched VALLEYED for good. A platform's phase belongs to
+     * the train it is serving, so a new train gets a new cycle.</p>
+     */
+    public void claim(int trainId) {
+        if (servingTrain != trainId) {
+            servingTrain = trainId;
+            reset();
+        }
+    }
+
+    /**
+     * {@code trainId} has left the platform. If it was the train being served, the platform is ready
+     * for the next one.
+     */
+    public void release(int trainId) {
+        if (servingTrain == trainId) {
+            servingTrain = NO_TRAIN;
+            reset();
+        }
+    }
+
+    public int servingTrain() {
+        return servingTrain;
+    }
+
     /**
      * Whether the platform currently has a train under its control and not yet released — true
      * during both {@link Phase#ARRIVING} (still braking) and {@link Phase#DWELLING} (stopped and
      * waiting). False once dispatch has begun, even though the train may still be physically
      * within the span for a few more ticks.
      */
+    /**
+     * Whether the platform is in control of its train: braking it in, holding it, or pushing it
+     * out. Dispatch counts — for its first tick or two the train is still barely moving, and a
+     * platform that disowned it then would have its own launch misread as a stall and the train
+     * latched VALLEYED on the spot (found in play, on the second lap of the demo).
+     */
     public boolean isHolding() {
-        return phase == Phase.ARRIVING || phase == Phase.DWELLING;
+        return phase != Phase.DEPARTED;
     }
 
     public Phase phase() {

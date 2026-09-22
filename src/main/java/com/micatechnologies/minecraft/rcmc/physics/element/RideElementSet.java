@@ -90,9 +90,20 @@ public final class RideElementSet implements TrainManager.ExternalAcceleration {
      * <p>Looks up the element (if any) covering {@code train}'s current position and delegates to
      * it — see the class javadoc for what happens when more than one element could match.</p>
      */
+    /** The element each train was on last tick, so a train leaving a station can be noticed. */
+    private final java.util.Map<Integer, RideElement> lastElement = new java.util.HashMap<>();
+
     @Override
     public double forTrain(int trainId, Train train) {
         RideElement element = find(train.reference());
+        RideElement previous = element == null
+            ? lastElement.remove(trainId) : lastElement.put(trainId, element);
+        if (previous != element && previous instanceof StationPlatform) {
+            ((StationPlatform) previous).release(trainId);
+        }
+        if (element instanceof StationPlatform) {
+            ((StationPlatform) element).claim(trainId);
+        }
         return element == null ? 0.0D : element.accelerationFor(train);
     }
 

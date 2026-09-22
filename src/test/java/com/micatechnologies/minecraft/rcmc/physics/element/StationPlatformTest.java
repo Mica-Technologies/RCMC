@@ -69,7 +69,14 @@ class StationPlatformTest {
         // DISPATCHING and returns the dispatch push in the same call.
         assertEquals(DWELL_TICKS + 1, dwellCalls, "expected exactly dwellTicks holding calls before dispatch");
         assertEquals(StationPlatform.Phase.DISPATCHING, platform.phase());
-        assertFalse(platform.isHolding(), "the platform should no longer report holding once dispatching");
+        // Still in control while it pushes the train out. Letting go at this point is what latched
+        // a train VALLEYED on the demo's second lap: its first dispatch tick left it under the
+        // stopped-speed threshold, and a platform that had disowned it could not stop the stall.
+        assertTrue(platform.isHolding(), "the platform is still driving the train while dispatching");
+        while (platform.phase() == StationPlatform.Phase.DISPATCHING) {
+            tickUnder(train, flat, platform);
+        }
+        assertFalse(platform.isHolding(), "and lets go once the train has departed");
     }
 
     @Test
