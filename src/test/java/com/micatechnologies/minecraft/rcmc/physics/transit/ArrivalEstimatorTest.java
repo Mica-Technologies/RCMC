@@ -47,6 +47,52 @@ class ArrivalEstimatorTest {
         assertEquals(3, ArrivalEstimator.stopsAway(line(true), 1, 1, 0));
     }
 
+    /**
+     * Found in play on the Circle Line: a train heading inbound past Exchange was listed on
+     * Exchange's board under IN, then vanished from IN and reappeared under OUT once it had turned
+     * back at the terminus. It was going to call at Exchange outbound all along; the board filed it
+     * under the direction it was travelling at the time, not the one it would arrive in.
+     */
+    @Test
+    @DisplayName("a train that turns back before it gets here arrives in the other direction")
+    void arrivalDirectionFollowsTheTurnback() {
+        // Outbound (+1) running to C, asking about A: it turns back at D and arrives inbound.
+        assertEquals(-1, ArrivalEstimator.arrivalDirection(line(false), 1, 2, 0));
+        // Inbound (-1) running to B, asking about D: it turns back at A and arrives outbound.
+        assertEquals(1, ArrivalEstimator.arrivalDirection(line(false), -1, 1, 3));
+        // The Circle case itself: inbound, running to A, asking about B, the stop it just left.
+        assertEquals(1, ArrivalEstimator.arrivalDirection(line(false), -1, 0, 1));
+    }
+
+    @Test
+    @DisplayName("a train that reaches here without turning back arrives the way it is going")
+    void arrivalDirectionWithoutATurnback() {
+        assertEquals(1, ArrivalEstimator.arrivalDirection(line(false), 1, 1, 3));
+        assertEquals(-1, ArrivalEstimator.arrivalDirection(line(false), -1, 2, 0));
+        assertEquals(1, ArrivalEstimator.arrivalDirection(line(false), 1, 2, 2),
+            "this station next: the current direction");
+    }
+
+    @Test
+    @DisplayName("a terminus is arrived at in the direction that runs into it")
+    void arrivalDirectionAtATerminus() {
+        assertEquals(1, ArrivalEstimator.arrivalDirection(line(false), 1, 1, 3));
+        assertEquals(-1, ArrivalEstimator.arrivalDirection(line(false), 1, 2, 0));
+    }
+
+    @Test
+    @DisplayName("a loop has no turnback, so the direction never changes")
+    void arrivalDirectionOnALoop() {
+        assertEquals(1, ArrivalEstimator.arrivalDirection(line(true), 1, 2, 0));
+        assertEquals(-1, ArrivalEstimator.arrivalDirection(line(true), -1, 1, 3));
+    }
+
+    @Test
+    @DisplayName("an unreachable station has no arrival direction")
+    void arrivalDirectionUnreachable() {
+        assertEquals(0, ArrivalEstimator.arrivalDirection(line(false), 1, 9, 0));
+    }
+
     @Test
     @DisplayName("out-of-range indices answer -1 rather than throwing in a render path")
     void outOfRangeAnswersMinusOne() {

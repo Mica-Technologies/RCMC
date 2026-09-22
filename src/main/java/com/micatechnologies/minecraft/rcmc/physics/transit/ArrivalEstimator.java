@@ -29,20 +29,53 @@ public final class ArrivalEstimator {
      */
     public static int stopsAway(TransitLine line, int serviceDirection, int nextStopIndex,
                                 int stationIndex) {
+        long walk = walk(line, serviceDirection, nextStopIndex, stationIndex);
+        return walk < 0 ? -1 : (int) (walk >> 1);
+    }
+
+    /**
+     * The service direction the train will be running in when it calls at {@code stationIndex} —
+     * which is not always the direction it is running in now.
+     *
+     * <p>A train that turns back at a terminus before it reaches this station arrives the other way.
+     * On a turnback line that is the ordinary case for half the trains a board lists, and grouping
+     * them by their current direction put a train due outbound under the inbound heading until it
+     * had turned, then moved it across: a row that jumps headings mid-approach. Boards and speakers
+     * group and announce by this instead.</p>
+     *
+     * @return {@code +1} or {@code -1}, or {@code 0} if the pattern never reaches the station
+     */
+    public static int arrivalDirection(TransitLine line, int serviceDirection, int nextStopIndex,
+                                       int stationIndex) {
+        long walk = walk(line, serviceDirection, nextStopIndex, stationIndex);
+        if (walk < 0) {
+            return 0;
+        }
+        return (walk & 1L) == 0L ? 1 : -1;
+    }
+
+    /**
+     * Replays the service pattern to {@code stationIndex}: the stop count in the high bits and the
+     * direction on arrival in the low bit ({@code 0} = {@code +1}), or {@code -1} if never reached.
+     * One walk for both answers, so the count and the direction can never disagree about which
+     * visit to the station they describe.
+     */
+    private static long walk(TransitLine line, int serviceDirection, int nextStopIndex,
+                             int stationIndex) {
         if (line == null) {
             throw new IllegalArgumentException("line is required");
         }
         int count = line.stationCount();
         if (nextStopIndex < 0 || nextStopIndex >= count
             || stationIndex < 0 || stationIndex >= count) {
-            return -1;
+            return -1L;
         }
         int index = nextStopIndex;
         int direction = serviceDirection >= 0 ? 1 : -1;
         // A full out-and-back visits every stop at most twice; 2·count steps covers any pattern.
         for (int steps = 0; steps <= 2 * count; steps++) {
             if (index == stationIndex) {
-                return steps;
+                return ((long) steps << 1) | (direction > 0 ? 0L : 1L);
             }
             int next = index + direction;
             if (line.isLoop()) {
@@ -56,7 +89,7 @@ public final class ArrivalEstimator {
             }
             index = next;
         }
-        return -1;
+        return -1L;
     }
 
     /**

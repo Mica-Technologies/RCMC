@@ -159,7 +159,13 @@ public class TileStationSpeaker extends TileTransitSignBase {
                 // Announce only when a train has moved to a nearer band this tick, inside the
                 // three-station window, and never while it is being held short of the approach.
                 if (!farHold && phase <= WINDOW && (previous == null || phase < previous)) {
-                    String text = TransitSignText.announcement(line, snapshot.serviceDirection(),
+                    // Announced in the direction it will arrive in: a train due here after turning
+                    // back at a terminus is the OUTBOUND train to riders on this platform, even
+                    // while it is still running inbound to the end of the line.
+                    int arriving = ArrivalEstimator.arrivalDirection(line,
+                        snapshot.serviceDirection(), snapshot.nextStopIndex(), stationIndex);
+                    String text = TransitSignText.announcement(line,
+                        arriving == 0 ? snapshot.serviceDirection() : arriving,
                         raw, snapshot.atPlatform());
                     if (text != null) {
                         announce(text);
