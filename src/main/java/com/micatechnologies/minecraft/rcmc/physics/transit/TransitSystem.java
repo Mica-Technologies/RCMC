@@ -234,15 +234,57 @@ public final class TransitSystem {
      */
     public LineService enterService(int trainId, Train train, TrackNetwork network,
                                     String lineName, TransitStopController controller) {
+        return enterService(trainId, train, network, lineName, controller, 0.0D);
+    }
+
+    /**
+     * {@link #enterService(int, Train, TrackNetwork, String, TransitStopController)}, for a train
+     * whose direction of travel is already known — a service being resumed from a save.
+     *
+     * <p><b>Why a resume needs this.</b> A train standing on a stop point is zero blocks from that
+     * station in <em>both</em> directions, so a free choice of facing is decided by a rounding tie —
+     * and the wrong side of it sends the train back down the track it arrived on. In play that ran
+     * a Circle Line train backwards on the wrong track and an Airport Line train off the end of its
+     * line, after an ordinary save and reload. The facing is a fact about how the train was moving,
+     * not about the line, so unlike a saved stop index it cannot go stale when stations change.</p>
+     *
+     * @param preferredFacing {@code +1} or {@code -1} to consider only that direction of travel,
+     *                        or {@code 0} to consider both; if the preferred direction reaches no
+     *                        station at all, both are tried rather than refusing the service
+     */
+    public LineService enterService(int trainId, Train train, TrackNetwork network,
+                                    String lineName, TransitStopController controller,
+                                    double preferredFacing) {
         TransitLine line = line(lineName);
         if (line == null) {
             throw new IllegalArgumentException("no line named " + lineName);
         }
+        if (preferredFacing != 0.0D) {
+            double facing = preferredFacing > 0.0D ? 1.0D : -1.0D;
+            LineService service = enterFacing(trainId, train, network, line, controller,
+                new double[] {facing});
+            if (service != null) {
+                return service;
+            }
+        }
+        LineService service = enterFacing(trainId, train, network, line, controller,
+            candidateFacings(train));
+        if (service == null) {
+            throw new IllegalArgumentException("train " + trainId
+                + " cannot reach any station of line " + line.name() + " — is it on this line's track?");
+        }
+        return service;
+    }
+
+    /** Enters service choosing among {@code facings}; {@code null} if none reaches a station. */
+    private LineService enterFacing(int trainId, Train train, TrackNetwork network,
+                                    TransitLine line, TransitStopController controller,
+                                    double[] facings) {
         int bestIndex = -1;
         double bestDistance = Double.POSITIVE_INFINITY;
         double bestFacing = 1.0D;
         for (int i = 0; i < line.stationCount(); i++) {
-            for (double facing : candidateFacings(train)) {
+            for (double facing : facings) {
                 // Nearest berth of this station, not the primary's: an island's two platforms are
                 // on different tracks, and only one of them is the one this train can pull into.
                 double d = live(line.station(i)).distanceToNearestPlatform(
@@ -255,8 +297,7 @@ public final class TransitSystem {
             }
         }
         if (bestIndex < 0) {
-            throw new IllegalArgumentException("train " + trainId
-                + " cannot reach any station of line " + line.name() + " — is it on this line's track?");
+            return null;
         }
         LineService service = new LineService(line, controller, bestIndex,
             serviceDirectionFrom(line, network, train.reference(), bestFacing, bestIndex), bestFacing,
@@ -337,7 +378,17 @@ public final class TransitSystem {
         double toNext = neighbourDistance(line, network, from, facing, index + 1);
         double toPrevious = neighbourDistance(line, network, from, facing, index - 1);
         if (Double.isInfinite(toNext) && Double.isInfinite(toPrevious)) {
-            return 1;
+            // Neither neighbour is ahead: the train is running into the end of a stub line — the
+            // buffer stop is ahead, the rest of the line behind. The service direction is the one
+            // it arrived in, which is the way AWAY from the neighbour behind it; the terminus
+            // turnback in LineService then reverses it on the way out. Defaulting to +1 here was
+            // what sent a train reloaded at its first terminus straight on into the buffers.
+            double behindNext = neighbourDistance(line, network, from, -facing, index + 1);
+            double behindPrevious = neighbourDistance(line, network, from, -facing, index - 1);
+            if (Double.isInfinite(behindNext) && Double.isInfinite(behindPrevious)) {
+                return 1;
+            }
+            return behindNext <= behindPrevious ? -1 : 1;
         }
         return toNext <= toPrevious ? 1 : -1;
     }

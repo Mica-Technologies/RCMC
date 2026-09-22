@@ -81,6 +81,11 @@ public final class TrainCodec {
 
     private static final String KEY_LINE = "Line";
     private static final String KEY_CRUISE = "Cruise";
+    /**
+     * The service's direction of travel along the train's section, {@code +1} or {@code -1}. Absent
+     * from saves made before it existed, which then resume as they always did.
+     */
+    private static final String KEY_FACING = "Facing";
 
     private TrainCodec() {
         throw new AssertionError("No instances.");
@@ -109,6 +114,7 @@ public final class TrainCodec {
                 tag.setInteger(KEY_ID, entry.getKey());
                 tag.setString(KEY_LINE, entry.getValue().line().name());
                 tag.setDouble(KEY_CRUISE, entry.getValue().controller().cruiseSpeed());
+                tag.setDouble(KEY_FACING, entry.getValue().facing());
                 serviceList.appendTag(tag);
             }
         }
@@ -207,8 +213,11 @@ public final class TrainCodec {
                 continue;
             }
             try {
+                // The facing, where the save has one: a train standing on a stop point is level
+                // with it in both directions, so without this the way it sets off is a coin toss.
+                double facing = tag.hasKey(KEY_FACING) ? tag.getDouble(KEY_FACING) : 0.0D;
                 transit.enterService(trainId, train, network, tag.getString(KEY_LINE),
-                    TransitDrives.metro(cruise, tickSeconds));
+                    TransitDrives.metro(cruise, tickSeconds), facing);
                 resumed++;
             }
             catch (IllegalArgumentException e) {
