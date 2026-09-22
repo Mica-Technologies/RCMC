@@ -1,9 +1,19 @@
+# Mica Technologies standard mod release workflow — canonical copy from dev-configurations
+# (minecraft-mod-workflows/template/). Every push to main publishes a pre-release; a manual
+# dispatch with release=true publishes a full release. Both are date-versioned.
+#
+# Lines marked `# ADAPT:` are the only ones a repo is expected to change. Everything else is
+# kept verbatim across the fleet so a repo stays diffable against this file. If a repo needs a
+# structural difference, list it in a "Fork deltas" comment block at the top of its copy (see
+# the README's Variants section) rather than letting it drift silently.
+#
+# The name below is load-bearing: cleanup-mod-pre-releases.yml triggers on it by name.
 name: Build Mod Release/Pre-Release (Main Branch)
 
 on:
   push:
     branches:
-      - main
+      - main    # ADAPT: the repo's default branch
       - master
   workflow_dispatch:
     inputs:
@@ -11,6 +21,11 @@ on:
         description: 'Create a full release'
         required: false
         default: 'false'
+
+# Pushes the release tag and creates/publishes the release entry. Stated explicitly because
+# repos created since 2023 default GITHUB_TOKEN to read-only.
+permissions:
+  contents: write
 
 jobs:
   assemble_release:
@@ -24,6 +39,7 @@ jobs:
 
       # RFG runs the Gradle process on Java 21+ (compiler + mod code stay Java 8 via
       # Jabel); older Gradle-JVM Java versions are deprecated and slated for removal.
+      # ADAPT: only for a non-RFG build (see the README's Variants section).
       - name: Set Up JDK 21
         uses: actions/setup-java@v5
         with:
@@ -32,7 +48,6 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
-
 
       - name: Create Version Numbers
         run: |
@@ -77,6 +92,8 @@ jobs:
           git tag "${{ env.PRE_TAG }}" "${{ github.sha }}"
           git push origin "${{ env.PRE_TAG }}"
 
+      # FIX 1 (dev-configurations minecraft-mod-workflows, "the UTC-midnight tag bug").
+      #
       # The version the jar is stamped with comes from `git describe --abbrev=0 --tags`
       # (build.gradle's getLastTag), which asks "some tag on this commit" and not "the tag being
       # published". A dispatched release and a pushed pre-release of the same commit leave BOTH
@@ -103,9 +120,11 @@ jobs:
           grep -n '^modVersion' buildscript.properties
 
           # getLastTag also feeds the generated changelog, which asks git the same ambiguous
-          # question, so the other tags on this commit go too. Local refs only: the remote tags,
-          # and so the release history, are untouched. `|| true` because grep exits 1 when the
-          # chosen tag is the only one on the commit, which is the ordinary pre-release case.
+          # question, so the other tags on this commit go too. This is NOT redundant with the
+          # pin above. Local refs only: the remote tags, and so the release history, are
+          # untouched. `|| true` is load-bearing: grep exits 1 when the chosen tag is the only
+          # one on the commit, which is the ordinary pre-release case, and `set -o pipefail`
+          # would otherwise fail the release.
           others="$(git tag --points-at "${{ github.sha }}" | grep -vxF "$chosen" || true)"
           if [ -n "$others" ]; then
             echo "$others" | xargs git tag -d
@@ -119,8 +138,8 @@ jobs:
       # `| tail -n 1`: these values are pasted into a filename by the steps below, so any stray
       # stdout line corrupts the release. Gradle prints banners during project evaluation even
       # under -q — the buildscript update check broke a CSM release exactly that way on
-      # 2026-07-27. gradle.properties disables that check at the source; this is the
-      # belt-and-braces half.
+      # 2026-07-27. gradle.properties disables that check at the source
+      # (systemProp.DISABLE_BUILDSCRIPT_UPDATE_CHECK = true); this is the belt-and-braces half.
       - name: Save Mod Name to GITHUB_ENV
         run: |
           modName=$(${{github.workspace}}/gradlew -q printModName | tail -n 1 | xargs)
@@ -155,16 +174,24 @@ jobs:
           minecraftVersion=$(${{github.workspace}}/gradlew -q printMinecraftVersion | tail -n 1 | xargs)
           echo "MINECRAFT_VERSION=$minecraftVersion" >> $GITHUB_ENV
 
+      # RELEASE_FILES is the list the upload step walks and RELEASE_FILE_COUNT is what the verify
+      # step checks against. A repo that ships more than one jar replaces this step with the
+      # list-driven one described in the README's multi-jar variant; the steps below it already
+      # handle any number of files.
       - name: Copy Assembled Mod Jar to GitHub Actions Workspace
         run: |
           set -euo pipefail
           jar="${{ env.MOD_ARCHIVE_BASE_NAME }}-${{ env.MOD_VERSION }}.jar"
-          cp "./build/libs/$jar" ./
+          if [ ! -f "build/libs/$jar" ]; then
+            echo "::error::build/libs/$jar was not built"
+            ls -la build/libs/ || true
+            exit 1
+          fi
+          cp "build/libs/$jar" ./
           {
-            echo "RELEASE_FILES<<RCMC_RELEASE_EOF"
+            echo "RELEASE_FILES<<MOD_RELEASE_EOF"
             echo "$jar"
-            echo "RCMC_RELEASE_EOF"
-            # The publish step is verified against this below.
+            echo "MOD_RELEASE_EOF"
             echo "RELEASE_FILE_COUNT=1"
           } >> "$GITHUB_ENV"
 
@@ -180,6 +207,7 @@ jobs:
           echo "SHA256_HASH=$sha256" >> $GITHUB_ENV
           echo "CRC32_HASH=$crc32" >> $GITHUB_ENV
 
+      # FIX 3, part 1: the entry is created as an EMPTY DRAFT. See the upload step for why.
       - name: Create Release Entry
         if: ${{ github.event.inputs.release == 'true' && github.event.inputs.release }}
         uses: softprops/action-gh-release@v3
@@ -188,6 +216,7 @@ jobs:
         with:
           tag_name: ${{ env.REL_TAG }}
           name: Release ${{ env.MOD_VERSION }} (${{ env.MINECRAFT_VERSION }})
+          # ADAPT: the body text, if the mod needs more (fork notices, upstream lineage, ...).
           body: |
             Release of ${{ env.MOD_NAME }}
             Mod Version: ${{ env.MOD_VERSION }}
@@ -211,6 +240,7 @@ jobs:
         with:
           tag_name: ${{ env.PRE_TAG }}
           name: Pre-Release ${{ env.MOD_VERSION }} (${{ env.MINECRAFT_VERSION }})
+          # ADAPT: the body text, as above.
           body: |
             Pre-Release of ${{ env.MOD_NAME }}
             Mod Version: ${{ env.MOD_VERSION }}
@@ -231,14 +261,14 @@ jobs:
           prerelease: true
           generate_release_notes: true
 
-      # WHY THE ASSET IS NOT ATTACHED BY THE ACTION ABOVE
+      # FIX 3, part 2 — WHY THE ASSETS ARE NOT ATTACHED BY THE ACTION ABOVE
       #
       # softprops/action-gh-release uploads assets in parallel and was seen to lose some of them
       # in CSM on 2026-09-17 — `Error creating asset temp dir`, a different subset missing on
       # each of three runs, on v2 and v3 alike — while leaving the release a draft and the run
-      # looking like a build failure. RCMC ships one jar today, but a second asset (an -api jar,
-      # a SHA256SUMS.txt) is exactly when that race starts, so the files go up one at a time
-      # here, where a failure is a failure and a retry is possible.
+      # looking like a build failure. Moving to v3 alone does NOT fix it. A release missing a jar
+      # is worse than no release: launcher manifests point straight at these file names. So the
+      # files go up one at a time here, where a failure is a failure and a retry is possible.
       - name: Upload the release assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -265,9 +295,10 @@ jobs:
             done
           done <<< "${{ env.RELEASE_FILES }}"
 
-      # The release is read back from the API rather than trusted. This runs before the release
-      # is published, so a short release is never visible to anyone. Only assets whose state is
-      # `uploaded` count: a failed or in-flight upload is listed with a different state.
+      # FIX 3, part 3: the release is read back from the API rather than trusted. This runs
+      # before the release is published, so a short release is never visible to anyone. Only
+      # assets whose state is `uploaded` count: a failed or in-flight upload is listed with a
+      # different state, and a bare `.assets | length` would pass a broken release.
       - name: Verify the release has every asset
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -288,6 +319,7 @@ jobs:
             exit 1
           fi
 
+      # FIX 3, part 4: publish only now, and confirm it actually left draft state.
       - name: Publish the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -2,12 +2,17 @@
 #
 # Boot a dedicated server via `./gradlew runServer` and assert it reaches "Done (".
 #
+# Canonical copy from dev-configurations (minecraft-mod-workflows/template/). This version is
+# for RFG / GregTechCEu-buildscript mods; the ForgeGradle 2.3 variant (which must also read
+# run/logs/latest.log) is described in that folder's README.
+#
 # Why this exists: mod code that compiles fine can still be impossible to load on a
 # dedicated server — a client-only class referenced from common code, a client mod
 # declared as a hard dependency, a Side.CLIENT packet handler that touches Minecraft
 # directly. Forge only catches those at server startup, so `./gradlew build` is
-# perfectly happy right up until production dies. The sibling SUM mod shipped three such
-# bugs at once and took a server down; every one was reachable from a single server boot.
+# perfectly happy right up until production dies. SUM shipped three such bugs at once
+# in 2026.07.19 and took the Alto server down; every one of them was reachable from a
+# single server boot.
 #
 # RCMC is a prime candidate for this class of bug: rider camera control, track mesh
 # rendering and the ride HUD are all client-only and all live next to common track code.
@@ -18,11 +23,14 @@
 # Env:
 #   SMOKE_TIMEOUT   seconds to wait for startup (default 900)
 #   SMOKE_LOG       log file path (default server-smoke.log)
+#   GRADLE_ARGS     extra arguments for the runServer line (default none), e.g. CSM's
+#                   `-PcsmRunModules=core` to boot with only its mandatory jar.
 
 set -uo pipefail
 
 TIMEOUT="${SMOKE_TIMEOUT:-900}"
 LOG="${SMOKE_LOG:-server-smoke.log}"
+GRADLE_ARGS="${GRADLE_ARGS:-}"
 
 # Signals a successfully started dedicated server.
 SUCCESS_RE='Done \([0-9.]+s\)!'
@@ -41,8 +49,10 @@ mkdir -p run run/server
 printf 'eula=true\n' > run/eula.txt
 printf 'eula=true\n' > run/server/eula.txt
 
-echo "==> Starting dedicated server (timeout ${TIMEOUT}s)"
-./gradlew runServer \
+echo "==> Starting dedicated server (timeout ${TIMEOUT}s)${GRADLE_ARGS:+ with ${GRADLE_ARGS}}"
+# GRADLE_ARGS is deliberately unquoted: it may carry more than one argument.
+# shellcheck disable=SC2086
+./gradlew runServer $GRADLE_ARGS \
   -Dhttp.socketTimeout=60000 -Dhttp.connectionTimeout=60000 \
   -Dorg.gradle.internal.http.socketTimeout=60000 \
   -Dorg.gradle.internal.http.connectionTimeout=60000 \

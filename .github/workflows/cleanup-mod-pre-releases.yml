@@ -1,3 +1,14 @@
+# Mica Technologies standard pre-release cleanup — canonical copy from dev-configurations
+# (minecraft-mod-workflows/template/). Nothing here is expected to change per repo.
+#
+# The workflow_run trigger matches the release workflow by its `name:`. Rename that workflow and
+# this one silently stops running.
+#
+# Known risk: delete-older-releases@v0.3.2 declares `using: node20` and has no newer release, so
+# GitHub force-runs it on Node 24 — the same condition the publish action was under when it
+# started losing assets. It has run green so far and only ever touches pre-releases, so it is
+# left alone. If it misbehaves, replace it with a `gh release list` / `gh release delete` step
+# rather than looking for a newer tag that does not exist (see the README).
 name: Cleanup Old/Outdated Mod Pre-Release(s)
 
 on:

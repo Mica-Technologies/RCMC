@@ -1,3 +1,9 @@
+# Mica Technologies standard PR check — canonical copy from dev-configurations
+# (minecraft-mod-workflows/template/). Lines marked `# ADAPT:` are the only ones a repo is
+# expected to change.
+#
+# The job names are what branch protection matches on. Renaming one makes every PR wait
+# forever for a check that no longer reports — update the protection rule in the same change.
 name: Test Mod Build (Pull Request)
 
 on: pull_request
@@ -19,6 +25,7 @@ jobs:
 
       # RFG runs the Gradle process on Java 21+ (compiler + mod code stay Java 8 via
       # Jabel); older Gradle-JVM Java versions are deprecated and slated for removal.
+      # ADAPT: only for a non-RFG build (see the README's Variants section).
       - name: Set Up JDK 21
         uses: actions/setup-java@v5
         with:
@@ -44,6 +51,7 @@ jobs:
     needs: compile
     runs-on: ubuntu-latest
     # World gen on a cold cache is the slow part; the script has its own inner budget.
+    # ADAPT: raise both this and SMOKE_TIMEOUT for a large content mod (CSM uses 30 / 1200).
     timeout-minutes: 25
     steps:
       - name: Checkout code
@@ -64,6 +72,8 @@ jobs:
       # dedicated server: client-only classes reached from common code, a client mod
       # declared as a hard dependency, or a Side.CLIENT packet handler touching
       # Minecraft directly all compile cleanly and only fail at server startup.
+      # SUM shipped three such bugs at once in 2026.07.19 and took the Alto server down;
+      # all three were caught by a single `runServer`.
       # RCMC is especially exposed here — coaster rendering, camera roll and the ride
       # HUD are all client-only, and every one of them sits next to common track code.
       - name: Boot dedicated server and assert startup
