@@ -79,6 +79,40 @@ class DemoCoasterRunTest {
         }
     }
 
+    /**
+     * Found in review: the station dispatched its first train and then never stopped another. Its
+     * phase went to DEPARTED and nothing ever set it back, so on every later lap the train rolled
+     * through the platform at full speed — and a train reaching it slowly just stopped there, with
+     * nothing holding it, and latched VALLEYED for good.
+     */
+    @Test
+    @DisplayName("the train stops at the station every lap, not just the first")
+    void stationStopsTheTrainEveryLap() {
+        Harness h = buildDemoAsCommandDoes();
+        StationPlatform station = null;
+        for (com.micatechnologies.minecraft.rcmc.physics.element.RideElement element
+            : h.elements.elements()) {
+            if (element instanceof StationPlatform) {
+                station = (StationPlatform) element;
+            }
+        }
+
+        int dwells = 0;
+        StationPlatform.Phase previous = station.phase();
+        for (int tick = 0; tick < 20 * 60 * 8; tick++) {       // eight minutes
+            h.tick();
+            StationPlatform.Phase phase = station.phase();
+            if (phase == StationPlatform.Phase.DWELLING && previous != StationPlatform.Phase.DWELLING) {
+                dwells++;
+            }
+            previous = phase;
+            assertTrue(h.train.isRunning(), "the train faulted (" + h.train.status() + ") at s="
+                + h.train.reference().distance() + " after " + dwells + " station stops");
+        }
+        assertTrue(dwells >= 3, "a lap takes well under two minutes, so eight minutes must include "
+            + "at least three station stops; got " + dwells);
+    }
+
     @Test
     @DisplayName("the demo dispatches from the station and crests the lift hill")
     void trainCrestsTheLift() {
