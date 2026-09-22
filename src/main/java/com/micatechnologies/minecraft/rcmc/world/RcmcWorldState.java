@@ -291,9 +291,11 @@ public final class RcmcWorldState {
     /**
      * Steps the authored state back one edit. Returns false if there is nothing to undo.
      *
-     * <p>Affects only the authored, persisted state (track, elements, transit) — never running
-     * trains, which are runtime and unpersisted. An undo that removes a section a train sits on
-     * leaves the train safely skipped, exactly as deleting the section by hand does.</p>
+     * <p>Restores the authored state (track, elements, stations, lines, signals). Trains are not
+     * part of it and stay where they are; their line services are carried over onto the restored
+     * lines ({@code TransitSystem.adoptServices}). An undo that removes a section a train sits on
+     * leaves the train safely skipped, exactly as deleting the section by hand does, and an undo
+     * that removes a line leaves that line's trains parked.</p>
      */
     public boolean undo(World world) {
         return applyRestore(world, history == null ? null : history.undo());
@@ -330,6 +332,11 @@ public final class RcmcWorldState {
                 com.micatechnologies.minecraft.rcmc.track.storage.ElementCodec.read(snapshot);
             com.micatechnologies.minecraft.rcmc.physics.transit.TransitSystem restoredTransit =
                 com.micatechnologies.minecraft.rcmc.track.storage.TransitCodec.read(snapshot);
+
+            // A snapshot is authored state only, so the restored transit arrives with no services.
+            // Carry the running ones across, or every undo stops the whole network.
+            restoredTransit.adoptServices(this.transit, trains, restoredNetwork,
+                com.micatechnologies.minecraft.rcmc.RcmcConstants.SECONDS_PER_TICK);
 
             this.network = restoredNetwork;
             this.elements = restoredElements;
