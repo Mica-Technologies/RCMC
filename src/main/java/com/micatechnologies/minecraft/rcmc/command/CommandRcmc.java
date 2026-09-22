@@ -1439,6 +1439,7 @@ public class CommandRcmc extends CommandBase {
         int trains = state.trains().count();
         int sections = state.network().sectionCount();
         state.elements().clear();
+        state.rides().clear();
 
         for (EntityCoasterCar car : new ArrayList<>(
             world.getEntities(EntityCoasterCar.class, entity -> true))) {
@@ -1615,6 +1616,9 @@ public class CommandRcmc extends CommandBase {
         }
 
         int removedElements = state.elements().removeForSection(sectionId);
+        // Its operator state goes with it: a section id is reused, and a new coaster must not
+        // inherit an old one's CLOSED or e-stop.
+        state.rides().remove(sectionId);
         state.blocks().remove(sectionId);
         state.network().removeSection(sectionId);
         state.markTrackDirty(world);

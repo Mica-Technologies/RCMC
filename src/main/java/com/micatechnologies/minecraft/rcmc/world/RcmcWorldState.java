@@ -77,6 +77,18 @@ public final class RcmcWorldState {
     private com.micatechnologies.minecraft.rcmc.physics.transit.TransitSystem transit =
         new com.micatechnologies.minecraft.rcmc.physics.transit.TransitSystem();
 
+    /**
+     * Each coaster's operator state — open or closed, dispatch mode, e-stop. Server-side it is
+     * {@code RcmcTrackData}'s own instance, saved beside the trains; a client never holds one and
+     * learns a ride's state from the operator panel's packets.
+     */
+    private com.micatechnologies.minecraft.rcmc.physics.ride.RideControllers rides =
+        new com.micatechnologies.minecraft.rcmc.physics.ride.RideControllers();
+
+    public com.micatechnologies.minecraft.rcmc.physics.ride.RideControllers rides() {
+        return rides;
+    }
+
     /** Watches door phases and plays the metro sounds; server-side, decoration only. */
     private final com.micatechnologies.minecraft.rcmc.sound.TransitSounds transitSounds =
         new com.micatechnologies.minecraft.rcmc.sound.TransitSounds();
@@ -112,6 +124,7 @@ public final class RcmcWorldState {
             created.elements = data.elements();
             created.transit = data.transit();
             created.trains = data.trains();
+            created.rides = data.rides();
             // Seed history with the loaded state so the first edit is undoable.
             created.history = new EditHistory(data.snapshot(), EditHistory.DEFAULT_DEPTH);
             // Must happen after the fields above are installed: putting a train back into service
@@ -518,6 +531,9 @@ public final class RcmcWorldState {
                 com.micatechnologies.minecraft.rcmc.physics.TrainManager.ExternalAcceleration control
                     = null;
                 if (!state.remote) {
+                    // Every tick rather than once: an undo swaps in a fresh element set, and a gate
+                    // installed only at load would silently fall back to "always dispatch".
+                    state.elements.setDispatchGates(state.rides::gateFor);
                     if (state.blocks.isEmpty()) {
                         control = state.elements;
                     }
@@ -528,6 +544,11 @@ public final class RcmcWorldState {
                         state.blocks.updateOccupancy(state.trains, state.network);
                         control = new com.micatechnologies.minecraft.rcmc.physics.block
                             .BlockSignaledElementSet(state.elements, state.blocks);
+                    }
+                    if (!state.rides.isEmpty()) {
+                        // The operator's e-stop overrides the hardware and the block signals.
+                        control = new com.micatechnologies.minecraft.rcmc.physics.ride.RideControlLayer(
+                            control, state.rides, state.network, RcmcConstants.SECONDS_PER_TICK);
                     }
                     if (state.transit.hasServices()) {
                         // Trains in metro service are driven by their LineService; everything
