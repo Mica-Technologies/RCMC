@@ -177,17 +177,24 @@ public class RenderArrivalBoard extends TileEntitySpecialRenderer<TileArrivalBoa
                 }
                 int stops = ArrivalEstimator.stopsAway(line, snapshot.serviceDirection(),
                     snapshot.nextStopIndex(), stationIndex);
+                // Filed under the direction it will ARRIVE in, not the one it is running in now:
+                // a train that turns back at a terminus first calls here the other way, and grouping
+                // it by its current direction moved its row across headings mid-approach.
+                int arriving = ArrivalEstimator.arrivalDirection(line, snapshot.serviceDirection(),
+                    snapshot.nextStopIndex(), stationIndex);
+                if (arriving == 0) {
+                    continue;
+                }
                 // The berth rides along on the snapshot, and stopsLabel shows it only for a train
                 // whose next stop is this station — the one case where the berth it resolved is
                 // one of ours. That is what turns an island's two rows from "a train is coming"
                 // into "a train is coming, and it is the far side you want".
                 String text = TransitSignText.stopsLabel(stops, snapshot.atPlatform(),
-                    snapshot.platformLabel(), line.labelFor(snapshot.serviceDirection()));
+                    snapshot.platformLabel(), line.labelFor(arriving));
                 if (text == null) {
                     continue;
                 }
-                byDirection.get(TransitSignText.destinationLabel(line, snapshot.serviceDirection()))
-                    .add(text);
+                byDirection.get(TransitSignText.destinationLabel(line, arriving)).add(text);
             }
         }
 
