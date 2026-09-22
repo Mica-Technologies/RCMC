@@ -44,6 +44,24 @@ public final class RideElementSet implements TrainManager.ExternalAcceleration {
     }
 
     /**
+     * Puts {@code replacement} exactly where {@code old} was — its position is its priority where
+     * spans overlap, so a retuned element must not move to the back of the list.
+     *
+     * @return false if {@code old} is not in this set
+     */
+    public boolean replace(RideElement old, RideElement replacement) {
+        if (replacement == null) {
+            throw new IllegalArgumentException("replacement must not be null");
+        }
+        int index = elements.indexOf(old);
+        if (index < 0) {
+            return false;
+        }
+        elements.set(index, replacement);
+        return true;
+    }
+
+    /**
      * Removes every element anchored to {@code sectionId}, returning how many went.
      *
      * <p>Needed whenever a section is deleted. An element addresses track as
