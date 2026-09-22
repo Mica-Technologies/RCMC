@@ -77,31 +77,96 @@ jobs:
           git tag "${{ env.PRE_TAG }}" "${{ github.sha }}"
           git push origin "${{ env.PRE_TAG }}"
 
+      # The version the jar is stamped with comes from `git describe --abbrev=0 --tags`
+      # (build.gradle's getLastTag), which asks "some tag on this commit" and not "the tag being
+      # published". A dispatched release and a pushed pre-release of the same commit leave BOTH
+      # tags on it, and which one describe answers with depends on how they sort: after UTC
+      # midnight the pre-release tag wins, and a full release ships a jar stamped as a
+      # pre-release, with `mcmod.info` inside it saying so too. This bit MCMCP on 2026-09-09 and
+      # was latent in CSM.
+      #
+      # So the version is STATED rather than inferred: buildscript.properties' modVersion is
+      # empty, and build.gradle only falls back to git when it is. `-PmodVersion` does not work
+      # for this — loadProjectProperties copies buildscript.properties over it. This edit is
+      # CI-only and never committed.
+      - name: Pin the mod version to the tag being published
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event.inputs.release }}" = "true" ]; then
+            chosen="${{ env.REL_TAG }}"
+          else
+            chosen="${{ env.PRE_TAG }}"
+          fi
+          echo "CHOSEN_TAG=$chosen" >> "$GITHUB_ENV"
+
+          sed -i "s|^modVersion =.*|modVersion = $chosen|" buildscript.properties
+          grep -n '^modVersion' buildscript.properties
+
+          # getLastTag also feeds the generated changelog, which asks git the same ambiguous
+          # question, so the other tags on this commit go too. Local refs only: the remote tags,
+          # and so the release history, are untouched. `|| true` because grep exits 1 when the
+          # chosen tag is the only one on the commit, which is the ordinary pre-release case.
+          others="$(git tag --points-at "${{ github.sha }}" | grep -vxF "$chosen" || true)"
+          if [ -n "$others" ]; then
+            echo "$others" | xargs git tag -d
+          fi
+          echo "Local tags now on this commit:"
+          git tag --points-at "${{ github.sha }}"
+
       - name: Assemble Mod with Gradle
         run: ./gradlew build -Dhttp.socketTimeout=60000 -Dhttp.connectionTimeout=60000 -Dorg.gradle.internal.http.socketTimeout=60000 -Dorg.gradle.internal.http.connectionTimeout=60000
 
+      # `| tail -n 1`: these values are pasted into a filename by the steps below, so any stray
+      # stdout line corrupts the release. Gradle prints banners during project evaluation even
+      # under -q — the buildscript update check broke a CSM release exactly that way on
+      # 2026-07-27. gradle.properties disables that check at the source; this is the
+      # belt-and-braces half.
       - name: Save Mod Name to GITHUB_ENV
         run: |
-          modName=$(${{github.workspace}}/gradlew -q printModName | xargs)
+          modName=$(${{github.workspace}}/gradlew -q printModName | tail -n 1 | xargs)
           echo "MOD_NAME=$modName" >> $GITHUB_ENV
 
       - name: Save Mod Version to GITHUB_ENV
         run: |
-          modVersion=$(${{github.workspace}}/gradlew -q printModVersion | xargs)
+          modVersion=$(${{github.workspace}}/gradlew -q printModVersion | tail -n 1 | xargs)
           echo "MOD_VERSION=$modVersion" >> $GITHUB_ENV
+
+      # Shape validation cannot catch a version that is well formed but simply not the one being
+      # published, so this compares against the intended value. It runs before anything is
+      # uploaded, because the version is baked into the jar and mcmod.info as well as the file
+      # name — a wrong one cannot be fixed by renaming the asset afterwards.
+      - name: Fail if the built version is not the tag being published
+        run: |
+          built="${{ env.MOD_VERSION }}"
+          chosen="${{ env.CHOSEN_TAG }}"
+          if [ "$built" != "$chosen" ]; then
+            echo "::error::Built version '$built' does not match the published tag '$chosen'. The jar, and the mcmod.info inside it, would be stamped '$built'. Refusing to publish."
+            exit 1
+          fi
+          echo "Built version matches the published tag: $built"
 
       - name: Save Mod Archive Base Name to GITHUB_ENV
         run: |
-          modArchiveBaseName=$(${{github.workspace}}/gradlew -q printArchivesBaseName | xargs)
+          modArchiveBaseName=$(${{github.workspace}}/gradlew -q printArchivesBaseName | tail -n 1 | xargs)
           echo "MOD_ARCHIVE_BASE_NAME=$modArchiveBaseName" >> $GITHUB_ENV
 
       - name: Save Minecraft Version to GITHUB_ENV
         run: |
-          minecraftVersion=$(${{github.workspace}}/gradlew -q printMinecraftVersion | xargs)
+          minecraftVersion=$(${{github.workspace}}/gradlew -q printMinecraftVersion | tail -n 1 | xargs)
           echo "MINECRAFT_VERSION=$minecraftVersion" >> $GITHUB_ENV
 
       - name: Copy Assembled Mod Jar to GitHub Actions Workspace
-        run: cp ./build/libs/${{ env.MOD_ARCHIVE_BASE_NAME }}-${{ env.MOD_VERSION }}.jar ./
+        run: |
+          set -euo pipefail
+          jar="${{ env.MOD_ARCHIVE_BASE_NAME }}-${{ env.MOD_VERSION }}.jar"
+          cp "./build/libs/$jar" ./
+          {
+            echo "RELEASE_FILES<<RCMC_RELEASE_EOF"
+            echo "$jar"
+            echo "RCMC_RELEASE_EOF"
+            # The publish step is verified against this below.
+            echo "RELEASE_FILE_COUNT=1"
+          } >> "$GITHUB_ENV"
 
       - name: Calculate Hashes for the Jar
         id: calculate-hashes
@@ -117,7 +182,7 @@ jobs:
 
       - name: Create Release Entry
         if: ${{ github.event.inputs.release == 'true' && github.event.inputs.release }}
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -132,15 +197,15 @@ jobs:
             SHA-256: `${{ env.SHA256_HASH }}`
             MD5: `${{ env.MD5_HASH }}`
             CRC-32: `${{ env.CRC32_HASH }}`
-          draft: false
+          # Created as a draft with no files attached: the action's own uploader is what loses
+          # assets (see the upload step below). It is filled and published from there instead.
+          draft: true
           prerelease: false
           generate_release_notes: true
-          files: |
-            ${{ env.MOD_ARCHIVE_BASE_NAME }}-${{ env.MOD_VERSION }}.jar
 
       - name: Create Pre-Release Entry
         if: ${{ github.event.inputs.release == 'false' || !github.event.inputs.release }}
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -160,8 +225,80 @@ jobs:
             guaranteed to be stable or permanently available for download/usage.
             Pre-release versions of ${{ env.MOD_NAME }} may be removed or unavailable after
             90 days from their initial release.
-          draft: false
+          # As above: a draft with nothing attached, filled by the upload step and published
+          # once every file is verified to be there.
+          draft: true
           prerelease: true
           generate_release_notes: true
-          files: |
-            ${{ env.MOD_ARCHIVE_BASE_NAME }}-${{ env.MOD_VERSION }}.jar
+
+      # WHY THE ASSET IS NOT ATTACHED BY THE ACTION ABOVE
+      #
+      # softprops/action-gh-release uploads assets in parallel and was seen to lose some of them
+      # in CSM on 2026-09-17 — `Error creating asset temp dir`, a different subset missing on
+      # each of three runs, on v2 and v3 alike — while leaving the release a draft and the run
+      # looking like a build failure. RCMC ships one jar today, but a second asset (an -api jar,
+      # a SHA256SUMS.txt) is exactly when that race starts, so the files go up one at a time
+      # here, where a failure is a failure and a retry is possible.
+      - name: Upload the release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="${{ env.CHOSEN_TAG }}"
+
+          while IFS= read -r file; do
+            [ -n "$file" ] || continue
+            if [ ! -f "$file" ]; then
+              echo "::error::$file was listed for upload but is not there"
+              exit 1
+            fi
+            for attempt in 1 2 3; do
+              echo "==> uploading $file (attempt $attempt)"
+              if gh release upload "$tag" "$file" --repo "${{ github.repository }}" --clobber; then
+                break
+              fi
+              if [ "$attempt" -eq 3 ]; then
+                echo "::error::giving up on $file after 3 attempts"
+                exit 1
+              fi
+              sleep $(( attempt * 5 ))
+            done
+          done <<< "${{ env.RELEASE_FILES }}"
+
+      # The release is read back from the API rather than trusted. This runs before the release
+      # is published, so a short release is never visible to anyone. Only assets whose state is
+      # `uploaded` count: a failed or in-flight upload is listed with a different state.
+      - name: Verify the release has every asset
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="${{ env.CHOSEN_TAG }}"
+
+          repo="${{ github.repository }}"
+          attached=$(gh release view "$tag" --repo "$repo" --json assets \
+            --jq '[.assets[] | select(.state == "uploaded")] | length')
+
+          echo "==> $tag has $attached of ${{ env.RELEASE_FILE_COUNT }} assets"
+          gh release view "$tag" --repo "$repo" --json assets \
+            --jq '.assets[] | "    \(.name) \(.size) \(.state)"'
+
+          if [ "$attached" -ne "${{ env.RELEASE_FILE_COUNT }}" ]; then
+            echo "::error::$tag has $attached uploaded assets, expected ${{ env.RELEASE_FILE_COUNT }}"
+            exit 1
+          fi
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="${{ env.CHOSEN_TAG }}"
+          gh release edit "$tag" --repo "${{ github.repository }}" --draft=false
+
+          isDraft=$(gh release view "$tag" --repo "${{ github.repository }}" --json isDraft --jq '.isDraft')
+          if [ "$isDraft" != "false" ]; then
+            echo "::error::$tag is still a draft"
+            exit 1
+          fi
+          echo "==> published $tag"
