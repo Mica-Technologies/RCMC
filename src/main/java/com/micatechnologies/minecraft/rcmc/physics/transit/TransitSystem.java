@@ -420,6 +420,48 @@ public final class TransitSystem {
         return Collections.unmodifiableMap(services);
     }
 
+    /**
+     * Carries {@code previous}'s running services over into this system, which has just replaced it.
+     *
+     * <p>For an undo or redo. Those restore the <em>authored</em> state — stations, lines, signals —
+     * as a fresh system read from a snapshot, and a snapshot holds no services because a service is
+     * runtime state. Without this, any undo, even of an unrelated track edit, took every train on
+     * the network out of service.</p>
+     *
+     * <p>Each service is re-entered rather than moved across, against this system's lines and the
+     * restored track: the edit being undone may have changed either, and a {@link LineService}
+     * holds its line by value. The facing and cruise speed carry over, so a train keeps going the
+     * way it was going at the speed it was set to. A service whose line or train no longer exists,
+     * or whose train can no longer reach its line, is dropped with the train left parked — the same
+     * outcome as resuming it from a save.</p>
+     *
+     * @return how many services were carried over
+     */
+    public int adoptServices(TransitSystem previous, TrainManager trains, TrackNetwork network,
+                             double tickSeconds) {
+        if (previous == null || previous == this) {
+            return 0;
+        }
+        int adopted = 0;
+        for (Map.Entry<Integer, LineService> entry : previous.services.entrySet()) {
+            int trainId = entry.getKey();
+            LineService old = entry.getValue();
+            Train train = trains.train(trainId);
+            if (train == null || line(old.line().name()) == null) {
+                continue;
+            }
+            try {
+                enterService(trainId, train, network, old.line().name(),
+                    TransitDrives.metro(old.controller().cruiseSpeed(), tickSeconds), old.facing());
+                adopted++;
+            }
+            catch (IllegalArgumentException e) {
+                // The restored track no longer carries this train to its line. Parked, not lost.
+            }
+        }
+        return adopted;
+    }
+
     public boolean hasServices() {
         return !services.isEmpty();
     }
