@@ -70,6 +70,14 @@ public class RcmcTrackData extends WorldSavedData {
      */
     private NBTTagCompound pendingServices;
 
+    /** Each coaster's block sections. Authored layout: saved, and part of the undo snapshot. */
+    private com.micatechnologies.minecraft.rcmc.physics.block.BlockSystems blocks =
+        new com.micatechnologies.minecraft.rcmc.physics.block.BlockSystems();
+
+    public com.micatechnologies.minecraft.rcmc.physics.block.BlockSystems blocks() {
+        return blocks;
+    }
+
     /** Each ride's operating state. Saved beside the trains, outside the undo snapshot. */
     private com.micatechnologies.minecraft.rcmc.physics.ride.RideControllers rides =
         new com.micatechnologies.minecraft.rcmc.physics.ride.RideControllers();
@@ -169,10 +177,12 @@ public class RcmcTrackData extends WorldSavedData {
      */
     public void install(TrackNetwork network,
                         com.micatechnologies.minecraft.rcmc.physics.element.RideElementSet elements,
-                        com.micatechnologies.minecraft.rcmc.physics.transit.TransitSystem transit) {
+                        com.micatechnologies.minecraft.rcmc.physics.transit.TransitSystem transit,
+                        com.micatechnologies.minecraft.rcmc.physics.block.BlockSystems blocks) {
         this.network = network;
         this.elements = elements;
         this.transit = transit;
+        this.blocks = blocks;
         markDirty();
     }
 
@@ -181,6 +191,7 @@ public class RcmcTrackData extends WorldSavedData {
         this.network = TrackCodec.readNetwork(nbt);
         this.elements = ElementCodec.read(nbt);
         this.transit = TransitCodec.read(nbt);
+        this.blocks = BlockCodec.read(nbt);
         // The integrator comes from the server's own config rather than the save: physics values
         // are server-authoritative, so a train must restore with the physics this server runs, not
         // the physics it was saved under.
@@ -218,6 +229,7 @@ public class RcmcTrackData extends WorldSavedData {
             compound.setTag(key, elementTag.getTag(key));
         }
         TransitCodec.write(transit, compound);
+        BlockCodec.write(blocks, compound);
         return compound;
     }
 }

@@ -157,7 +157,13 @@ cannot produce a plausible-looking rating.
 ```
 
 Divides a circuit into block sections, each holding at most one train. A train may not enter a
-block until the next is clear; if it cannot, it stops at the block brake.
+block until the next is clear; if it cannot, it stops at the block brake. Block sections are saved
+with the world and can be undone like any other edit.
+
+Without block sections, nothing keeps two trains apart. If two trains on one coaster run into each
+other, the ride **emergency-stops** and everyone in the dimension is told. It stays stopped while
+the trains overlap, so take one off at the [operator panel](#operating-a-ride) (or add block
+sections) before resetting it.
 
 Know the limits before you rely on it:
 
@@ -188,6 +194,7 @@ brakes to that limit the same way it brakes to a station.
 | --- | --- | --- |
 | A train stops mid-circuit and stays there | **Valleying** — it did not have the energy to crest something. Detected and surfaced rather than left as a silent hang | Give it more energy: a taller lift, a shallower hill |
 | A metro train is parked and stuck | Same detection, but recoverable | `/rcmc line start` — entering service clears a valleyed train |
+| A coaster stopped with "trains collided — emergency stop" | Two trains on the ride overlapped | Remove a train at the operator panel, reset the emergency stop, and open the ride. Add block sections to run several trains |
 | A train did not come back after a restart | Its track was deleted while the world was closed, so it has nowhere to be | Rebuild the section, then `/rcmc train` |
 | A service did not resume, but its train did | The line it worked was deleted or renamed, or the train can no longer reach any of its stations | `/rcmc line start <name> <trainId>` |
 | Track "ignores" a height you placed | Was the vertical-overshoot sag; now fixed by clamped node tangents. If you still see it, report it | — |
