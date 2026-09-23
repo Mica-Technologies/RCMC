@@ -146,13 +146,13 @@ class RideRaterTest {
 
         // The physical claim the whole nausea model rests on: stripping the bank should not change
         // the geometry at all, only how much of the turn shows up as lateral G instead of vertical.
-        // Peak lateral G alone understates the difference — both fixtures still share the same
-        // ease-in/ease-out zones at the very start and end of the curve where bank is near zero
-        // either way — which is exactly why the nausea model is built on the duration-weighted
-        // integral rather than the peak; see RideStatistics#sustainedLateralGSeconds's javadoc.
-        assertTrue(unbanked.peakLateralG >= banked.peakLateralG,
-            "unbanked turn should feel at least as much sideways load at its worst instant: banked="
-                + banked.peakLateralG + "g unbanked=" + unbanked.peakLateralG + "g");
+        // Not asserted at the peak. G is measured at the rider's heart (see Heartline), and a
+        // circular Curve reaches full curvature at once while its bank eases in: at the entry the
+        // rider takes the unbanked turn's load AND the throw of their chest rolling into the bank,
+        // so the banked turn's worst instant is briefly the worse one. That is the curvature step
+        // clothoid transitions exist to remove. Over the turn, banking wins by far — which is why
+        // the nausea model is built on the duration-weighted integral rather than the peak; see
+        // RideStatistics#sustainedLateralGSeconds's javadoc.
         assertTrue(unbanked.sustainedLateralGSeconds > banked.sustainedLateralGSeconds * 2.5D,
             "unbanked turn should accumulate dramatically more sustained lateral load: banked="
                 + banked.sustainedLateralGSeconds + " unbanked=" + unbanked.sustainedLateralGSeconds);

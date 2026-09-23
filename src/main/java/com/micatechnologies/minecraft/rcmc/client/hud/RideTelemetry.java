@@ -6,7 +6,6 @@ import com.micatechnologies.minecraft.rcmc.track.TrackNetwork;
 import com.micatechnologies.minecraft.rcmc.track.TrackRef;
 import com.micatechnologies.minecraft.rcmc.track.TrackSection;
 import com.micatechnologies.minecraft.rcmc.track.math.TrackFrame;
-import com.micatechnologies.minecraft.rcmc.track.math.Vec3;
 
 /**
  * Turns a train's raw simulation state into the numbers a rider actually feels: speed and the
@@ -19,39 +18,14 @@ import com.micatechnologies.minecraft.rcmc.track.math.Vec3;
  * that keeps {@code client.render.track.TrackMeshBuilder} pure despite also living under
  * {@code client}.</p>
  *
- * <p><b>Curvature direction — an honest estimate, not an exact result.</b> {@link GForces#at}
- * needs a unit vector toward the centre of curvature, but nothing downstream of
- * {@code CatmullRomSpline} exposes the curve's second derivative as a vector — only
- * {@code curvatureAt}, a scalar magnitude. {@code TrackValidator} hits the identical problem for
- * its lateral-G warning and solves it by finite-differencing the tangent; this does the same
- * thing and gets the direction for free out of the same difference. The Frenet formula
- * {@code dT/ds = kappa * N} says the tangent's rate of change points toward the centre of
- * curvature, so sampling the tangent {@link #CURVATURE_HALF_STEP} blocks ahead of and behind the
- * car and normalising {@code tangent(ahead) - tangent(behind)} gives both the direction and,
- * divided by the sampled arc length, the magnitude — in one finite difference.</p>
- *
- * <p><b>Where this degrades, and how it is flagged.</b> Near an open section's unconnected ends,
- * or across a closed circuit's start/finish seam, {@code TrackSection.tangentAtDistance} clamps
- * one of the two samples short, so the difference quietly narrows to less than
- * {@code 2 * CURVATURE_HALF_STEP} of track on one side only. That biases the magnitude low and
- * can make the direction noisier right at the boundary. This case sets
- * {@link Reading#curvatureUncertain}, but is deliberately <em>not</em> corrected for — a fully
- * robust fix needs {@code TrackSection} to expose its own wrap-vs-clamp logic, which it does not,
- * and duplicating that logic here would silently drift out of sync with it. In practice this is a
- * minor approximation: {@link GForceEffects} only reacts to a multi-second-smoothed value (see
- * {@link GForceSmoother}), so a boundary artefact lasting a fraction of a section washes out
- * completely; only a HUD reading grabbed at that exact instant could show a very slightly wrong
- * number for one frame.</p>
+ * <p><b>Measured at the rider's heart, not the rail</b> — see {@code physics.Heartline}, which
+ * finds the curve the rider's chest follows, and how fast it moves, by sampling it either side of
+ * the car. {@code RideRater} measures the same way, so the HUD and {@code /rcmc rate} agree. Near an
+ * open section's end the sample is cut short and slid inward, which {@link
+ * Reading#curvatureUncertain} flags; {@link GForceEffects} only reacts to a smoothed value (see
+ * {@link GForceSmoother}), so that washes out.</p>
  */
 public final class RideTelemetry {
-
-    /**
-     * Distance, in blocks, sampled on either side of the car to estimate curvature. Small enough
-     * to stay local — curvature genuinely changes over a couple of blocks on a tight element —
-     * and large enough that the tangent difference is not swamped by floating-point noise; the
-     * same order of magnitude as {@code TrackValidator}'s default sample spacing.
-     */
-    static final double CURVATURE_HALF_STEP = 0.5D;
 
     private RideTelemetry() {
         throw new AssertionError("No instances.");
@@ -69,7 +43,7 @@ public final class RideTelemetry {
         public final GForces gForces;
 
         /**
-         * True when the curvature sample fell within {@link #CURVATURE_HALF_STEP} of a section
+         * True when the curvature sample fell within {@code Heartline.HALF_STEP} of a section
          * boundary, where the direction/magnitude estimate is one-sided rather than centred. See
          * the class javadoc.
          */
@@ -115,27 +89,13 @@ public final class RideTelemetry {
         double velocity = train.velocity();
         double alongTrackAcceleration = dtSeconds > 0.0D ? (velocity - previousVelocity) / dtSeconds : 0.0D;
 
-        double total = section.totalLength();
-        double lo = Math.max(0.0D, s - CURVATURE_HALF_STEP);
-        double hi = Math.min(total, s + CURVATURE_HALF_STEP);
-        double sampledSpan = hi - lo;
-
-        // Within CURVATURE_HALF_STEP of either end (open section) means at least one sample got
-        // clamped short of a full half-step — see the class javadoc on why this is flagged and
-        // not corrected.
-        boolean uncertain = sampledSpan < CURVATURE_HALF_STEP * 2.0D - 1.0e-6D;
-
-        double curvature = 0.0D;
-        Vec3 direction = null;
-        if (sampledSpan > 1.0e-6D) {
-            Vec3 tangentLo = section.tangentAtDistance(lo);
-            Vec3 tangentHi = section.tangentAtDistance(hi);
-            Vec3 deltaTangent = tangentHi.subtract(tangentLo);
-            curvature = deltaTangent.length() / sampledSpan;
-            direction = deltaTangent.normalize();
-        }
-
-        GForces gForces = GForces.at(frame, velocity, curvature, direction, alongTrackAcceleration, gravity);
+        // Measured where the rider is, not on the rail — see Heartline. The rating does the same,
+        // so the HUD and /rcmc rate agree.
+        com.micatechnologies.minecraft.rcmc.physics.Heartline.Sample heart =
+            com.micatechnologies.minecraft.rcmc.physics.Heartline.at(section, s);
+        boolean uncertain = heart.clipped;
+        GForces gForces = GForces.at(frame, Math.abs(velocity) * heart.speedFactor, heart.curvature,
+            heart.direction, alongTrackAcceleration, gravity);
         return new Reading(frame, Math.abs(velocity), gForces, uncertain);
     }
 }

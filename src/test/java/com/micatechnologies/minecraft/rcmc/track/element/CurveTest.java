@@ -36,18 +36,36 @@ class CurveTest {
     }
 
     @Test
-    @DisplayName("every node of a circular-arc curve sits exactly radius away from the arc's center")
-    void nodesStayOnTheCircle() {
-        double radius = 30.0D;
-        Curve curve = new Curve(radius, 140.0D, TurnDirection.LEFT, 8.0D, 60.0D);
-        ElementResult result = curve.generate(levelContext());
-
-        // Reconstruct the center the same way Curve does: entryPos - right*radius*turnSign, turnSign=+1
-        // for LEFT.
-        Vec3 center = new Vec3(0.0D, 64.0D, 0.0D).subtract(new Vec3(0.0D, 0.0D, 1.0D).scale(radius));
-        for (TrackNode node : result.nodes) {
-            assertEquals(radius, node.position().distanceTo(center), 1e-6);
+    @DisplayName("taken at its design speed, a curve is felt only as weight in the seat: never sideways")
+    void designSpeedFeelsNoSideLoad() {
+        // It was a circular arc, which has its whole curvature from the first block: a train
+        // arriving from straight track took nearly 1 g sideways before any bank could lean into it.
+        double speed = 20.0D;
+        // Straight track either side, at the builder's own node spacing, as a builder would lay it.
+        java.util.List<TrackNode> nodes = new java.util.ArrayList<>();
+        ElementContext start = new ElementContext(new com.micatechnologies.minecraft.rcmc.track.math.TrackFrame(
+            new Vec3(-20.0D, 64.0D, 0.0D), new Vec3(1.0D, 0.0D, 0.0D), Vec3.UP), 0.0D);
+        nodes.add(new TrackNode(start.entryFrame.position));
+        ElementResult in = new Straight(20.0D).generate(start);
+        nodes.addAll(in.nodes);
+        ElementResult curve = new Curve(40.0D, 150.0D, TurnDirection.RIGHT, speed, 60.0D)
+            .generate(in.asNextContext(ElementContext.DEFAULT_NODE_SPACING));
+        nodes.addAll(curve.nodes);
+        nodes.addAll(new Straight(20.0D).generate(curve.asNextContext(ElementContext.DEFAULT_NODE_SPACING)).nodes);
+        com.micatechnologies.minecraft.rcmc.track.TrackSection section =
+            new com.micatechnologies.minecraft.rcmc.track.TrackSection(1, nodes, false, null);
+        double worst = 0.0D;
+        double at = 0.0D;
+        for (double s = 1.0D; s < section.totalLength() - 1.0D; s += 0.5D) {
+            double lateral = Math.abs(com.micatechnologies.minecraft.rcmc.physics.Heartline
+                .forces(section, s, speed, 0.0D, 9.81D).lateral);
+            if (lateral > worst) {
+                worst = lateral;
+                at = s;
+            }
         }
+        assertTrue(worst < 0.25D, "sideways load reached " + worst + " g at s=" + at + " of "
+            + section.totalLength());
     }
 
     @Test
@@ -80,22 +98,36 @@ class CurveTest {
         List<TrackNode> nodes = curve.generate(context).nodes;
 
         // First node should be close to the entry bank (20), not the target bank, and the last node
-        // should be close to level (0), not still at the target bank.
+        // should be level, not still at the target bank. Level to the rider, that is: the rail of a
+        // heartlined curve rises a little as it banks, which twists the transported frame by a
+        // fraction of a degree, and the exit bank is whatever takes that back out.
         assertEquals(20.0D, nodes.get(0).bankDegrees(), 3.0D);
-        assertEquals(0.0D, nodes.get(nodes.size() - 1).bankDegrees(), 1e-6);
+        ElementResult result = curve.generate(context);
+        Vec3 riderUp = result.exitFrame.withBank(Math.toRadians(result.exitBankDegrees)).up;
+        assertEquals(1.0D, riderUp.dot(Vec3.UP), 1e-4, "the rider leaves level: " + riderUp);
+        assertEquals(0.0D, nodes.get(nodes.size() - 1).bankDegrees(), 0.5D);
     }
 
     @Test
-    @DisplayName("the curve's own bank formula matches atan(v^2/(r*g)) below the clamp")
+    @DisplayName("the curve's own bank formula matches atan(v^2/(r*g)) below the clamp, r as built")
     void bankMatchesBalancedFormula() {
         double speed = 12.0D;
-        double radius = 60.0D;
         double gravity = 9.81D;
-        double expected = Math.toDegrees(Math.atan((speed * speed) / (radius * gravity)));
 
-        Curve curve = new Curve(radius, 90.0D, TurnDirection.LEFT, speed, 89.0D, gravity);
+        Curve curve = new Curve(60.0D, 90.0D, TurnDirection.LEFT, speed, 89.0D, gravity);
         List<TrackNode> nodes = curve.generate(levelContext()).nodes;
-        double midBank = nodes.get(nodes.size() / 2).bankDegrees();
+        int mid = nodes.size() / 2;
+        double midBank = nodes.get(mid).bankDegrees();
+        // The radius the middle was actually built at — tighter than the nominal 60, since the curve
+        // is fitted to end where a circle of 60 would (see Curve) — from the circle through three
+        // consecutive nodes.
+        Vec3 a = nodes.get(mid - 1).position();
+        Vec3 b = nodes.get(mid).position();
+        Vec3 c = nodes.get(mid + 1).position();
+        double radius = a.distanceTo(b) * b.distanceTo(c) * c.distanceTo(a)
+            / (2.0D * b.subtract(a).cross(c.subtract(a)).length());
+        assertTrue(radius < 58.0D, "the middle is tighter than the nominal radius: " + radius);
+        double expected = Math.toDegrees(Math.atan((speed * speed) / (radius * gravity)));
 
         // Negative for a LEFT turn — see bankSignFollowsDirection. The magnitude is the formula's.
         assertEquals(-expected, midBank, 0.1D);

@@ -47,6 +47,8 @@ public final class TrackSection {
 
     /** Distance along the section at which each node sits. */
     private final double[] nodeDistances;
+    /** Roll rate at each node, radians per block — see {@link #bankRadiansAt}. */
+    private final double[] bankSlopes;
 
     /**
      * Roll, in radians, that parallel transport accumulates over a full lap of a closed circuit.
@@ -117,6 +119,7 @@ public final class TrackSection {
         for (int i = 0; i < this.nodes.size(); i++) {
             nodeDistances[i] = arcLength.distanceAtParam((double) i / segments);
         }
+        this.bankSlopes = bankSlopes(this.nodes, nodeDistances, arcLength.totalLength(), closed);
 
         this.rollResidual = closed ? computeRollResidual(frames) : 0.0D;
     }
@@ -159,13 +162,20 @@ public final class TrackSection {
     }
 
     /**
-     * Authored bank angle in radians at distance {@code s}, cubically eased between the
-     * bracketing nodes.
+     * Authored bank angle in radians at distance {@code s}: a monotone cubic through the nodes.
      *
-     * <p>Smoothstep ({@code t²(3−2t)}) rather than linear interpolation: its derivative is zero at
-     * both ends, so bank rate is continuous <em>across</em> nodes. Linear interpolation would step
-     * the roll rate at every node, which a rider feels as a jolt even though the bank angle itself
-     * is continuous.</p>
+     * <p>Not linear: that steps the roll rate at every node, a jolt a rider feels though the angle
+     * itself is continuous. And not a smoothstep per span, which is what this was: its rate is zero
+     * at both ends of every span, so a roll spread over several nodes stops and starts again at each
+     * one. On the rail that is invisible. At the rider's heart, most of a block above it, every stop
+     * is a sideways jerk — measured at ±2 g on an ordinary banked curve's roll-in once G was taken
+     * at the heart (see {@code physics.Heartline}), and fatal to a heartline roll.</p>
+     *
+     * <p>So each node carries a roll rate ({@link #bankSlopes}) and each span is a cubic Hermite
+     * between them: rate as well as angle is continuous, and the roll runs straight through the
+     * nodes. The rates are Fritsch–Carlson's, which keep the curve monotone between nodes — it
+     * never overshoots a node's bank, and where the bank holds steady the rate is zero, so a
+     * constant-bank stretch stays exactly constant.</p>
      */
     public double bankRadiansAt(double s) {
         int count = nodes.size();
@@ -176,25 +186,60 @@ public final class TrackSection {
         // from the last node back to the first on a closed circuit.
         for (int i = 0; i < count - 1; i++) {
             if (distance <= nodeDistances[i + 1]) {
-                return ease(nodes.get(i).bankRadians(), nodes.get(i + 1).bankRadians(),
-                    nodeDistances[i], nodeDistances[i + 1], distance);
+                return hermite(nodes.get(i).bankRadians(), nodes.get(i + 1).bankRadians(),
+                    bankSlopes[i], bankSlopes[i + 1], nodeDistances[i], nodeDistances[i + 1], distance);
             }
         }
         if (closed) {
-            return ease(nodes.get(count - 1).bankRadians(), nodes.get(0).bankRadians(),
-                nodeDistances[count - 1], total, distance);
+            return hermite(nodes.get(count - 1).bankRadians(), nodes.get(0).bankRadians(),
+                bankSlopes[count - 1], bankSlopes[0], nodeDistances[count - 1], total, distance);
         }
         return nodes.get(count - 1).bankRadians();
     }
 
-    private static double ease(double from, double to, double spanStart, double spanEnd, double at) {
+    private static double hermite(double from, double to, double fromSlope, double toSlope,
+                                  double spanStart, double spanEnd, double at) {
         double span = spanEnd - spanStart;
         if (span <= 0.0D) {
             return to;
         }
         double t = Math.max(0.0D, Math.min(1.0D, (at - spanStart) / span));
-        double smooth = t * t * (3.0D - 2.0D * t);
-        return from + (to - from) * smooth;
+        double t2 = t * t;
+        double t3 = t2 * t;
+        return (2.0D * t3 - 3.0D * t2 + 1.0D) * from + (t3 - 2.0D * t2 + t) * span * fromSlope
+            + (-2.0D * t3 + 3.0D * t2) * to + (t3 - t2) * span * toSlope;
+    }
+
+    /**
+     * The roll rate at each node, radians per block: Fritsch–Carlson (Fritsch–Butland form), which
+     * keeps the interpolation monotone. Zero where the bank peaks, dips or holds steady either side
+     * of a node, and at an open section's ends, so the track rolls in from rest and out to rest.
+     */
+    private static double[] bankSlopes(List<TrackNode> nodes, double[] distances, double total, boolean closed) {
+        int count = nodes.size();
+        double[] slopes = new double[count];
+        for (int i = 0; i < count; i++) {
+            boolean first = i == 0;
+            boolean last = i == count - 1;
+            if (!closed && (first || last)) {
+                continue;
+            }
+            int before = first ? count - 1 : i - 1;
+            int after = last ? 0 : i + 1;
+            double gapBefore = first ? total - distances[before] + distances[i] : distances[i] - distances[before];
+            double gapAfter = last ? total - distances[i] + distances[after] : distances[after] - distances[i];
+            if (gapBefore <= 0.0D || gapAfter <= 0.0D) {
+                continue;
+            }
+            double into = (nodes.get(i).bankRadians() - nodes.get(before).bankRadians()) / gapBefore;
+            double outOf = (nodes.get(after).bankRadians() - nodes.get(i).bankRadians()) / gapAfter;
+            if (into * outOf <= 0.0D) {
+                continue;
+            }
+            slopes[i] = 3.0D * (gapBefore + gapAfter)
+                / ((2.0D * gapAfter + gapBefore) / into + (gapAfter + 2.0D * gapBefore) / outOf);
+        }
+        return slopes;
     }
 
     /**

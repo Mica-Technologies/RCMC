@@ -35,7 +35,7 @@ class DemoCoasterCheckTest {
     private static final double TICK = RcmcConstants.SECONDS_PER_TICK;
 
     @ParameterizedTest(name = "scale {0}, lift {1}")
-    @CsvSource({"1.0, 34", "1.0, 8", "1.0, 12", "0.4, 16", "1.0, 24", "4.0, 34", "0.4, 60", "4.0, 60",
+    @CsvSource({"1.0, 34", "1.0, 16", "1.0, 20", "0.4, 16", "1.0, 24", "4.0, 34", "0.4, 60", "4.0, 60",
         "0.4, 90", "4.0, 90", "0.4, 120", "4.0, 120"})
     @DisplayName("the demo coaster has no ride-check warnings, and rates safe")
     void demoPassesItsCheck(double scale, double lift) {

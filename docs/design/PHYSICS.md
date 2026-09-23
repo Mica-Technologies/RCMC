@@ -100,11 +100,17 @@ If `PhysicsIntegratorTest` starts failing, the integrator changed — not the te
 
 The model above is the core. These all exist and sit on it:
 
-- **G-forces** — `GForces`: the centripetal term `v²·κ`, from the spline's curvature
-  (`CatmullRomSpline.curvatureAt`), plus gravity, projected onto the car's banked axes to give
-  vertical and lateral load; longitudinal is `dv/dt`. Because bank is already in the frame, how much
-  of a turn the bank absorbed needs no special case. They drive the rider HUD and its screen
-  effects, and the ride ratings.
+- **G-forces** — `GForces`: the centripetal term `v²·κ` plus gravity, projected onto the car's
+  banked axes to give vertical and lateral load; longitudinal is `dv/dt`. Because bank is already in
+  the frame, how much of a turn the bank absorbed needs no special case. They drive the rider HUD
+  and its screen effects, and the ride ratings.
+
+  G is measured **at the rider's heart**, not on the rail (`Heartline`): a point 0.9 blocks above
+  the track along its `up`, whose curve and speed are found by sampling it either side of the car.
+  In ordinary track the two barely differ. In a roll they are opposites: roll a car about the rail
+  and the rider's chest swings round a circle almost a block across, a hard sideways throw the rail
+  never shows. So a rail measurement calls a roll about the rail smooth and a real heartline roll
+  violent, which is backwards.
 - **Multi-car trains** — a train is rigid, so all cars share one `TrainState` and are offset by
   fixed distances along `s`. Gravity is **averaged over the whole train** (`Train`), not sampled at
   one point: this is why a long train crests a hill differently from a short one, and it is a real,

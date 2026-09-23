@@ -240,7 +240,9 @@ public class CommandRcmc extends CommandBase {
             return;
         }
         double scale = args.length > 1 ? parseDouble(args[1], 0.4D, 4.0D) : 1.0D;
-        double lift = args.length > 2 ? parseDouble(args[2], 8.0D, 120.0D) : 34.0D;
+        // Below 16 the turnarounds are too tight to roll into gently: the rider's chest is thrown
+        // sideways faster than any bank can follow.
+        double lift = args.length > 2 ? parseDouble(args[2], 16.0D, 120.0D) : 34.0D;
 
         int id = state.network().allocateSectionId();
         DemoCoaster.Result demo = DemoCoaster.build(id,

@@ -111,6 +111,25 @@ this turn 45°", and the ride-rating system wants to compare authored bank again
 curve's lateral G would *require* — the difference is exactly what makes a turn feel
 uncomfortable, which is a thing the rating system should be able to punish.
 
+Between nodes, bank follows a **monotone cubic** (Fritsch–Carlson): each node carries a roll rate,
+so a roll spread over several nodes runs straight through them. An earlier smoothstep per span
+stopped the roll at every node. That was invisible on the rail, but it jerked a rider's chest
+sideways at each one. The monotone form never overshoots a node's bank, and a steady bank stays
+exactly steady.
+
+### Rolling about the heartline
+
+A rider's heart is almost a block above the rail, so rolling the car about the rail swings it
+sideways. Real track rolls about the **heartline** instead: the riders' chests follow a smooth
+path and the rail moves around it. `HeartlineShaper` lays track that way. A piece describes where
+the hearts go and which way is up for them, and the shaper puts the rail below each heart and reads
+off the bank that makes the finished track's frame agree. The bank is measured on a local copy of
+the track rather than computed, because a rail that spirals picks up transport twist of its own.
+
+Turns are laid through **clothoid** transitions: curvature eases in from zero, rather than a
+circle's full curvature from the first block, and the bank follows the curvature. A `Curve` still
+ends exactly where the circular arc of its radius would, so pieces fit the same footprint.
+
 ## Built on top of this
 
 This page covers one section's geometry. The layers above it all exist:

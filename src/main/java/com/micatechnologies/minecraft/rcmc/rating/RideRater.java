@@ -51,11 +51,6 @@ public final class RideRater {
      *  purely so a layout that can never complete a lap (see the class javadoc) still terminates. */
     public static final int DEFAULT_MAX_TICKS = 12_000;
 
-    /** Distance sampled either side of the car to estimate curvature and its direction — see
-     *  {@link #sampleCurvature}. Matches {@code client.hud.RideTelemetry}'s own constant; both solve
-     *  the identical problem the identical way, independently, for the reason explained there. */
-    private static final double CURVATURE_HALF_STEP = 0.5D;
-
     /** {@code |dot(curvatureDirection, horizontalRight)|} below which a curving moment is treated as
      *  mostly vertical (a hill, not a turn) rather than attributed to either a left or a right turn,
      *  for direction-change counting. Tuned by feel, not derived. */
@@ -255,46 +250,17 @@ public final class RideRater {
     private GForces sampleTick(Accumulator acc, TrackSection section, double distance, double velocity,
                              double previousVelocity) {
         TrackFrame frame = section.frameAtDistance(distance);
-        CurvatureSample curvature = sampleCurvature(section, distance);
+        // Measured where the rider is, not on the rail — see Heartline.
+        com.micatechnologies.minecraft.rcmc.physics.Heartline.Sample heart =
+            com.micatechnologies.minecraft.rcmc.physics.Heartline.at(section, distance);
+        CurvatureSample curvature = new CurvatureSample(heart.curvature, heart.direction);
         double alongTrackAcceleration = (velocity - previousVelocity) / tickSeconds;
 
-        GForces g = GForces.at(frame, Math.abs(velocity), curvature.magnitude, curvature.direction,
-            alongTrackAcceleration, gravity);
+        GForces g = GForces.at(frame, Math.abs(velocity) * heart.speedFactor, curvature.magnitude,
+            curvature.direction, alongTrackAcceleration, gravity);
 
         acc.record(frame, g, Math.abs(velocity), tickSeconds, curvature);
         return g;
-    }
-
-    /**
-     * Curvature magnitude and the direction toward the centre of curvature at {@code s}, by
-     * finite-differencing the tangent {@link #CURVATURE_HALF_STEP} blocks either side.
-     *
-     * <p>{@code CatmullRomSpline.curvatureAt} gives the magnitude but only as a scalar in
-     * spline-parameter space, and {@link GForces#at} needs a world-space direction too.
-     * {@code client.hud.RideTelemetry} solves the identical problem for live-ride HUD readings this
-     * same way — see its javadoc for the underlying Frenet-formula justification
-     * ({@code dT/ds = kappa * N}, so the tangent's rate of change points toward the centre of
-     * curvature). It is re-derived locally here rather than depended on, because it lives under the
-     * {@code client} package tree and {@code CLAUDE.md} rule 2 forbids common code reaching
-     * client-only classes — a design-time rating must be computable with no client present at all,
-     * e.g. from a dedicated server. This mirrors the policy {@code track.element} already follows for
-     * not reaching into another package's private helpers: a few duplicated lines is a smaller risk
-     * than a cross-package or cross-side dependency.</p>
-     */
-    private static CurvatureSample sampleCurvature(TrackSection section, double s) {
-        double total = section.totalLength();
-        double lo = Math.max(0.0D, s - CURVATURE_HALF_STEP);
-        double hi = Math.min(total, s + CURVATURE_HALF_STEP);
-        double span = hi - lo;
-        if (span < 1.0e-6D) {
-            return new CurvatureSample(0.0D, null);
-        }
-        Vec3 tangentLo = section.tangentAtDistance(lo);
-        Vec3 tangentHi = section.tangentAtDistance(hi);
-        Vec3 deltaTangent = tangentHi.subtract(tangentLo);
-        double magnitude = deltaTangent.length() / span;
-        Vec3 direction = magnitude < 1.0e-9D ? null : deltaTangent.normalize();
-        return new CurvatureSample(magnitude, direction);
     }
 
     /** The world-horizontal "right" direction for {@code forward} — i.e. what {@code TrackFrame.right}
@@ -307,7 +273,7 @@ public final class RideRater {
     }
 
     /** Curvature magnitude plus the (possibly {@code null}) unit direction toward the centre of
-     *  curvature — see {@link #sampleCurvature}. */
+     *  curvature, of the rider's heartline. */
     private static final class CurvatureSample {
         final double magnitude;
         final Vec3 direction;

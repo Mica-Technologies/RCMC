@@ -162,13 +162,19 @@ public final class DemoCoaster {
         }
         TrackSection flat = new TrackSection(sectionId, nodes, true, null);
 
-        // Bank each node for the load felt there. Brakes, platform and lift stay level.
+        // Bank each node for the load felt there. Brakes, platform and lift stay level. The bank
+        // turns about the riders' hearts, not the rail: the heart stays where it would be over a
+        // level rail and the rail moves, or every roll into a turn would throw riders sideways.
         List<TrackNode> banked = new ArrayList<>();
         for (int i = 0; i < nodes.size(); i++) {
             double u = stations.get(i);
             double bank = u <= plan.crest ? 0.0D : idealBank(flat, flat.nodeDistance(i),
                 plan.speedSquaredAt(u));
-            banked.add(new TrackNode(nodes.get(i).position(), bank, null));
+            TrackFrame level = flat.unbankedFrameAtDistance(flat.nodeDistance(i));
+            Vec3 bankedUp = level.withBank(Math.toRadians(bank)).up;
+            Vec3 rail = nodes.get(i).position().add(level.up.subtract(bankedUp)
+                .scale(com.micatechnologies.minecraft.rcmc.track.element.HeartlineShaper.HEART_HEIGHT));
+            banked.add(new TrackNode(rail, bank, null));
         }
         TrackSection section = new TrackSection(sectionId, banked, true, null);
 
@@ -281,8 +287,11 @@ public final class DemoCoaster {
                 // top of this profile the track curves by (pi^2 / 2) * shape^2 * rise / half^2.
                 double rise = keyHeight[3];
                 double overTheTop = speedSquaredAt(middle);
-                double half = Math.sqrt(Math.PI * Math.PI / 2.0D * HILL_SHAPE * HILL_SHAPE * rise * overTheTop
-                    / ((1.0D + CAMELBACK_AIRTIME) * GRAVITY));
+                // The riders' hearts, above the rail, go over a crest on a tighter curve than the
+                // rail does — by the heart's height — so the rail's crest is that much wider.
+                double crestRadius = overTheTop / ((1.0D + CAMELBACK_AIRTIME) * GRAVITY)
+                    + com.micatechnologies.minecraft.rcmc.track.element.HeartlineShaper.HEART_HEIGHT;
+                double half = Math.sqrt(Math.PI * Math.PI / 2.0D * HILL_SHAPE * HILL_SHAPE * rise * crestRadius);
                 half = Math.max(8.0D, Math.min(room, half));
                 keyU[2] = middle - half;
                 keyU[4] = middle + half;

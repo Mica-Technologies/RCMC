@@ -30,7 +30,7 @@ element, and the exact `/rcmc train` line to run next.
 | Argument | Range | Default |
 | --- | --- | --- |
 | `scale` | 0.4 – 4.0 | 1.0 |
-| `liftHeight` | 8 – 120 | 34 |
+| `liftHeight` | 16 – 120 | 34 |
 
 The scale is held between 1.0 and 1.4 times `liftHeight / 34`: a tall lift on a small layout pulls
 more G than a rider can take, and a big layout on a low lift runs out of energy before it gets
