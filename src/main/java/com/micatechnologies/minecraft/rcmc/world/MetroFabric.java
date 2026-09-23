@@ -167,6 +167,7 @@ public final class MetroFabric {
      */
     private static int line(World world, Set<Long> interior, Vec3 origin) {
         int placed = 0;
+        java.util.List<BlockPos> lanterns = new java.util.ArrayList<>();
         for (long packed : interior) {
             BlockPos pos = BlockPos.fromLong(packed);
             for (net.minecraft.util.EnumFacing face : net.minecraft.util.EnumFacing.values()) {
@@ -189,6 +190,9 @@ public final class MetroFabric {
                     material = lit(pos, interior)
                         ? Blocks.SEA_LANTERN.getDefaultState()
                         : Blocks.STONEBRICK.getDefaultState();
+                    if (material.getBlock() == Blocks.SEA_LANTERN) {
+                        lanterns.add(neighbour);
+                    }
                 }
                 else {
                     material = Blocks.STONEBRICK.getDefaultState();
@@ -197,7 +201,31 @@ public final class MetroFabric {
                 placed++;
             }
         }
+        relight(world, lanterns);
         return placed;
+    }
+
+    /**
+     * Works out the light from each lantern again, now that the whole network is built.
+     *
+     * <p>{@code setBlockState} only recalculates light where the area around the block is loaded,
+     * and the network is built out to hundreds of blocks from whoever ran the command: the far
+     * loop's lanterns were placed but lit nothing, measured at light 2 on its floor while the near
+     * one read 8 — dark enough for zombies. Every chunk a lantern's light reaches is loaded first,
+     * so the check is not skipped again.</p>
+     */
+    private static void relight(World world, java.util.List<BlockPos> lanterns) {
+        java.util.Set<Long> loaded = new java.util.HashSet<>();
+        for (BlockPos lantern : lanterns) {
+            for (int cx = (lantern.getX() - 16) >> 4; cx <= (lantern.getX() + 16) >> 4; cx++) {
+                for (int cz = (lantern.getZ() - 16) >> 4; cz <= (lantern.getZ() + 16) >> 4; cz++) {
+                    if (loaded.add(((long) cx << 32) ^ (cz & 0xFFFFFFFFL))) {
+                        world.getChunk(cx, cz);
+                    }
+                }
+            }
+            world.checkLight(lantern);
+        }
     }
 
     /**
