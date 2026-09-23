@@ -91,18 +91,15 @@ public final class Corkscrew implements TrackElement {
             throw new IllegalArgumentException("too slow for a corkscrew: the train would stall");
         }
 
-        // Nodes close where the rider rolls, gradually sparser where not — see
-        // InversionPath.nodeIndices for why a roll needs them close, and evenly graded.
+        // Nodes evenly along the hearts' path — see InversionPath.nodeIndices.
         int count = path.hearts.size();
         double[] arc = new double[count];
-        double[] turn = new double[count];
         for (int k = 0; k < count; k++) {
             arc[k] = path.arc.get(k);
-            turn[k] = path.rolls.get(k);
         }
         List<Vec3> hearts = new ArrayList<>();
         List<Vec3> ups = new ArrayList<>();
-        for (int k : InversionPath.nodeIndices(arc, turn, InversionPath.NODE_SPACING)) {
+        for (int k : InversionPath.nodeIndices(arc, InversionPath.NODE_SPACING)) {
             hearts.add(path.hearts.get(k));
             ups.add(path.ups.get(k));
         }

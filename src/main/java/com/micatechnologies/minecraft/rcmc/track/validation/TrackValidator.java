@@ -16,23 +16,19 @@ import java.util.function.DoublePredicate;
  * than a hard refusal, and it is the model this validator follows. {@link TrackIssue.Severity#ERROR}
  * is reserved for geometry that would actually break the simulation: coincident nodes, a
  * non-finite number, a tangent that reverses (which none of {@code track.math}'s geometry should
- * ever produce — see {@link #checkCusps}). Every other finding — too much lateral G, too steep a
- * drop, banking that rolls too fast, track passing close to itself — is a
+ * ever produce — see {@link #checkCusps}). Every other finding — nodes too close or too far apart,
+ * track passing close to itself — is a
  * {@link TrackIssue.Severity#WARNING}: the section is completely valid to build and ride, it is
  * just going to feel a particular way, and the builder gets to decide whether that way is
  * "thrilling" or "needs another look".</p>
  *
- * <p><b>Curvature is computed locally.</b> None of {@code track.math} exposes the curve's
- * second derivative — {@code CatmullRomSpline} only exposes position and (first-derivative)
- * tangent, and {@code docs/design/PHYSICS.md} explicitly lists curvature as "not yet implemented,
- * needed for G-forces". Rather than add a method to {@code CatmullRomSpline} (which this
- * package must not touch — track network / physics work is landing there in parallel), curvature
- * is estimated here from a finite difference of the tangent with respect to arc length:
- * {@code kappa = |dT/ds|}, radius {@code = 1/kappa}. This is a reasonable, if approximate, way to
- * get curvature out of a curve that only hands out its tangent; a precise analytic second
- * derivative from the same Barry-Goldman recurrence {@code CatmullRomSpline.tangentInSegment}
- * already differentiates would be more accurate and belongs upstream on the spline itself once
- * that class is free to change again.</p>
+ * <p><b>No G-force, steepness or roll-rate checks.</b> There were: sideways G from the rail's
+ * curvature at one assumed speed, a maximum grade, and a maximum bank change per block. All three
+ * judged track without its speed or its riders, and warned on every correct loop and heartline
+ * roll — a rail spiralling round the riders' hearts is
+ * tightly curved, and a loop goes past vertical by design. {@code rating.RideCheck} judges G from
+ * the ride as it actually runs, measured at the rider. This keeps to geometry that is wrong
+ * whatever the speed.</p>
  *
  * <p>Pure Java, zero Minecraft types, like everything else under {@code track} — see
  * {@code CLAUDE.md}.</p>
@@ -72,9 +68,6 @@ public final class TrackValidator {
         if (section.totalLength() > 0.0D) {
             ContinuousSamples samples = sampleContinuous(section);
             checkCusps(samples, issues);
-            checkGrade(samples, issues);
-            checkLateralG(samples, issues);
-            checkBankRate(samples, issues);
             // Vertical overshoot is checked per node-to-node span rather than from the continuous
             // samples, because the thing being measured is the curve relative to ITS ENDPOINTS —
             // a property of each span, not of any single point on it.
@@ -101,7 +94,7 @@ public final class TrackValidator {
 
     /**
      * Walks the whole section once, collecting the tangent and authored bank at each sample.
-     * Every check below (grade, curvature/lateral-G, bank rate, cusp) reads from this one pass
+     * The cusp check reads from this one pass
      * instead of re-sampling the curve, since {@code tangentAtDistance} is not free — it walks
      * the arc-length table's binary search and evaluates the spline.
      */
@@ -117,136 +110,13 @@ public final class TrackValidator {
         for (int i = 0; i < count; i++) {
             // Last sample lands exactly on totalLength rather than overshooting past it, even
             // though that makes the final step shorter than `spacing` — see the endpoint note
-            // on checkGrade/checkLateralG for why treating that stub step like any other is fine.
+            // below for why treating that stub step like any other is fine.
             double distance = (i == count - 1) ? total : Math.min(i * spacing, total);
             s[i] = distance;
             tangent[i] = section.tangentAtDistance(distance);
             bank[i] = Math.toDegrees(section.bankRadiansAt(distance));
         }
         return new ContinuousSamples(s, tangent, bank);
-    }
-
-    // ---- excessive curvature / minimum radius --------------------------------------------
-
-    /**
-     * Flags points where the curve's radius of curvature is tight enough that, at
-     * {@link ValidationLimits#designSpeedBlocksPerSecond()}, the resulting lateral acceleration
-     * {@code v^2/r} would exceed {@link ValidationLimits#maxLateralGees()}.
-     *
-     * <p>Curvature {@code kappa = |dT/ds|} is estimated by a central (forward/backward at the
-     * two ends) finite difference of the sampled tangents — see the class javadoc for why this
-     * is computed here instead of upstream on {@code CatmullRomSpline}. At a closed circuit's
-     * wrap point this slightly under-samples across the seam rather than blending across it,
-     * which is a minor approximation acceptable for a coarse rider-comfort screen.</p>
-     */
-    private void checkLateralG(ContinuousSamples samples, List<TrackIssue> out) {
-        int n = samples.s.length;
-        double[] lateralG = new double[n];
-        double v2 = limits.designSpeedBlocksPerSecond() * limits.designSpeedBlocksPerSecond();
-        double g = limits.gravityBlocksPerSecondSquared();
-
-        for (int i = 0; i < n; i++) {
-            double kappa = curvatureAt(samples, i);
-            double value = g > 0.0D ? (v2 * kappa) / g : 0.0D;
-            lateralG[i] = sanitize(value, samples.s[i], "TRACK_NON_FINITE_CURVATURE",
-                "Curvature computation produced a non-finite value", out);
-        }
-
-        DoublePredicate exceeds = value -> value > limits.maxLateralGees();
-        scanRuns(samples.s, lateralG, exceeds, (distance, value) -> {
-            double radius = value > 0.0D ? (v2 / (value * g)) : Double.POSITIVE_INFINITY;
-            String message = String.format(
-                "At %.1f blocks/s this curve implies %.2fg of lateral acceleration (radius ~ %.1f "
-                    + "blocks), above the configured limit of %.2fg.",
-                limits.designSpeedBlocksPerSecond(), value, radius, limits.maxLateralGees());
-            return new TrackIssue(TrackIssue.Severity.WARNING, "TRACK_EXCESSIVE_LATERAL_G", message,
-                distance, value);
-        }, out);
-    }
-
-    /** {@code |dT/ds|} at sample {@code i}, via central difference where a neighbour exists on both sides. */
-    private static double curvatureAt(ContinuousSamples samples, int i) {
-        int n = samples.s.length;
-        int lo = Math.max(0, i - 1);
-        int hi = Math.min(n - 1, i + 1);
-        if (lo == hi) {
-            return 0.0D;
-        }
-        double ds = samples.s[hi] - samples.s[lo];
-        if (ds <= 0.0D) {
-            return 0.0D;
-        }
-        Vec3 dT = samples.tangent[hi].subtract(samples.tangent[lo]);
-        return dT.length() / ds;
-    }
-
-    // ---- excessive grade ------------------------------------------------------------------
-
-    /**
-     * Flags climbs/drops steeper than {@link ValidationLimits#maxGradeDegrees()}.
-     *
-     * <p>Grade is {@code asin(forward.y)} in degrees — exactly the angle {@code PhysicsIntegrator}
-     * already uses to project gravity onto the track ({@code a_gravity = -g * sin(grade)}), so
-     * "grade" here means the same thing it means to the physics layer. 90 degrees (a true
-     * vertical drop) is legal on a real coaster and is never itself an error here, only a
-     * warning if it clears the configured threshold — see {@link ValidationLimits#maxGradeDegrees()}
-     * for why the default sits below 90 anyway. A true beyond-vertical element (horizontal
-     * direction reversing while still descending, e.g. an overhanging drop) is a distinct
-     * element this scalar angle cannot represent and this check does not attempt to detect.</p>
-     */
-    private void checkGrade(ContinuousSamples samples, List<TrackIssue> out) {
-        int n = samples.s.length;
-        double[] gradeDegrees = new double[n];
-        for (int i = 0; i < n; i++) {
-            double y = Math.max(-1.0D, Math.min(1.0D, samples.tangent[i].y));
-            gradeDegrees[i] = Math.toDegrees(Math.asin(y));
-        }
-
-        DoublePredicate exceeds = value -> Math.abs(value) > limits.maxGradeDegrees();
-        scanRuns(samples.s, gradeDegrees, exceeds, (distance, value) -> {
-            String message = String.format(
-                "Grade reaches %.1f degrees here, steeper than the configured maximum of %.1f "
-                    + "degrees (90 degrees, i.e. vertical, is legal on a coaster and not itself flagged).",
-                value, limits.maxGradeDegrees());
-            return new TrackIssue(TrackIssue.Severity.WARNING, "TRACK_EXCESSIVE_GRADE", message,
-                distance, value);
-        }, out);
-    }
-
-    // ---- excessive bank rate ---------------------------------------------------------------
-
-    /**
-     * Flags authored bank rolling faster than {@link ValidationLimits#maxBankRateDegreesPerBlock()}
-     * per block of track.
-     *
-     * <p>Deliberately reads {@code TrackSection.bankRadiansAt}, the <em>authored</em> bank, not
-     * the frame's total roll (which also includes the small, linearly-distributed closed-circuit
-     * residual correction from {@code TrackSection.rollCorrectionAt}). That residual is spread
-     * evenly over the whole circuit specifically to be imperceptible — see
-     * {@code docs/design/TRACK_GEOMETRY.md}'s "known limitation" section — so folding it into
-     * this check would only ever add noise, never catch a real problem. What this check is
-     * actually for is a builder rolling a barrel roll or corkscrew faster than is comfortable,
-     * which is entirely about the authored bank curve.</p>
-     */
-    private void checkBankRate(ContinuousSamples samples, List<TrackIssue> out) {
-        int n = samples.s.length;
-        double[] bankRate = new double[n];
-        for (int i = 0; i < n; i++) {
-            int lo = Math.max(0, i - 1);
-            int hi = Math.min(n - 1, i + 1);
-            double ds = samples.s[hi] - samples.s[lo];
-            bankRate[i] = ds > 0.0D ? (samples.bankDegrees[hi] - samples.bankDegrees[lo]) / ds : 0.0D;
-        }
-
-        DoublePredicate exceeds = value -> Math.abs(value) > limits.maxBankRateDegreesPerBlock();
-        scanRuns(samples.s, bankRate, exceeds, (distance, value) -> {
-            String message = String.format(
-                "Bank angle changes at %.1f degrees/block here, above the configured maximum of "
-                    + "%.1f degrees/block.",
-                value, limits.maxBankRateDegreesPerBlock());
-            return new TrackIssue(TrackIssue.Severity.WARNING, "TRACK_EXCESSIVE_BANK_RATE", message,
-                distance, value);
-        }, out);
     }
 
     // ---- cusp / tangent reversal (backstop) ------------------------------------------------

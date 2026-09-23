@@ -27,8 +27,8 @@ What differs is how you shape it. Transit alignments want:
 
     Transit-specific validation — gentler curve limits, level-platform checks, gradient limits at
     stations — is not implemented. The transit tool previews where a click lands, not whether the
-    track there is suitable, and the coaster
-    validator's limits are coaster limits. For now, this is on you.
+    track there is suitable, and the validator checks only the shape of the track, not its curves
+    or gradients. For now, this is on you.
 
 ### Give it the transit look
 

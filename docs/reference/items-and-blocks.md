@@ -25,7 +25,7 @@ the provisional curve as translucent track while you build.
 
 ### Piece tool
 
-`rcmc:piece_tool` — the prefab palette. Nine standard manoeuvres, each with one adjustable
+`rcmc:piece_tool` — the prefab palette. Twelve standard manoeuvres, each with one adjustable
 parameter.
 
 | Input | Effect |

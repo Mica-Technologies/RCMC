@@ -27,6 +27,11 @@ public final class Immelmann implements TrackElement {
     /** Slowest entry, in blocks/s, an Immelmann gets over at. */
     public static final double MIN_SPEED = 22.0D;
 
+    /** How far to the side the train comes back, in blocks: it returns the way it went in, and
+     *  must pass beside the track it came in on, not through it: past the track validator's
+     *  4-block clearance even where the pull-out passes under or over the way in. */
+    static final double SIDEWAYS = 6.5D;
+
     private final double entrySpeed;
     private final RollDirection direction;
 
@@ -62,6 +67,7 @@ public final class Immelmann implements TrackElement {
         path.settle(Math.PI, PULL_OUT, ease);
         path.roll(from, to, direction == RollDirection.POSITIVE ? 180.0D : -180.0D);
         Vec3 back = context.entryFrame.forward.scale(-1.0D);
-        return path.shape(context, InversionPath.NODE_SPACING, back);
+        return path.shape(context, InversionPath.NODE_SPACING, back,
+            direction == RollDirection.POSITIVE ? SIDEWAYS : -SIDEWAYS);
     }
 }

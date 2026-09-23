@@ -140,8 +140,8 @@ five-car train entering at a design speed (`InversionPath`, and `Corkscrew` in t
 rolling resistance and drag charged as the physics charges them. Every roll happens where the
 riders are weightless, so it throws nobody sideways. Each pull-out ends on a feedback law that
 leaves the element exactly level, and the design refuses any speed at which the train would slow
-below 5 blocks/s. Nodes are half a block apart, because the rail spirals round the riders' chests
-closer than that.
+below 5 blocks/s. Nodes are a block apart, closer than anywhere else on a ride, because the rail
+spirals round the riders' chests less than a block away.
 
 ## Built on top of this
 

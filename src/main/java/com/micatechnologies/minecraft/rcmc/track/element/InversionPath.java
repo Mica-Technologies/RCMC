@@ -39,9 +39,6 @@ final class InversionPath {
     /** How hard a pull-out closes on level: load above 1 g per unit of sin(pitch error). */
     private static final double SETTLE_GAIN = 8.0D;
 
-    /** Most the rider's orientation may turn between two nodes, in degrees — see {@link #shape}. */
-    static final double TURN_PER_NODE = 10.0D;
-
     /** Distance behind the front car of each car's centre in the stock coaster train: five cars
      *  3 blocks long with half-block gaps. */
     static final double[] CAR_OFFSETS = {0.0D, 3.5D, 7.0D, 10.5D, 14.0D};
@@ -52,12 +49,12 @@ final class InversionPath {
     private static final double AIR_DRAG = 0.0015D;
     private static final double LOSS_MARGIN = 1.3D;
 
-    /** Node spacing through an inversion, in blocks — see {@link #nodeIndices}. */
+    /** Node spacing along the riders' hearts through an inversion, in blocks — see
+     *  {@link #nodeIndices}. Close enough for the rail's spiral round the heart, with G measured
+     *  over a block either side of the rider (see {@code physics.Heartline}); and wide enough that
+     *  the rail's nodes, closer together where the rail runs inside the hearts' curve, stay above
+     *  the block the track validator asks for. */
     static final double NODE_SPACING = 0.5D;
-
-    /** How fast node spacing may change along the track, in blocks per block — see
-     *  {@link #nodeIndices}. */
-    static final double SPACING_GROWTH = 0.3D;
 
     /** Slowest the design lets the train get anywhere in an element, in blocks/s. Well above
      *  stopping: the real train differs from the design by a little, and a little too slow at the
@@ -234,73 +231,62 @@ final class InversionPath {
      * Hands the path to {@link HeartlineShaper}, its nodes placed by {@link #nodeIndices}.
      */
     ElementResult shape(ElementContext context, double spacing, Vec3 exitForward) {
+        return shape(context, spacing, exitForward, 0.0D);
+    }
+
+    /**
+     * As above, the whole path eased {@code sideways} blocks to the right by its end, along
+     * {@link #smootherstep} — for an element that comes back the way it went in and must pass beside
+     * its own entry rather than through it.
+     */
+    ElementResult shape(ElementContext context, double spacing, Vec3 exitForward, double sideways) {
         Vec3 forward = context.entryFrame.forward;
+        Vec3 right = context.entryFrame.right;
         Vec3 up = context.entryFrame.up;
         Vec3 origin = context.entryFrame.position.add(up.scale(HeartlineShaper.HEART_HEIGHT));
         double[] arc = new double[points.size()];
-        double[] turn = new double[points.size()];
         for (int i = 1; i < points.size(); i++) {
-            Point a = points.get(i - 1);
-            Point b = points.get(i);
-            arc[i] = b.s;
-            turn[i] = turn[i - 1] + Math.abs(b.roll - a.roll) + Math.abs(Math.toDegrees(b.alpha - a.alpha));
+            arc[i] = points.get(i).s;
         }
         List<Vec3> hearts = new ArrayList<>();
         List<Vec3> ups = new ArrayList<>();
-        for (int i : nodeIndices(arc, turn, spacing)) {
+        for (int i : nodeIndices(arc, spacing)) {
             Point p = points.get(i);
             Vec3 tangent = forward.scale(Math.cos(p.alpha)).add(up.scale(Math.sin(p.alpha)));
             Vec3 planeUp = forward.scale(-Math.sin(p.alpha)).add(up.scale(Math.cos(p.alpha)));
             double r = Math.toRadians(p.roll);
             Vec3 riderUp = planeUp.scale(Math.cos(r)).add(tangent.cross(planeUp).scale(Math.sin(r)));
-            hearts.add(origin.add(forward.scale(p.x)).add(up.scale(p.y)));
+            hearts.add(origin.add(forward.scale(p.x)).add(up.scale(p.y))
+                .add(right.scale(sideways * smootherstep(p.s / s))));
             ups.add(riderUp);
         }
         return HeartlineShaper.shape(context, hearts, ups, exitForward);
     }
 
     /**
-     * Which samples become nodes: about {@link #TURN_PER_NODE} of turning apart where the rider
-     * turns quickly, {@code spacing} apart where they do not, and never a sudden change between.
+     * Which samples become nodes: evenly, {@code spacing} blocks of heart path apart, and the last.
      *
-     * <p>The rail spirals round the riders' hearts less than a block away, and the spline has to
-     * follow that spiral from the nodes alone: a fast roll needs nodes a fraction of a block apart.
-     * But a spline through nodes whose spacing jumps — two blocks, then half a block — overshoots at
-     * the jump, and at the heart a centimetre of overshoot is half a g sideways. So the spacing each
-     * point wants is worked out first, then limited to grow by {@link #SPACING_GROWTH} of a block per
-     * block of track in either direction, so nodes crowd in and thin out gradually.</p>
+     * <p>Evenly on purpose. The rail spirals round the riders' hearts less than a block away and the
+     * spline has to follow that spiral from the nodes alone; nodes packed closer where the rider
+     * rolls fast looked like the answer, but a spline through nodes whose spacing changes
+     * overshoots where it changes, and at the heart a centimetre of overshoot is half a g
+     * sideways.</p>
      *
-     * @param arc  arc length at each sample, ascending from 0
-     * @param turn cumulative turning, in degrees, at each sample
+     * @param arc arc length at each sample, ascending from 0
      * @return sample indices, ascending, excluding 0 and including the last
      */
-    static List<Integer> nodeIndices(double[] arc, double[] turn, double spacing) {
+    static List<Integer> nodeIndices(double[] arc, double spacing) {
         int count = arc.length;
-        double[] want = new double[count];
-        int window = 20;
-        for (int i = 0; i < count; i++) {
-            int lo = Math.max(0, i - window);
-            int hi = Math.min(count - 1, i + window);
-            double rate = arc[hi] > arc[lo] ? (turn[hi] - turn[lo]) / (arc[hi] - arc[lo]) : 0.0D;
-            want[i] = rate > 1.0e-9D ? Math.min(spacing, TURN_PER_NODE / rate) : spacing;
-        }
-        for (int i = 1; i < count; i++) {
-            want[i] = Math.min(want[i], want[i - 1] + SPACING_GROWTH * (arc[i] - arc[i - 1]));
-        }
-        for (int i = count - 2; i >= 0; i--) {
-            want[i] = Math.min(want[i], want[i + 1] + SPACING_GROWTH * (arc[i + 1] - arc[i]));
-        }
+        double total = arc[count - 1];
+        int segments = Math.max(4, (int) Math.round(total / spacing));
         List<Integer> nodes = new ArrayList<>();
-        int last = 0;
-        for (int i = 1; i < count - 1; i++) {
-            if (arc[i] - arc[last] >= want[last]) {
-                nodes.add(i);
-                last = i;
+        int i = 1;
+        for (int k = 1; k < segments; k++) {
+            double target = total * k / segments;
+            while (i < count - 1 && arc[i] < target) {
+                i++;
             }
-        }
-        // The end is a node; drop the one before it if it would sit much too close.
-        if (!nodes.isEmpty() && arc[count - 1] - arc[last] < 0.5D * want[last]) {
-            nodes.remove(nodes.size() - 1);
+            nodes.add(i);
         }
         nodes.add(count - 1);
         return nodes;

@@ -117,6 +117,11 @@ On commit the section is run through the validator and any findings are reported
 it is **committed anyway**. That is deliberate: *RollerCoaster Tycoon* lets you build the lethal
 ride and then tells you what you have built, which is far more fun than a refusal.
 
+The validator checks the track's shape: nodes on top of each other or implausibly far apart, a
+kink, track running through itself. It does not judge G-forces, steepness or how fast the track
+rolls. Those depend on how fast the train is going, which the shape alone cannot know, so the
+[ride check](#checking-the-ride) judges them from the ride as it actually runs.
+
 Useful session commands:
 
 ```
@@ -188,7 +193,8 @@ at**, not by a size. Each shapes itself for that speed:
 - the track rolls about the riders' chests, not the rail, so nobody is thrown sideways;
 - every roll happens while the riders are weightless or nearly so;
 - each one leaves level. The corkscrew and zero-g roll carry on the way they came in; the Immelmann
-  and dive loop turn you back the other way, higher and lower respectively.
+  and dive loop turn you back the other way, higher and lower respectively, and 6.5 blocks to the
+  side, so the track back passes beside the track in rather than through it.
 
 Dial in the speed the train will really have there. Run [`/rcmc check`](../reference/commands.md#rcmc-check)
 afterwards: too fast and the top turns to airtime, too slow and the check will show where the

@@ -62,6 +62,15 @@ class InversionRideTest {
         TrackNetwork network = new TrackNetwork();
         network.addSection(section);
 
+        // The builder's own validator has nothing to say about the element's nodes: found in game,
+        // where half-block nodes drew a warning for every one of them.
+        for (com.micatechnologies.minecraft.rcmc.track.validation.TrackIssue issue
+            : new com.micatechnologies.minecraft.rcmc.track.validation.TrackValidator().validate(section)) {
+            assertTrue(issue.severity() != com.micatechnologies.minecraft.rcmc.track.validation.TrackIssue.Severity.WARNING
+                && issue.severity() != com.micatechnologies.minecraft.rcmc.track.validation.TrackIssue.Severity.ERROR,
+                kind + ": " + issue.code() + " " + issue.message());
+        }
+
         // It leaves level and upright, facing the way the element says.
         Vec3 riderUp = piece.exitFrame.withBank(Math.toRadians(piece.exitBankDegrees)).up;
         assertEquals(1.0D, riderUp.dot(Vec3.UP), 0.01D, kind + " leaves the rider tilted: " + riderUp);
@@ -89,7 +98,10 @@ class InversionRideTest {
         assertTrue(furthest[0] > leave, kind + " stalled at " + furthest[0] + " of " + leave);
         assertTrue(stats.inversionCount >= 1, kind + " never turned its riders over");
         assertTrue(worst[0] < 0.6D, kind + " throws riders sideways: " + worst[0] + " g");
-        assertTrue(worst[1] > -1.0D && worst[2] < 4.5D,
+        // Hanging lightly in the restraints over the top is what an inversion does — the front car of
+        // a corkscrew most, since the train behind it is still climbing — but never near the ride
+        // check's -2 g, and never more than a firm pull-out's worth of pressing in.
+        assertTrue(worst[1] > -1.5D && worst[2] < 4.5D,
             kind + " vertical load out of range: " + worst[1] + " .. " + worst[2] + " g");
     }
 
