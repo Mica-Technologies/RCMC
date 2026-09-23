@@ -280,7 +280,10 @@ public final class RideOperations {
         Integer stored = transfer == null ? null
             : com.micatechnologies.minecraft.rcmc.physics.ride.Transfers.stored(transfer,
                 state.trains().asMap());
-        return new RideView(sectionId, "Coaster #" + sectionId, ride.state().ordinal(),
+        return new RideView(sectionId,
+            // Its name, once it has one: the same title its ride signs show.
+            ride.name() == null || ride.name().isEmpty() ? "Coaster #" + sectionId : ride.name(),
+            ride.state().ordinal(),
             ride.dispatchMode().ordinal(), ride.isEmergencyStopped(),
             ride.stopCause() == null ? "" : ride.stopCause().name(), ride.carsPerTrain(),
             RideController.maxTrains(blocks), blocks, message, trains, settings)

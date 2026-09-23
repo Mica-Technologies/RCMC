@@ -55,7 +55,7 @@ import net.minecraftforge.fml.relauncher.SideOnly;
  * Orange line. 1.12.2 has no text-entry affordance for an item, and the alternative — placing an
  * unnamed thing and then typing a chat command to rename it — would leave the command as the real
  * authoring path, which is the exact problem this tool exists to remove. Unnamed falls back to
- * "Station N" / "Line N", so the tool is usable the moment it is picked up.</p>
+ * "StationN" / "LineN", so the tool is usable the moment it is picked up.</p>
  *
  * <p>Everything here is server-side and goes through operations that already existed and were
  * already tested — {@code addStation}, {@code addLine}, {@code addSwitch}, {@code withStyle}. The
@@ -189,6 +189,7 @@ public class ItemTransitTool extends Item {
         }
 
         String name = chosenName(player, "Station", transit.stations().size() + 1);
+        warnIfSpaced(player, name);
         boolean moved = transit.station(name) != null;
         transit.addStation(new TransitStation(name, hit.ref));
         syncTransit(world, state);
@@ -396,6 +397,7 @@ public class ItemTransitTool extends Item {
             stops.add(station);
         }
         String name = chosenName(player, "Line", transit.lines().size() + 1);
+        warnIfSpaced(player, name);
         transit.addLine(TransitLine.of(name, stops, session.kind()));
         session.clearPending();
         pushTool(player, session);
@@ -669,7 +671,7 @@ public class ItemTransitTool extends Item {
 
     /**
      * The name for the next thing created: the tool's anvil name if it has one, else
-     * {@code <kind> <n>}. Trimmed and length-capped, because it becomes a registry key that gets
+     * {@code <kind><n>}, one word. Trimmed and length-capped, because it becomes a registry key that gets
      * rendered on a sign and shown on a board.
      */
     private static String chosenName(EntityPlayer player, String kind, int ordinal) {
@@ -680,7 +682,17 @@ public class ItemTransitTool extends Item {
                 return name.length() > 24 ? name.substring(0, 24) : name;
             }
         }
-        return kind + " " + ordinal;
+        // One word, so it can be typed into a command: /rcmc platform, /rcmc line start and the rest
+        // read a name as a single argument, and "Station 1" was one no command could reach.
+        return kind + ordinal;
+    }
+
+    /** Warns when a name has a space in it: commands take a name as one word, so none can use it. */
+    private static void warnIfSpaced(EntityPlayer player, String name) {
+        if (name.indexOf(' ') >= 0) {
+            say(player, TextFormatting.GOLD, "  '" + name + "' has a space in it, so commands such as "
+                + "/rcmc platform can't name it. The tools still can; rename the tool without spaces to avoid it.");
+        }
     }
 
     private static TrackPicker.Hit pickAlongLook(EntityPlayer player, RcmcWorldState state) {
