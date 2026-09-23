@@ -172,6 +172,18 @@ than two trains nose to tail on the same track. `/rcmc info` reports section len
 | `metro` | MBTA Orange Line, CRRC 65 ft class | ~19.8 m |
 | `metrolong` | LA HR4000 / NYC 75-footers | ~22.9 m |
 
+### `/rcmc check`
+
+```
+/rcmc check <sectionId>
+```
+
+Runs the ride's own train round a simulated lap, from its station, and lists where riders would feel
+more than is safe, and where a train cannot get past. Each warning says what was measured and
+between which nodes: *6.2 g pressing riders into their seats — between nodes 9 and 10 of #1*.
+Nothing is changed or blocked. The same check is marked on the track while you hold the track
+editor. A section with no station has no ride to run.
+
 ### `/rcmc rate`
 
 ```

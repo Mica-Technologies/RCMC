@@ -224,24 +224,25 @@ public final class TrackPreviewRenderer {
     }
 
     /**
-     * Draws the provisional track, tinted by whether the validator objects to it.
+     * Draws the provisional track, with anything the validator objects to marked where it is.
      *
      * <p>Running the validator here is the RCT loop in miniature: the game tells you what you are
      * about to build while you can still move the cursor, rather than after you have committed.</p>
      */
     private static void drawPreview(TrackSection preview, double camX, double camY, double camZ) {
-        boolean warned = false;
+        // Problems are marked where they are, not by turning the whole run red: a builder laying a
+        // long chain needs to know which bend is wrong.
+        List<TrackIssue> issues = new java.util.ArrayList<>();
         for (TrackIssue issue : new TrackValidator(ValidationLimits.DEFAULT).validate(preview)) {
             if (issue.severity() != TrackIssue.Severity.INFO) {
-                warned = true;
-                break;
+                issues.add(issue);
             }
         }
         // A steep placement is flagged even when the validator is content: an abrupt climb between
         // two adjacent nodes is the single most surprising thing the height offset does, and it is
         // geometry the builder chose rather than a fault in the curve.
         BuildCursor.Segment segment = BuildCursor.pendingSegment(net.minecraft.client.Minecraft.getMinecraft());
-        float[] tint = (warned || (segment != null && segment.isSteep())) ? WARNING_COLOR : VALID_COLOR;
+        float[] tint = segment != null && segment.isSteep() ? WARNING_COLOR : VALID_COLOR;
 
         // Supports are previewed too. Without them, raising the placement height showed track
         // floating with no indication of what would hold it up — which is most of what a builder is
@@ -266,7 +267,26 @@ public final class TrackPreviewRenderer {
             vertex(buffer, quad.d, camX, camY, camZ, tint);
         }
         tessellator.draw();
+
+        for (TrackIssue issue : issues) {
+            float[] colour = issue.severity() == TrackIssue.Severity.ERROR
+                ? new float[] {1.0F, 0.18F, 0.12F} : new float[] {1.0F, 0.72F, 0.12F};
+            RideCheckOverlay.drawBand(preview, issue.distanceBlocks() - ISSUE_HALF_LENGTH,
+                issue.distanceBlocks() + ISSUE_HALF_LENGTH, colour);
+        }
+        if (!issues.isEmpty()) {
+            // drawBand restores GL to its defaults; the node markers drawn next want this pass's.
+            GlStateManager.disableTexture2D();
+            GlStateManager.disableLighting();
+            GlStateManager.enableBlend();
+            GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+            GlStateManager.disableCull();
+            GlStateManager.disableDepth();
+        }
     }
+
+    /** How far either side of a reported problem its marker reaches, blocks. */
+    private static final double ISSUE_HALF_LENGTH = 3.0D;
 
     /** Small cubes at each node, with the one under the cursor picked out. */
     private static void drawNodeMarkers(List<TrackNode> nodes, boolean hasCandidate,

@@ -246,6 +246,17 @@ public class GuiTrackEditor extends GuiScreen {
         drawString(fontRenderer, TextFormatting.WHITE + "Section #" + view.sectionId
             + TextFormatting.GRAY + "  " + (view.closed ? "circuit, " : "") + format(view.length) + " blocks",
             l + 6, t + 5, 0xFFFFFF);
+        // The ride check, rerun after every edit: what riders would feel, marked on the track.
+        java.util.List<com.micatechnologies.minecraft.rcmc.rating.RideWarning> warnings =
+            com.micatechnologies.minecraft.rcmc.client.build.RideCheckOverlay.warnings();
+        boolean danger = false;
+        for (com.micatechnologies.minecraft.rcmc.rating.RideWarning w : warnings) {
+            danger |= w.severity == com.micatechnologies.minecraft.rcmc.rating.RideWarning.Severity.DANGER;
+        }
+        String check = warnings.isEmpty() ? TextFormatting.GREEN + "Ride check: OK"
+            : (danger ? TextFormatting.RED : TextFormatting.GOLD) + "Ride check: " + warnings.size()
+                + (warnings.size() == 1 ? " warning" : " warnings");
+        drawString(fontRenderer, check, l + WIDTH - 6 - fontRenderer.getStringWidth(check), t + 5, 0xFFFFFF);
         drawString(fontRenderer, "Node " + (view.nodeIndex + 1) + " of " + view.nodeCount,
             l + 94, t + 22, 0xDDDDDD);
 
@@ -261,7 +272,23 @@ public class GuiTrackEditor extends GuiScreen {
             : "No span from the last node";
         drawString(fontRenderer, TextFormatting.WHITE + heading, l + WIDTH - 6 - fontRenderer.getStringWidth(heading),
             t + 22, 0xFFFFFF);
-        if (toolsPage) {
+        if (toolsPage && !warnings.isEmpty()) {
+            // Room for the first few; the rest are on the track, and in /rcmc check.
+            int y = t + 120;
+            for (int i = 0; i < Math.min(3, warnings.size()); i++) {
+                com.micatechnologies.minecraft.rcmc.rating.RideWarning w = warnings.get(i);
+                int colour = w.severity == com.micatechnologies.minecraft.rcmc.rating.RideWarning.Severity.DANGER
+                    ? 0xFF6655 : 0xFFC040;
+                for (String line : fontRenderer.listFormattedStringToWidth("#" + w.sectionId + ": " + w.message(), 146)) {
+                    if (y > t + 176) {
+                        break;
+                    }
+                    drawString(fontRenderer, line, l + 147, y, colour);
+                    y += 10;
+                }
+            }
+        }
+        else if (toolsPage) {
             String help = "To give part of a track another style, split it there and restyle one half. "
                 + "Join works at an end node, with another end close by.";
             int y = t + 120;

@@ -61,7 +61,7 @@ public class CommandRcmc extends CommandBase {
 
     @Override
     public String getUsage(ICommandSender sender) {
-        return "/rcmc <demo|metrodemo|train|clear|info|build|paint|style|rate|block|transfer|ride|station|line"
+        return "/rcmc <demo|metrodemo|train|clear|info|build|paint|style|rate|check|block|transfer|ride|station|line"
             + "|switch|platform|rmsection|undo|redo>";
     }
 
@@ -75,7 +75,7 @@ public class CommandRcmc extends CommandBase {
                                           String[] args, BlockPos targetPos) {
         if (args.length == 1) {
             return getListOfStringsMatchingLastWord(args, "demo", "metrodemo", "train", "clear",
-                "info", "build", "paint", "style", "rate", "block", "transfer", "ride", "station", "line", "switch",
+                "info", "build", "paint", "style", "rate", "check", "block", "transfer", "ride", "station", "line", "switch",
                 "platform", "rmsection", "undo", "redo");
         }
         if (args.length == 3 && "style".equalsIgnoreCase(args[0])) {
@@ -172,6 +172,9 @@ public class CommandRcmc extends CommandBase {
                 break;
             case "rate":
                 rate(sender, state, args);
+                break;
+            case "check":
+                check(sender, state, args);
                 break;
             case "block":
                 block(sender, state, args);
@@ -1689,6 +1692,45 @@ public class CommandRcmc extends CommandBase {
      * <p>Simulation is entirely offline — no entity is spawned and no state is touched — so it is
      * safe to run on a circuit that already has a train on it.</p>
      */
+    /**
+     * {@code /rcmc check <sectionId>} — runs the ride through a simulated lap and says where riders
+     * would feel too much, or where the train cannot get past. See {@code RideCheck}.
+     */
+    private void check(ICommandSender sender, RcmcWorldState state, String[] args) throws CommandException {
+        if (args.length < 2) {
+            throw new CommandException("/rcmc check <sectionId>");
+        }
+        int id = parseInt(args[1]);
+        if (state.network().section(id) == null) {
+            throw new CommandException("No section #" + id + " — try /rcmc info");
+        }
+        java.util.List<com.micatechnologies.minecraft.rcmc.rating.RideWarning> warnings =
+            com.micatechnologies.minecraft.rcmc.world.RideChecks.forRide(state, id);
+        boolean hasStation = false;
+        for (com.micatechnologies.minecraft.rcmc.physics.element.RideElement element : state.elements().elements()) {
+            hasStation |= element instanceof StationPlatform
+                && state.rides().members(id).contains(element.sectionId());
+        }
+        if (!hasStation) {
+            throw new CommandException("Section #" + id + " has no station, so there is no ride to run. Lay a"
+                + " station with the track tool's Station segment.");
+        }
+        if (warnings.isEmpty()) {
+            reply(sender, TextFormatting.GREEN, "Ride check #" + id + ": the train gets round, and nothing is"
+                + " over the safe limits.");
+            return;
+        }
+        reply(sender, TextFormatting.GOLD, "Ride check #" + id + ": " + warnings.size()
+            + (warnings.size() == 1 ? " warning" : " warnings"));
+        for (com.micatechnologies.minecraft.rcmc.rating.RideWarning w : warnings) {
+            TrackSection on = state.network().section(w.sectionId);
+            String where = on == null ? "" : " — " + com.micatechnologies.minecraft.rcmc.world.RideChecks
+                .whereOn(on, (w.from + w.to) * 0.5D) + " of #" + w.sectionId;
+            reply(sender, w.severity == com.micatechnologies.minecraft.rcmc.rating.RideWarning.Severity.DANGER
+                ? TextFormatting.RED : TextFormatting.YELLOW, "  " + w.message() + where);
+        }
+    }
+
     private void rate(ICommandSender sender, RcmcWorldState state, String[] args)
         throws CommandException {
         TrackSection section;

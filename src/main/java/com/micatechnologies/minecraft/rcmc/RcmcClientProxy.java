@@ -42,6 +42,8 @@ public class RcmcClientProxy extends RcmcCommonProxy {
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(
             new com.micatechnologies.minecraft.rcmc.client.build.TransitToolPreview());
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(
+            new com.micatechnologies.minecraft.rcmc.client.build.RideCheckOverlay());
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(
             new com.micatechnologies.minecraft.rcmc.client.ClientPhysics.Hooks());
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(
             new com.micatechnologies.minecraft.rcmc.client.sound.CoasterSoundDirector());

@@ -310,6 +310,9 @@ public final class TrackEditOperations {
             n.bankDegrees(), spanType, part.ordinal(), section.palette().of(part).label(), message,
             canSplit(section, node), target == null ? "" : target.label(),
             TrackStyleIds.label(section.styleId())), open), player);
+        // Rechecked with every view, so what the editor shows is the ride as it is after this edit.
+        RcmcNetwork.sendTo(new com.micatechnologies.minecraft.rcmc.net.PacketRideCheck(
+            RideChecks.forRide(state, sectionId)), player);
     }
 
     private static boolean holdingEditor(EntityPlayerMP player) {

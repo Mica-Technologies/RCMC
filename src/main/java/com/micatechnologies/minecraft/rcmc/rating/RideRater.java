@@ -140,6 +140,17 @@ public final class RideRater {
      */
     public RideStatistics simulate(TrackNetwork network, RideElementSet elements, TrackRef start,
                                     TrainSpec trainSpec, double initialVelocity) {
+        return simulate(network, elements, start, trainSpec, initialVelocity, null);
+    }
+
+    /** Told what the rider feels at every simulated tick — where it is, how fast, and the G-forces. */
+    public interface Listener {
+        void sample(TrackRef where, double speed, GForces g);
+    }
+
+    /** As above, telling {@code listener} (if not {@code null}) about every tick. */
+    public RideStatistics simulate(TrackNetwork network, RideElementSet elements, TrackRef start,
+                                    TrainSpec trainSpec, double initialVelocity, Listener listener) {
         if (network == null) {
             throw new IllegalArgumentException("network must not be null");
         }
@@ -194,7 +205,10 @@ public final class RideRater {
             TrackRef ref = train.reference();
             TrackSection section = network.section(ref.sectionId());
             if (section != null) {
-                sampleTick(acc, section, ref.distance(), velocity, previousVelocity);
+                GForces g = sampleTick(acc, section, ref.distance(), velocity, previousVelocity);
+                if (listener != null) {
+                    listener.sample(ref, Math.abs(velocity), g);
+                }
             }
             previousVelocity = velocity;
 
@@ -219,6 +233,12 @@ public final class RideRater {
      */
     public RideStatistics simulateRide(TrackNetwork network, RideElementSet liveElements,
                                        int sectionId, TrainSpec trainSpec) {
+        return simulateRide(network, liveElements, sectionId, trainSpec, null);
+    }
+
+    /** As above, telling {@code listener} (if not {@code null}) about every tick. */
+    public RideStatistics simulateRide(TrackNetwork network, RideElementSet liveElements,
+                                       int sectionId, TrainSpec trainSpec, Listener listener) {
         RideElementSet hardware = liveElements == null ? new RideElementSet() : liveElements.freshCopy();
         double start = 0.0D;
         for (com.micatechnologies.minecraft.rcmc.physics.element.RideElement element : hardware.elements()) {
@@ -229,10 +249,10 @@ public final class RideRater {
                 break;
             }
         }
-        return simulate(network, hardware, new TrackRef(sectionId, start), trainSpec, 0.0D);
+        return simulate(network, hardware, new TrackRef(sectionId, start), trainSpec, 0.0D, listener);
     }
 
-    private void sampleTick(Accumulator acc, TrackSection section, double distance, double velocity,
+    private GForces sampleTick(Accumulator acc, TrackSection section, double distance, double velocity,
                              double previousVelocity) {
         TrackFrame frame = section.frameAtDistance(distance);
         CurvatureSample curvature = sampleCurvature(section, distance);
@@ -242,6 +262,7 @@ public final class RideRater {
             alongTrackAcceleration, gravity);
 
         acc.record(frame, g, Math.abs(velocity), tickSeconds, curvature);
+        return g;
     }
 
     /**

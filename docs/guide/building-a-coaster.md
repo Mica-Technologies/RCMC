@@ -194,6 +194,27 @@ Edits work on **spans** — the stretch between two placed nodes — rather than
 "this bit of track" means the piece you can see, and a span is the smallest thing with a length for
 an element to occupy.
 
+### Checking the ride
+
+While you hold the **track editor**, the ride you're editing is checked the way it actually runs:
+its own train goes round a simulated lap from its station, and every stretch where riders would
+feel too much is marked on the track. Amber means over the safe limit, red means well over it,
+and each band is labelled with what was measured:
+
+- **G into the seat** at the bottom of a drop or a tight valley
+- **G out of the seat** over a hill taken too fast
+- **Sideways G** in a curve too tight, or banked too little, for its speed
+- **Forward or backward G** from a launch or a brake that is too sharp
+- **Stalls here**, where a train can't get past: a hill it can't climb, or hardware that stops it
+
+The check reruns after every edit, so a band disappears when you fix the problem. The editor
+screen shows the number of warnings in its header and lists them on the section tools page.
+[`/rcmc check`](../reference/commands.md#rcmc-check) prints the same list. It's advice only:
+nothing is blocked.
+
+The **ghost preview** of track you're laying marks problems too: a band on the stretch where a
+curve is too tight or a slope too steep.
+
 ### The editor screen
 
 Right-clicking track opens a panel along the bottom of the screen, so the track stays in view
