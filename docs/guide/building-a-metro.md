@@ -102,7 +102,7 @@ from baked clips, which is precisely why **arbitrary player-chosen names work**.
 ## 3. Assemble a line
 
 Switch to **line** mode (++g++), click each stop **in order**, press ++v++ to choose whether the
-line is a **loop** or a **shuttle**, then ++c++ to create it.
+line is a **loop**, a **shuttle** or a **turnback**, then ++c++ to create it.
 
 | Kind | Behaviour at the end |
 | --- | --- |
@@ -215,6 +215,8 @@ Override it when you need to:
 /rcmc station doors <name> [platform] <left|right|both|auto>
 ```
 
+Useful for an island platform you only want served on one side. `auto` re-runs the detection.
+
 ### Island platforms: one station, two berths
 
 A station is a *place*, and a place can have more than one track through it. An island platform —
@@ -254,9 +256,6 @@ its trains actually take from stop to stop — dwell, hills, signals and headway
 the board adds up the legs between a train and this station. A freshly built line has not been timed
 yet, so its boards count stops until its trains have run each leg once; after a reload they relearn
 within a lap.
-
-Useful for a platform built out of other blocks, which the detector cannot see, or for an island
-platform you only want served on one side. `auto` re-runs the detection.
 
 Riders get told. As a train runs into a station it announces **"Entering Harbor. The doors will open
 on the left."** — a few seconds before it berths, so there is time to cross the car and be at the

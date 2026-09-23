@@ -73,11 +73,11 @@ section. See
 | ++c++ | Commit what is being assembled |
 | ++v++ | In line mode, cycle the line kind: loop / shuttle / turnback |
 | Sneak + right-click track | The mode's destructive counterpart |
+| Sneak + right-click air | Abandon what is being assembled |
 
 While you hold it, a coloured post and label mark the track under the crosshair and say what a
 click will do there — which station a platform joins, or which stop a line click adds. In line
 mode the stops already picked are marked in order.
-| Sneak + right-click air | Abandon what is being assembled |
 
 **Rename the tool in an anvil to name what you place next** — the tool called `Central` places a
 station called Central. Unnamed falls back to `Station N` / `Line N`.
@@ -91,10 +91,10 @@ because each tool gives them its own meaning:
 
 | Key | Track tool | Piece tool | Track editor | Transit tool |
 | --- | --- | --- | --- | --- |
-| ++g++ | Cycle segment type | Cycle piece | Cycle selected span's type | Cycle mode |
+| ++g++ | Open the segment picker (sneak: cycle) | Cycle piece | Cycle selected span's type | Cycle mode |
 | ++r++ | Reset adjustments | Undo last piece | — | — |
 | ++c++ | — | — | Cycle colour | Commit |
-| ++v++ | — | — | Cycle painted part | Loop / shuttle |
+| ++v++ | — | — | Cycle painted part | Loop / shuttle / turnback |
 
 ---
 
