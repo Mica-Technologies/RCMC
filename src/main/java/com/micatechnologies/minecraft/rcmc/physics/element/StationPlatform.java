@@ -291,6 +291,12 @@ public final class StationPlatform extends RideElementSpan {
         return servingTrain;
     }
 
+    /** The same platform, fresh: waiting for its first arrival, serving nobody. */
+    public StationPlatform freshCopy() {
+        return new StationPlatform(sectionId(), startDistance(), endDistance(), stopDistance,
+            brakeDeceleration, dwellTicks, dispatchAcceleration, dispatchSpeed, tickSeconds);
+    }
+
     /**
      * Whether the platform currently has a train under its control and not yet released — true
      * during both {@link Phase#ARRIVING} (still braking) and {@link Phase#DWELLING} (stopped and

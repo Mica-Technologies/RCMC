@@ -158,7 +158,9 @@ public final class RideRater {
         Accumulator acc = new Accumulator();
         acc.seed(network.frameAt(start));
 
-        double targetLapLength = totalNetworkLength(network);
+        // One lap of the ride being rated. Summing every section in the network made a rating in a
+        // park with other track run on until it had covered all of it.
+        double targetLapLength = network.section(start.sectionId()).totalLength();
         double travelled = 0.0D;
         double previousVelocity = train.velocity();
         int ticksSimulated = 0;
@@ -171,8 +173,9 @@ public final class RideRater {
                 break;
             }
 
-            train.setHeld(hardware.isHolding(TRAIN_ID, train));
+            // The same order as TrainManager: the hardware acts, then says whether it is holding.
             double accel = hardware.forTrain(TRAIN_ID, train);
+            train.setHeld(hardware.isHolding(TRAIN_ID, train));
             train.tick(network, accel, subSteps, tickSeconds);
             ticksSimulated++;
 
@@ -206,12 +209,27 @@ public final class RideRater {
         return acc.build(tickSeconds, ticksSimulated, travelled, train.status());
     }
 
-    private static double totalNetworkLength(TrackNetwork network) {
-        double total = 0.0D;
-        for (TrackSection section : network.sections()) {
-            total += section.totalLength();
+    /**
+     * Rates a ride the way it actually runs: its own train, starting at rest at its station's stop
+     * point, through a {@link RideElementSet#freshCopy fresh copy} of the park's hardware so the
+     * running park is untouched. Without a station, from the start of the section.
+     *
+     * <p>This is what {@code /rcmc rate} uses. It used to rate a single car from distance zero
+     * through the live hardware, which scored the demo coaster 0 / 0 / 0.</p>
+     */
+    public RideStatistics simulateRide(TrackNetwork network, RideElementSet liveElements,
+                                       int sectionId, TrainSpec trainSpec) {
+        RideElementSet hardware = liveElements == null ? new RideElementSet() : liveElements.freshCopy();
+        double start = 0.0D;
+        for (com.micatechnologies.minecraft.rcmc.physics.element.RideElement element : hardware.elements()) {
+            if (element.sectionId() == sectionId
+                && element instanceof com.micatechnologies.minecraft.rcmc.physics.element.StationPlatform) {
+                start = ((com.micatechnologies.minecraft.rcmc.physics.element.StationPlatform) element)
+                    .stopDistance();
+                break;
+            }
         }
-        return total;
+        return simulate(network, hardware, new TrackRef(sectionId, start), trainSpec, 0.0D);
     }
 
     private void sampleTick(Accumulator acc, TrackSection section, double distance, double velocity,
