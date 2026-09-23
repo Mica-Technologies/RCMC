@@ -110,7 +110,12 @@ public class RenderArrivalBoard extends TileEntitySpecialRenderer<TileArrivalBoa
     public void render(TileArrivalBoard board, double x, double y, double z,
                        float partialTicks, int destroyStage, float alpha) {
         GlStateManager.pushMatrix();
-        GlStateManager.translate(x + 0.5D, y, z + 0.5D);
+        // The screen's shift runs along its width, which is a world axis — see TileArrivalBoard.
+        boolean alongX = com.micatechnologies.minecraft.rcmc.block.sign.ArrivalBoardStructure
+            .widthAxis(board.facingDegrees()) == net.minecraft.util.EnumFacing.Axis.X;
+        double shift = board.screenShift();
+        GlStateManager.translate(x + 0.5D + (alongX ? shift : 0.0D), y,
+            z + 0.5D + (alongX ? 0.0D : shift));
         GlStateManager.rotate(-board.facingDegrees(), 0.0F, 1.0F, 0.0F);
 
         SignPanels.drawPanel(PANEL_HALF_WIDTH, PANEL_TOP - PANEL_HEIGHT, PANEL_TOP,

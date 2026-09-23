@@ -25,6 +25,28 @@ public class TileArrivalBoard extends TileTransitSignBase {
      */
     private boolean structured;
 
+    /**
+     * How far the screen is shifted along its width from the middle of the master block, in blocks,
+     * toward the positive world axis. Zero for a placed board.
+     *
+     * <p>A screen four blocks wide centred on a block's middle straddles half blocks at each end,
+     * which is right for most ceilings and wrong for one: an island between two tracks whose clear
+     * width is centred on a block <em>boundary</em>. There a centred screen overhangs one track by
+     * half a block and a train standing at that platform hides the end of every row — which is
+     * where the platform number is. The underground demo's islands shift theirs by half a block.</p>
+     */
+    private double screenShift;
+
+    public double screenShift() {
+        return screenShift;
+    }
+
+    /** Clamped to half a block either way — the screen always stays over its own footprint. */
+    public void setScreenShift(double blocks) {
+        this.screenShift = Math.max(-0.5D, Math.min(0.5D, blocks));
+        pushUpdate();
+    }
+
     public boolean isStructured() {
         return structured;
     }
@@ -97,12 +119,14 @@ public class TileArrivalBoard extends TileTransitSignBase {
     public void readFromNBT(NBTTagCompound compound) {
         super.readFromNBT(compound);
         structured = compound.getBoolean("Multiblock");
+        screenShift = Math.max(-0.5D, Math.min(0.5D, compound.getDouble("ScreenShift")));
     }
 
     @Override
     public NBTTagCompound writeToNBT(NBTTagCompound compound) {
         super.writeToNBT(compound);
         compound.setBoolean("Multiblock", structured);
+        compound.setDouble("ScreenShift", screenShift);
         return compound;
     }
 }

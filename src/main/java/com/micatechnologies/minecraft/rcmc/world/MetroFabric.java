@@ -278,6 +278,12 @@ public final class MetroFabric {
                     ArrivalBoardStructure.build(world, board, width);
                     placed += ArrivalBoardStructure.partPositions(board, width).size();
                 }
+                if (stop.kind == DemoUnderground.Kind.ISLAND) {
+                    // The island's clear width, between the two trains, is centred on a block
+                    // boundary half a block short of the master's middle. Centred on the block, the
+                    // screen's far end hung over a track and a train at the platform hid it.
+                    arrival.setScreenShift(-0.5D);
+                }
             }
 
             BlockPos plate = board.down(3);
