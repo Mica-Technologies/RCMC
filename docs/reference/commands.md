@@ -6,7 +6,7 @@ completion covers subcommands and most of their arguments: demo kinds, track sty
 subcommands and sides.
 
 ```
-/rcmc <demo|metrodemo|train|clear|info|build|paint|style|rate|block|transfer|ride|station|line|switch|platform|rmsection|undo|redo>
+/rcmc <demo|metrodemo|train|trains|clear|info|build|paint|style|rate|check|block|transfer|ride|station|line|switch|platform|rmsection|undo|redo>
 ```
 
 ---
@@ -143,7 +143,7 @@ Steps back and forward through track edits, server-side.
 ### `/rcmc train`
 
 ```
-/rcmc train [sectionId] [cars] [startSpeed] [coaster|shoulder|wooden|metro|metrocompact|metrolong] [distance]
+/rcmc train [sectionId] [cars] [startSpeed] [type] [distance]
 ```
 
 Spawns a train on a section. A train parked in a station dispatches itself. Every argument is
@@ -152,9 +152,9 @@ optional, but they are positional, so to give one you must give all those before
 | Argument | Range | Default |
 | --- | --- | --- |
 | `sectionId` | — | The first section in the world |
-| `cars` | 1 – 12 | 5 |
+| `cars` | 1 – the type's most | The type's default |
 | `startSpeed` | 0 – 60 blocks/s | 0 |
-| style | see below | `coaster` |
+| `type` | any [train type](train-types.md) | `coaster` |
 | `distance` | 0 – section length | The section's first coaster station stop point, else 0 |
 
 `distance` places the train at a point along the section instead of at its first station stop point.
@@ -163,14 +163,18 @@ runs — so this is how you get an inbound and an outbound service running at th
 than two trains nose to tail on the same track. `/rcmc info` reports section lengths and
 `/rcmc station list` reports each berth's distance along one.
 
-| Style | Based on | Body length |
-| --- | --- | --- |
-| `coaster` | Modern sit-down car: bucket seats, a lap bar per row | Coaster car |
-| `shoulder` | Looping-coaster car: tall seats, headrests, over-the-shoulder restraints | Coaster car |
-| `wooden` | Classic wooden-coaster car: high sides, a bench and one bar per row | Coaster car |
-| `metrocompact` | NYC A-Division / R142 | 15.65 m |
-| `metro` | MBTA Orange Line, CRRC 65 ft class | ~19.8 m |
-| `metrolong` | LA HR4000 / NYC 75-footers | ~22.9 m |
+The built-in types are `coaster`, `shoulder`, `wooden`, `metrocompact`, `metro` and `metrolong`; a
+server can add more. See [Train types](train-types.md), or run `/rcmc trains`.
+
+### `/rcmc trains`
+
+```
+/rcmc trains [reload]
+```
+
+Lists every train type the server knows: its id, name, body, default and most cars, and seats a
+car, marking the ones that come from a file. `reload` reads `config/rcmc/trains/` again and
+reports any file it skipped, and why. See [Train types](train-types.md).
 
 ### `/rcmc check`
 

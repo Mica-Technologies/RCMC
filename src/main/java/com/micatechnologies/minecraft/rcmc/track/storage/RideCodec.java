@@ -27,6 +27,7 @@ public final class RideCodec {
     private static final String KEY_CAUSE = "StopCause";
     private static final String KEY_TRANSFER = "TransferRequest";
     private static final String KEY_CAR_MODEL = "CarModel";
+    private static final String KEY_CAR_TYPE = "CarType";
     private static final String KEY_CARS = "CarsPerTrain";
     private static final String KEY_HOMES = "RideHomes";
     private static final String KEY_MEMBER = "Member";
@@ -77,7 +78,7 @@ public final class RideCodec {
                 tag.setString(KEY_DISPATCH, ride.dispatchMode().name());
                 tag.setBoolean(KEY_ESTOP, ride.isEmergencyStopped());
                 tag.setString(KEY_TRANSFER, ride.transferRequest().name());
-                tag.setString(KEY_CAR_MODEL, ride.carModel().name());
+                tag.setString(KEY_CAR_TYPE, ride.carType());
                 if (ride.stopCause() != null) {
                     tag.setString(KEY_CAUSE, ride.stopCause().name());
                 }
@@ -101,9 +102,17 @@ public final class RideCodec {
                 RideController.State.OPEN));
             ride.setDispatchMode(parse(RideController.DispatchMode.class, tag.getString(KEY_DISPATCH),
                 RideController.DispatchMode.AUTOMATIC));
-            ride.setCarModel(parse(com.micatechnologies.minecraft.rcmc.physics.TrainSpec.CoasterModel.class,
-                tag.getString(KEY_CAR_MODEL),
-                com.micatechnologies.minecraft.rcmc.physics.TrainSpec.CoasterModel.SIT_DOWN));
+            if (tag.hasKey(KEY_CAR_TYPE)) {
+                ride.setCarType(tag.getString(KEY_CAR_TYPE));
+            }
+            else {
+                // Saved before train types: the car model's name, which maps onto a built-in type.
+                com.micatechnologies.minecraft.rcmc.physics.TrainSpec.CoasterModel model =
+                    parse(com.micatechnologies.minecraft.rcmc.physics.TrainSpec.CoasterModel.class,
+                        tag.getString(KEY_CAR_MODEL),
+                        com.micatechnologies.minecraft.rcmc.physics.TrainSpec.CoasterModel.SIT_DOWN);
+                ride.setCarType(model.word);
+            }
             ride.setTransferRequest(parse(RideController.TransferRequest.class,
                 tag.getString(KEY_TRANSFER), RideController.TransferRequest.NONE));
             if (tag.hasKey(KEY_CARS)) {

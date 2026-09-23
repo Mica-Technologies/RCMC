@@ -93,6 +93,7 @@ nav:
       - Commands: reference/commands.md
       - Items and blocks: reference/items-and-blocks.md
       - Track styles: reference/track-styles.md
+      - Train types: reference/train-types.md
       - Configuration: reference/config.md
   - Internals:
       - Track geometry: design/TRACK_GEOMETRY.md

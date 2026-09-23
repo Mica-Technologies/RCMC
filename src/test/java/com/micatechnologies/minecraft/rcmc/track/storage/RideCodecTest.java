@@ -36,6 +36,23 @@ class RideCodecTest {
     }
 
     @Test
+    @DisplayName("a ride saved before train types keeps its car, as the matching built-in type")
+    void oldCarModelLoadsAsItsType() {
+        net.minecraft.nbt.NBTTagCompound root = new net.minecraft.nbt.NBTTagCompound();
+        net.minecraft.nbt.NBTTagList list = new net.minecraft.nbt.NBTTagList();
+        net.minecraft.nbt.NBTTagCompound tag = new net.minecraft.nbt.NBTTagCompound();
+        tag.setInteger("Section", 3);
+        tag.setString("CarModel", "SHOULDER");
+        list.appendTag(tag);
+        root.setTag("Rides", list);
+        assertEquals("shoulder", RideCodec.read(root).get(3).carType());
+
+        RideControllers rides = new RideControllers();
+        rides.getOrCreate(3).setCarType("family");
+        assertEquals("family", roundTrip(rides).get(3).carType(), "a custom type id is kept as written");
+    }
+
+    @Test
     @DisplayName("an emergency stop survives a restart")
     void emergencyStopSurvives() {
         RideControllers rides = new RideControllers();

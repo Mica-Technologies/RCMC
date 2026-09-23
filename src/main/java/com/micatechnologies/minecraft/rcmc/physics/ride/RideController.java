@@ -118,17 +118,20 @@ public final class RideController implements DispatchGate {
 
     private TransferRequest transferRequest = TransferRequest.NONE;
 
-    /** The coaster car new trains on this ride are built from. */
-    private com.micatechnologies.minecraft.rcmc.physics.TrainSpec.CoasterModel carModel =
-        com.micatechnologies.minecraft.rcmc.physics.TrainSpec.CoasterModel.SIT_DOWN;
+    /**
+     * The id of the train type new trains on this ride are built from — see {@code TrainTypes}.
+     * Kept as the id, not the type, so a type a server later changes in its files is picked up, and
+     * one it removes falls back to the default rather than failing to load.
+     */
+    private String carType = com.micatechnologies.minecraft.rcmc.physics.TrainTypes.DEFAULT_COASTER;
 
-    public com.micatechnologies.minecraft.rcmc.physics.TrainSpec.CoasterModel carModel() {
-        return carModel;
+    public String carType() {
+        return carType;
     }
 
-    public void setCarModel(com.micatechnologies.minecraft.rcmc.physics.TrainSpec.CoasterModel model) {
-        this.carModel = model == null
-            ? com.micatechnologies.minecraft.rcmc.physics.TrainSpec.CoasterModel.SIT_DOWN : model;
+    public void setCarType(String id) {
+        this.carType = id == null || id.isEmpty()
+            ? com.micatechnologies.minecraft.rcmc.physics.TrainTypes.DEFAULT_COASTER : id;
     }
 
     public TransferRequest transferRequest() {

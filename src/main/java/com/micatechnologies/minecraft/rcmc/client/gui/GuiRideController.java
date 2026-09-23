@@ -130,8 +130,7 @@ public class GuiRideController extends GuiScreen {
             buttonList.add(new GuiButton(id, x + 152, y + 106 + i * 18, 18, 16, "x"));
             removeButtonTrain.put(id, view.trains.get(i).trainId);
         }
-        buttonList.add(new GuiButton(ID_CAR_MODEL, x, y + 164, 170, 16, "Car: "
-            + com.micatechnologies.minecraft.rcmc.physics.TrainSpec.CoasterModel.byOrdinal(view.carModel).label));
+        buttonList.add(new GuiButton(ID_CAR_MODEL, x, y + 164, 170, 16, "Car: " + view.carType));
         buttonList.add(new GuiButton(ID_CARS_DOWN, x + 118, y + 182, 16, 16, "-"));
         buttonList.add(new GuiButton(ID_CARS_UP, x + 154, y + 182, 16, 16, "+"));
 

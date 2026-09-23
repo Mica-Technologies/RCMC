@@ -136,13 +136,16 @@ a line does not go stale when you rebuild the track underneath it.
 /rcmc line stop <trainId>
 ```
 
-Three metro presets, all proportioned from real stock at 1 block ≈ 1 m:
+Three built-in metro types, all proportioned from real stock at 1 block ≈ 1 m:
 
-| Style | Based on | Body |
+| Type | Based on | Body |
 | --- | --- | --- |
 | `metrocompact` | NYC A-Division / R142 | 15.65 m |
 | `metro` | MBTA Orange Line, CRRC 65 ft class | ~19.8 m |
 | `metrolong` | LA HR4000 / NYC 75-footers | ~22.9 m |
+
+A server can add its own metro stock, such as a line's own colours or a longer consist, with a
+JSON file. See [Train types](../reference/train-types.md).
 
 Once in service the train drives itself: it accelerates on its traction curve, holds the cruise
 speed you set, computes a constant-deceleration stopping curve to the next stop, berths, runs the

@@ -75,7 +75,7 @@ public class CommandRcmc extends CommandBase {
                                           String[] args, BlockPos targetPos) {
         if (args.length == 1) {
             return getListOfStringsMatchingLastWord(args, "demo", "metrodemo", "train", "clear",
-                "info", "build", "paint", "style", "rate", "check", "block", "transfer", "ride", "station", "line", "switch",
+                "info", "build", "paint", "style", "rate", "check", "trains", "block", "transfer", "ride", "station", "line", "switch",
                 "platform", "rmsection", "undo", "redo");
         }
         if (args.length == 3 && "style".equalsIgnoreCase(args[0])) {
@@ -131,8 +131,12 @@ public class CommandRcmc extends CommandBase {
             return getListOfStringsMatchingLastWord(args, "bank", "circuit", "status", "cancel");
         }
         if (args.length == 5 && "train".equalsIgnoreCase(args[0])) {
-            return getListOfStringsMatchingLastWord(args, "coaster", "shoulder", "wooden", "metro",
-                "metrocompact", "metrolong");
+            List<String> ids = new ArrayList<>();
+            for (com.micatechnologies.minecraft.rcmc.physics.TrainType type
+                : com.micatechnologies.minecraft.rcmc.physics.TrainTypes.all()) {
+                ids.add(type.id);
+            }
+            return getListOfStringsMatchingLastWord(args, ids);
         }
         return new ArrayList<>();
     }
@@ -175,6 +179,9 @@ public class CommandRcmc extends CommandBase {
                 break;
             case "check":
                 check(sender, state, args);
+                break;
+            case "trains":
+                trainTypes(sender, args);
                 break;
             case "block":
                 block(sender, state, args);
@@ -366,9 +373,15 @@ public class CommandRcmc extends CommandBase {
         if (section == null) {
             throw new CommandException("No section with id " + sectionId);
         }
-        int carCount = args.length > 2 ? parseInt(args[2], 1, 12) : 5;
+        String style = args.length > 4 ? args[4].toLowerCase(java.util.Locale.ROOT)
+            : com.micatechnologies.minecraft.rcmc.physics.TrainTypes.DEFAULT_COASTER;
+        com.micatechnologies.minecraft.rcmc.physics.TrainType type =
+            com.micatechnologies.minecraft.rcmc.physics.TrainTypes.get(style);
+        if (type == null) {
+            throw new CommandException("Unknown train type '" + style + "' — see /rcmc trains");
+        }
+        int carCount = args.length > 2 ? parseInt(args[2], 1, type.maxCars) : type.defaultCars;
         double speed = args.length > 3 ? parseDouble(args[3], 0.0D, 60.0D) : 0.0D;
-        String style = args.length > 4 ? args[4].toLowerCase(java.util.Locale.ROOT) : "coaster";
 
         // Where along the section to put it. Without this a second train on a circuit always lands
         // on top of the first, which makes the one arrangement a metro most needs impossible to
@@ -391,25 +404,7 @@ public class CommandRcmc extends CommandBase {
                 .findFirst().orElse(0.0D);
         }
 
-        TrainSpec spec;
-        switch (style) {
-            case "metro":
-                spec = TrainSpec.metroTrain(carCount);
-                break;
-            case "metrocompact":
-                spec = TrainSpec.metroTrainCompact(carCount);
-                break;
-            case "metrolong":
-                spec = TrainSpec.metroTrainLong(carCount);
-                break;
-            default:
-                TrainSpec.CoasterModel model = TrainSpec.CoasterModel.byWord(style);
-                if (model == null) {
-                    throw new CommandException("Unknown train style '" + style
-                        + "' — coaster, shoulder, wooden, metro, metrocompact or metrolong");
-                }
-                spec = new TrainSpec(carCount, 3.0D, 0.5D, 4).withCoasterModel(model);
-        }
+        TrainSpec spec = type.spec(carCount);
         int trainId = com.micatechnologies.minecraft.rcmc.world.TrainSpawner.spawn(
             world, state, sectionId, spec, startDistance, speed);
 
@@ -1692,6 +1687,31 @@ public class CommandRcmc extends CommandBase {
      * <p>Simulation is entirely offline — no entity is spawned and no state is touched — so it is
      * safe to run on a circuit that already has a train on it.</p>
      */
+    /**
+     * {@code /rcmc trains [reload]} — lists the train types this server knows, or reads its
+     * {@code config/rcmc/trains} files again.
+     */
+    private void trainTypes(ICommandSender sender, String[] args) throws CommandException {
+        if (args.length > 1 && "reload".equalsIgnoreCase(args[1])) {
+            com.micatechnologies.minecraft.rcmc.world.TrainTypeFiles.Result result =
+                com.micatechnologies.minecraft.rcmc.world.TrainTypeFiles.reload();
+            reply(sender, result.problems.isEmpty() ? TextFormatting.GREEN : TextFormatting.YELLOW,
+                "Loaded " + result.loaded + " train type file(s)"
+                    + (result.problems.isEmpty() ? "." : "; " + result.problems.size() + " skipped:"));
+            for (String problem : result.problems) {
+                reply(sender, TextFormatting.RED, "  " + problem);
+            }
+            return;
+        }
+        reply(sender, TextFormatting.GOLD, "Train types — /rcmc train <section> <cars> <speed> <type>");
+        for (com.micatechnologies.minecraft.rcmc.physics.TrainType type
+            : com.micatechnologies.minecraft.rcmc.physics.TrainTypes.all()) {
+            reply(sender, TextFormatting.WHITE, "  " + type.id + TextFormatting.GRAY + " — " + type.name + ", "
+                + type.body.word + ", " + type.defaultCars + " cars (up to " + type.maxCars + "), "
+                + type.seatsPerCar + " seats a car" + (type.custom ? TextFormatting.AQUA + "  [from file]" : ""));
+        }
+    }
+
     /**
      * {@code /rcmc check <sectionId>} — runs the ride through a simulated lap and says where riders
      * would feel too much, or where the train cannot get past. See {@code RideCheck}.

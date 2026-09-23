@@ -132,8 +132,9 @@ public final class RideOperations {
             case TUNE:
                 return tune(world, state, sectionId, first, second, value);
             case CYCLE_CAR_MODEL:
-                ride.setCarModel(ride.carModel().next());
-                return changed(world, state, "New trains will be " + ride.carModel().label + " cars.");
+                ride.setCarType(com.micatechnologies.minecraft.rcmc.physics.TrainTypes.nextCoaster(ride.carType()).id);
+                return changed(world, state, "New trains will be "
+                    + com.micatechnologies.minecraft.rcmc.physics.TrainTypes.coasterOrDefault(ride.carType()).name + " cars.");
             case STORE_TRAIN:
                 return transfer(world, state, sectionId, ride, RideController.TransferRequest.STORE);
             case RETRIEVE_TRAIN:
@@ -210,9 +211,12 @@ public final class RideOperations {
         }
         // Onto the station's own section, which after a split need not be the panel's.
         int id = TrainSpawner.spawn(world, state, station.sectionId(),
-            new TrainSpec(ride.carsPerTrain(), 3.0D, 0.5D, 4).withCoasterModel(ride.carModel()),
+            com.micatechnologies.minecraft.rcmc.physics.TrainTypes.coasterOrDefault(ride.carType())
+                .spec(ride.carsPerTrain()),
             station.stopDistance(), 0.0D);
-        return "Added train #" + id + " (" + ride.carsPerTrain() + " " + ride.carModel().label + " cars).";
+        com.micatechnologies.minecraft.rcmc.physics.TrainType type =
+            com.micatechnologies.minecraft.rcmc.physics.TrainTypes.coasterOrDefault(ride.carType());
+        return "Added train #" + id + " (" + Math.min(ride.carsPerTrain(), type.maxCars) + " " + type.name + " cars).";
     }
 
     private static String removeTrain(World world, RcmcWorldState state, int sectionId,
@@ -282,7 +286,7 @@ public final class RideOperations {
             RideController.maxTrains(blocks), blocks, message, trains, settings)
             .withTransfer(transferState, ride.transferRequest().ordinal(),
                 stored == null ? -1 : stored)
-            .withCarModel(ride.carModel().ordinal());
+            .withCarType(com.micatechnologies.minecraft.rcmc.physics.TrainTypes.coasterOrDefault(ride.carType()).name);
     }
 
     static StationPlatform stationOf(RcmcWorldState state, int sectionId) {

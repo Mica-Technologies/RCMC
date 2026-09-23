@@ -65,6 +65,12 @@ public class Rcmc {
     @EventHandler
     public void preInit(FMLPreInitializationEvent event) {
         RcmcConfig.init(event.getSuggestedConfigurationFile());
+        // The server's own train types, over the built-in ones. A bad file is skipped, not fatal.
+        com.micatechnologies.minecraft.rcmc.world.TrainTypeFiles.Result trainTypes =
+            com.micatechnologies.minecraft.rcmc.world.TrainTypeFiles.init(event.getModConfigurationDirectory());
+        for (String problem : trainTypes.problems) {
+            LOGGER.warn("Skipped train type {}", problem);
+        }
         MinecraftForge.EVENT_BUS.register(this);
         MinecraftForge.EVENT_BUS.register(new RcmcWorldState.Hooks());
         // Keeps car entities ticking at the edge of loaded terrain instead of freezing 32 blocks
