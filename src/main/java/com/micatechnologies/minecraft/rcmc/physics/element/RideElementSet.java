@@ -39,8 +39,21 @@ public final class RideElementSet implements TrainManager.ExternalAcceleration {
         elements.add(element);
     }
 
+    /**
+     * Removes {@code element}. A linked transfer track takes its storage berth with it: the berth
+     * exists only to receive that table's trains, and left behind it would block every edit to
+     * the storage track while nothing could unlink it any more.
+     */
     public boolean remove(RideElement element) {
-        return elements.remove(element);
+        boolean removed = elements.remove(element);
+        if (removed && element instanceof TransferTrack && ((TransferTrack) element).isLinked()) {
+            removeBerthsOn(((TransferTrack) element).storageSectionId());
+        }
+        return removed;
+    }
+
+    private void removeBerthsOn(int storageSectionId) {
+        elements.removeIf(e -> e instanceof StorageBerth && e.sectionId() == storageSectionId);
     }
 
     /**
@@ -70,13 +83,31 @@ public final class RideElementSet implements TrainManager.ExternalAcceleration {
      */
     public int removeForSection(int sectionId) {
         int before = elements.size();
+        List<Integer> storages = new ArrayList<>();
         java.util.Iterator<RideElement> it = elements.iterator();
         while (it.hasNext()) {
-            if (it.next().sectionId() == sectionId) {
+            RideElement element = it.next();
+            if (element.sectionId() == sectionId) {
+                if (element instanceof TransferTrack && ((TransferTrack) element).isLinked()) {
+                    storages.add(((TransferTrack) element).storageSectionId());
+                }
                 it.remove();
             }
         }
-        return before - elements.size();
+        int removed = before - elements.size();
+        // The tables' berths on other sections go with them, and a table elsewhere whose storage
+        // this was is unlinked rather than left pointing at track that no longer exists.
+        for (int storage : storages) {
+            removeBerthsOn(storage);
+        }
+        for (int i = 0; i < elements.size(); i++) {
+            RideElement element = elements.get(i);
+            if (element instanceof TransferTrack && ((TransferTrack) element).isLinked()
+                && ((TransferTrack) element).storageSectionId() == sectionId) {
+                elements.set(i, ((TransferTrack) element).linkedTo(TransferTrack.UNLINKED, 0.0D));
+            }
+        }
+        return removed;
     }
 
     /** The first element (in insertion order) whose span contains {@code ref}, or {@code null}. */

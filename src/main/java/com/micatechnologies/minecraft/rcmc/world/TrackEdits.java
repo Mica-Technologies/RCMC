@@ -103,6 +103,11 @@ public final class TrackEdits {
             }
         }
 
+        // Services keep the berth they are running to; its stop point may just have moved.
+        for (com.micatechnologies.minecraft.rcmc.physics.transit.LineService service
+            : state.transit().services().values()) {
+            service.refreshBerth();
+        }
         state.markTrackDirty(world);
         RcmcNetwork.sendToAllIn(new com.micatechnologies.minecraft.rcmc.net.PacketTrackSync(state.network()),
             dimension);

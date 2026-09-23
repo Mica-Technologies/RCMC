@@ -54,6 +54,18 @@ class CutAroundTest {
     }
 
     @Test
+    @DisplayName("a station cut through its stop keeps the longer piece, stopping trains at its exit")
+    void stationCutThroughItsStopStopsAtTheExit() {
+        StationPlatform station = new StationPlatform(1, 0.0D, 60.0D, 12.0D, 6.0D, 60, 4.0D, 6.0D, TICK);
+        List<RideElement> left = RideElements.cutAround(station, 1, 5.0D, 20.0D, TICK);
+
+        assertEquals(1, left.size());
+        assertSpan(left.get(0), 20.0D, 60.0D);
+        assertEquals(60.0D, ((StationPlatform) left.get(0)).stopDistance(), 1e-9,
+            "a stop at the piece's entry leaves the train hanging out of the platform");
+    }
+
+    @Test
     @DisplayName("hardware wholly inside the retyped span goes, and hardware elsewhere is untouched")
     void insideGoesOutsideStays() {
         BrakeRun inside = new BrakeRun(1, 32.0D, 48.0D, 6.0D, 6.0D, BrakeRun.Mode.TRIM, TICK);

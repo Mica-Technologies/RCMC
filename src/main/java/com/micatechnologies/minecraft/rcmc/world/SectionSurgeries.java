@@ -184,7 +184,16 @@ public final class SectionSurgeries {
         for (SectionEnd[] join : oldJoins) {
             SectionEnd a = r.endOf(join[0]);
             SectionEnd b = r.touches(join[1].sectionId) ? r.endOf(join[1]) : join[1];
-            if (a == null || b == null || b.equals(network.joinedTo(a))) {
+            if (a == null || b == null) {
+                // The edit used this end up. That is expected when the two ends it joined are the
+                // ones merged; a join to anywhere else is lost, and the player is told.
+                boolean mergedAway = r.touches(join[1].sectionId) && r.consumes(join[1]) && r.consumes(join[0]);
+                if (!mergedAway && !lost.contains("the join at " + join[0]) && !lost.contains("the join at " + join[1])) {
+                    lost.add("the join at " + join[0]);
+                }
+                continue;
+            }
+            if (b.equals(network.joinedTo(a))) {
                 continue;
             }
             try {
@@ -222,6 +231,11 @@ public final class SectionSurgeries {
             }
         }
 
+        // Services keep the berth they are running to; its stop point may just have moved.
+        for (com.micatechnologies.minecraft.rcmc.physics.transit.LineService service
+            : state.transit().services().values()) {
+            service.refreshBerth();
+        }
         state.markTrackDirty(world);
         RcmcNetwork.sendToAllIn(new com.micatechnologies.minecraft.rcmc.net.PacketTrackSync(network), dimension);
         RcmcNetwork.sendToAllIn(new com.micatechnologies.minecraft.rcmc.net.PacketElementSync(state.elements()),
@@ -232,8 +246,12 @@ public final class SectionSurgeries {
         if (kink >= 1.0D) {
             message.append(String.format(" The join turns %.0f°.", kink));
         }
-        if (!clearedBlocks.isEmpty()) {
-            message.append(" Block sections cleared; lay them out again with /rcmc block <id> auto.");
+        for (int id : clearedBlocks) {
+            // Automatic blocks need a circuit; an edit that opened the track needs a count instead.
+            TrackSection now = network.section(id);
+            boolean circuit = now != null && now.isClosed();
+            message.append(" Block sections on #").append(id).append(" were cleared; lay them out again with /rcmc block ")
+                .append(id).append(circuit ? " auto." : " <count>.");
         }
         if (dropped > 0) {
             message.append(" ").append(dropped).append(" piece(s) of hardware too short to keep were removed.");
@@ -242,6 +260,17 @@ public final class SectionSurgeries {
             message.append(" Could not keep ").append(String.join(", ", lost)).append(".");
         }
         return new Outcome(true, message.toString());
+    }
+
+    /** Whether a linked transfer table stores its trains on section {@code storageSectionId}. */
+    private static boolean hasTable(RcmcWorldState state, int storageSectionId) {
+        for (RideElement element : state.elements().elements()) {
+            if (element instanceof TransferTrack && ((TransferTrack) element).isLinked()
+                && ((TransferTrack) element).storageSectionId() == storageSectionId) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static SectionEnd mapped(SectionSurgery.Result r, SectionEnd end) {
@@ -272,7 +301,8 @@ public final class SectionSurgeries {
         }
         for (RideElement element : state.elements().elements()) {
             boolean linked = element instanceof TransferTrack && ((TransferTrack) element).isLinked();
-            if (!linked && !(element instanceof StorageBerth)) {
+            if (!linked && !(element instanceof StorageBerth && hasTable(state, element.sectionId()))) {
+                // An unlinked table moves like any hardware, and a berth no table uses is dropped.
                 continue;
             }
             boolean involved = touched.contains(element.sectionId());
