@@ -36,7 +36,7 @@ final class CarModel {
     private static final float CHASSIS_BOTTOM = RAIL_TOP + 0.01F;
     private static final float FLOOR_BOTTOM = RAIL_TOP + 0.11F;
     private static final float FLOOR_TOP = (float) CoasterCarLayout.SEAT_HEIGHT - 0.07F;
-    private static final float TUB_HALF_WIDTH = 0.62F;
+    private static final float TUB_HALF_WIDTH = (float) CoasterCarLayout.BODY_HALF_WIDTH;
     private static final float TUB_TOP = 0.64F;
     private static final float TUB_FLARE = 0.06F;
     private static final float TUB_WALL = 0.07F;

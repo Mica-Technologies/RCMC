@@ -3,7 +3,12 @@
 ## Boarding
 
 **A coaster** is boarded by right-clicking a car. You take the next free seat, front row first —
-a car seats two abreast in every row — and the ride does the rest.
+a car seats two abreast in every row — and the ride does the rest. A closed ride refuses riders,
+and says so.
+
+Get off with sneak once the train has stopped, and you step out beside your seat, on its side of
+the car. While the train is moving the restraints hold you in: sneaking puts you straight back in
+your seat.
 
 **A metro** is boarded by *walking in*. While a train is berthed with its doors open, the car stops
 being a solid box and becomes just a floor, and anyone standing inside is seated automatically. So

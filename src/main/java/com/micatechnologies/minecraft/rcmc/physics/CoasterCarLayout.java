@@ -30,6 +30,15 @@ public final class CoasterCarLayout {
      */
     public static final double SEAT_HEIGHT = 0.31D;
 
+    /** Half the width of the car body at its widest, the tub sides. */
+    public static final double BODY_HALF_WIDTH = 0.62D;
+
+    /**
+     * How far from the centreline a rider getting off is put: clear of the body by a player's half
+     * width and a little more, so they stand beside the car and not in it or on it.
+     */
+    public static final double STEP_OFF_ACROSS = BODY_HALF_WIDTH + 0.3D + 0.2D;
+
     private CoasterCarLayout() {
     }
 
@@ -57,6 +66,14 @@ public final class CoasterCarLayout {
     /** Across offset of seat {@code index}: even seats on the right of their row, odd on the left. */
     public static double across(int index) {
         return (index % 2 == 0 ? 1.0D : -1.0D) * SEAT_HALF_SPACING;
+    }
+
+    /**
+     * Across offset a rider sitting at {@code seatAcross} steps off to: out over the side their seat
+     * is on, which is the side they are facing into.
+     */
+    public static double stepOffAcross(double seatAcross) {
+        return (seatAcross >= 0.0D ? 1.0D : -1.0D) * STEP_OFF_ACROSS;
     }
 
     /** Along offset of seat {@code index}: its row's centre, filled front row first. */
