@@ -77,7 +77,8 @@ public final class BuildToolInput {
         EntityPlayer player = Minecraft.getMinecraft().player;
 
         // The transit tool takes the same three keys and gives them its own meanings: G picks
-        // what a click authors, C commits the line or switch being assembled, V is loop/shuttle.
+        // what a click authors, C commits the line or switch being assembled, V cycles the line
+        // kind (loop, shuttle, turnback).
         // It returns early for the same reason the piece tool does — one item, one meaning per key.
         if (holdingTransitTool(player)) {
             if (cycle) {

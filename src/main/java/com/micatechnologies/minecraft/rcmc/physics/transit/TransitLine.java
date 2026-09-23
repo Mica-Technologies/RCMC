@@ -41,6 +41,42 @@ import java.util.List;
  */
 public final class TransitLine {
 
+    /**
+     * The three shapes of line, by what a train does at the end of the route.
+     *
+     * <p>Named for the builder, who picks one: a {@code loop} never ends; a {@code shuttle} runs to
+     * a stub terminus and changes ends; a {@code turnback} line runs out on one track and back on
+     * another, turning round on a loop at each end.</p>
+     */
+    public enum Kind {
+        LOOP, SHUTTLE, TURNBACK;
+
+        /** The word the builder types and reads. */
+        public String label() {
+            return name().toLowerCase(java.util.Locale.ROOT);
+        }
+
+        public Kind next() {
+            return values()[(ordinal() + 1) % values().length];
+        }
+
+        /** Parses {@link #label}, case-insensitively; {@code null} for anything else. */
+        public static Kind byLabel(String label) {
+            for (Kind kind : values()) {
+                if (kind.label().equalsIgnoreCase(label)) {
+                    return kind;
+                }
+            }
+            return null;
+        }
+    }
+
+    /** A line of this kind, with the default direction labels. */
+    public static TransitLine of(String name, List<TransitStation> stations, Kind kind) {
+        return new TransitLine(name, stations, kind == Kind.LOOP, kind == Kind.TURNBACK,
+            "INBOUND", "OUTBOUND");
+    }
+
     private final String name;
     private final List<TransitStation> stations;
     private final boolean loop;
@@ -120,6 +156,10 @@ public final class TransitLine {
 
     public boolean isLoop() {
         return loop;
+    }
+
+    public Kind kind() {
+        return loop ? Kind.LOOP : turnbackLoop ? Kind.TURNBACK : Kind.SHUTTLE;
     }
 
     /**
