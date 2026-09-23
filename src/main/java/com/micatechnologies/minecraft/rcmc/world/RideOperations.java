@@ -178,7 +178,7 @@ public final class RideOperations {
     static com.micatechnologies.minecraft.rcmc.physics.element.TransferTrack transferOf(
         RcmcWorldState state, int sectionId) {
         for (RideElement element : state.elements().elements()) {
-            if (element.sectionId() == sectionId
+            if (state.rides().members(sectionId).contains(element.sectionId())
                 && element instanceof com.micatechnologies.minecraft.rcmc.physics.element.TransferTrack) {
                 return (com.micatechnologies.minecraft.rcmc.physics.element.TransferTrack) element;
             }
@@ -208,7 +208,8 @@ public final class RideOperations {
         if (stationOccupied(state, station)) {
             return "Wait for the station to clear first.";
         }
-        int id = TrainSpawner.spawn(world, state, sectionId,
+        // Onto the station's own section, which after a split need not be the panel's.
+        int id = TrainSpawner.spawn(world, state, station.sectionId(),
             new TrainSpec(ride.carsPerTrain(), 3.0D, 0.5D, 4).withCoasterModel(ride.carModel()),
             station.stopDistance(), 0.0D);
         return "Added train #" + id + " (" + ride.carsPerTrain() + " " + ride.carModel().label + " cars).";
@@ -217,7 +218,7 @@ public final class RideOperations {
     private static String removeTrain(World world, RcmcWorldState state, int sectionId,
                                       int trainId) {
         Train train = state.trains().train(trainId);
-        if (train == null || train.reference().sectionId() != sectionId) {
+        if (train == null || !state.rides().members(sectionId).contains(train.reference().sectionId())) {
             return "That train is not on this ride.";
         }
         TrainSpawner.remove(world, state, trainId);
@@ -231,8 +232,8 @@ public final class RideOperations {
             return "";
         }
         RideTuning.Parameter parameter = all[parameterOrdinal];
-        double applied = RideTuning.apply(state.elements(), sectionId, elementIndex, parameter,
-            value, RcmcConstants.SECONDS_PER_TICK);
+        double applied = RideTuning.apply(state.elements(), state.rides().members(sectionId),
+            state.network(), elementIndex, parameter, value, RcmcConstants.SECONDS_PER_TICK);
         if (Double.isNaN(applied)) {
             return "That setting has changed — try again.";
         }
@@ -262,8 +263,8 @@ public final class RideOperations {
                 train.speed(), train.status().name(), train.reference().distance()));
         }
         List<RideView.SettingRow> settings = new ArrayList<>();
-        for (RideTuning.Setting setting : RideTuning.settingsFor(state.elements(), sectionId,
-            RcmcConstants.SECONDS_PER_TICK)) {
+        for (RideTuning.Setting setting : RideTuning.settingsFor(state.elements(),
+            state.rides().members(sectionId), state.network(), RcmcConstants.SECONDS_PER_TICK)) {
             settings.add(new RideView.SettingRow(setting.elementIndex, setting.parameter.ordinal(),
                 setting.value));
         }
@@ -286,7 +287,8 @@ public final class RideOperations {
 
     static StationPlatform stationOf(RcmcWorldState state, int sectionId) {
         for (RideElement element : state.elements().elements()) {
-            if (element.sectionId() == sectionId && element instanceof StationPlatform) {
+            if (state.rides().members(sectionId).contains(element.sectionId())
+                && element instanceof StationPlatform) {
                 return (StationPlatform) element;
             }
         }
@@ -296,7 +298,7 @@ public final class RideOperations {
     private static Map<Integer, Train> trainsOn(RcmcWorldState state, int sectionId) {
         Map<Integer, Train> out = new java.util.TreeMap<>();
         for (Map.Entry<Integer, Train> entry : state.trains().asMap().entrySet()) {
-            if (entry.getValue().reference().sectionId() == sectionId) {
+            if (state.rides().members(sectionId).contains(entry.getValue().reference().sectionId())) {
                 out.put(entry.getKey(), entry.getValue());
             }
         }
@@ -304,8 +306,12 @@ public final class RideOperations {
     }
 
     private static int blockCount(RcmcWorldState state, int sectionId) {
-        BlockSystem blocks = state.blocks().get(sectionId);
-        return blocks == null ? 0 : blocks.blockCount();
+        int count = 0;
+        for (int member : state.rides().members(sectionId)) {
+            BlockSystem blocks = state.blocks().get(member);
+            count += blocks == null ? 0 : blocks.blockCount();
+        }
+        return count;
     }
 
     /** Whether any car of any train is standing in the station. */

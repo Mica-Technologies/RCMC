@@ -7,9 +7,13 @@ import com.micatechnologies.minecraft.rcmc.physics.element.LaunchTrack;
 import com.micatechnologies.minecraft.rcmc.physics.element.RideElement;
 import com.micatechnologies.minecraft.rcmc.physics.element.RideElementSet;
 import com.micatechnologies.minecraft.rcmc.physics.element.StationPlatform;
+import com.micatechnologies.minecraft.rcmc.track.TrackNetwork;
+import com.micatechnologies.minecraft.rcmc.track.TrackSection;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
 
 /**
  * The ride hardware an operator can adjust: lift and tyre speeds, launch speed and force, brake
@@ -78,34 +82,30 @@ public final class RideTuning {
     /** Every adjustable value of the elements on {@code sectionId}, in element order. */
     public static List<Setting> settingsFor(RideElementSet elements, int sectionId,
                                             double tickSeconds) {
+        return settingsFor(elements, Collections.singleton(sectionId), null, tickSeconds);
+    }
+
+    /**
+     * Every adjustable value of a ride spread over {@code sections}, one per piece of hardware.
+     *
+     * <p>A piece of hardware can be more than one element. A lift cut by a split, or running over a
+     * circuit's seam, is two elements laid end to end with the same settings — one lift to anyone
+     * looking at it, and listed once, addressed by its first element. {@link #apply} sets the rest
+     * with it. {@code network} decides what "end to end" means across sections and seams; without
+     * it only elements meeting on one section count.</p>
+     */
+    public static List<Setting> settingsFor(RideElementSet elements, Set<Integer> sections,
+                                            TrackNetwork network, double tickSeconds) {
         List<Setting> out = new ArrayList<>();
         List<RideElement> all = elements.elements();
+        Set<Integer> listed = new TreeSet<>();
         for (int i = 0; i < all.size(); i++) {
             RideElement element = all.get(i);
-            if (element.sectionId() != sectionId) {
+            if (!sections.contains(element.sectionId()) || listed.contains(i)) {
                 continue;
             }
-            if (element instanceof ChainLift) {
-                out.add(new Setting(i, Parameter.LIFT_SPEED, ((ChainLift) element).chainSpeed()));
-            }
-            else if (element instanceof LaunchTrack) {
-                LaunchTrack launch = (LaunchTrack) element;
-                // The magnitude: a backward launch is still set by how fast, not by a minus sign.
-                out.add(new Setting(i, Parameter.LAUNCH_SPEED, Math.abs(launch.targetSpeed())));
-                out.add(new Setting(i, Parameter.LAUNCH_FORCE, launch.constantAcceleration()));
-            }
-            else if (element instanceof BrakeRun) {
-                out.add(new Setting(i, Parameter.BRAKE_SPEED, ((BrakeRun) element).targetSpeed()));
-            }
-            else if (element instanceof DriveTyres) {
-                out.add(new Setting(i, Parameter.TYRE_SPEED, ((DriveTyres) element).driveSpeed()));
-            }
-            else if (element instanceof StationPlatform) {
-                out.add(new Setting(i, Parameter.STATION_DWELL,
-                    ((StationPlatform) element).dwellTicks() * tickSeconds));
-                out.add(new Setting(i, Parameter.STATION_PASSES,
-                    ((StationPlatform) element).passThroughs()));
-            }
+            listed.addAll(sameHardware(all, i, network));
+            out.addAll(settingsOf(element, i, tickSeconds));
         }
         return Collections.unmodifiableList(out);
     }
@@ -119,21 +119,136 @@ public final class RideTuning {
      */
     public static double apply(RideElementSet elements, int sectionId, int elementIndex,
                                Parameter parameter, double value, double tickSeconds) {
+        return apply(elements, Collections.singleton(sectionId), null, elementIndex, parameter, value,
+            tickSeconds);
+    }
+
+    /**
+     * As above, for a ride over {@code sections}: sets the piece of hardware {@code elementIndex}
+     * belongs to — every element of it, so a lift in two pieces stays one lift at one speed.
+     */
+    public static double apply(RideElementSet elements, Set<Integer> sections, TrackNetwork network,
+                               int elementIndex, Parameter parameter, double value, double tickSeconds) {
         List<RideElement> all = elements.elements();
         if (elementIndex < 0 || elementIndex >= all.size()) {
             return Double.NaN;
         }
         RideElement old = all.get(elementIndex);
-        if (old.sectionId() != sectionId) {
+        if (!sections.contains(old.sectionId())) {
             return Double.NaN;
         }
         double v = parameter.clamp(value);
-        RideElement replacement = withValue(old, parameter, v, tickSeconds);
-        if (replacement == null) {
+        if (withValue(old, parameter, v, tickSeconds) == null) {
             return Double.NaN;
         }
-        elements.replace(old, replacement);
+        List<RideElement> pieces = new ArrayList<>();
+        for (int index : sameHardware(all, elementIndex, network)) {
+            pieces.add(all.get(index));
+        }
+        for (RideElement piece : pieces) {
+            elements.replace(piece, withValue(piece, parameter, v, tickSeconds));
+        }
         return v;
+    }
+
+    /**
+     * The indices of every element that is one piece of hardware with element {@code index}: the
+     * same kind, with the same settings, each laid end to end with the next — on one section, over
+     * a circuit's seam, or across an end-to-start join.
+     */
+    static Set<Integer> sameHardware(List<RideElement> all, int index, TrackNetwork network) {
+        Set<Integer> group = new TreeSet<>();
+        List<Integer> frontier = new ArrayList<>();
+        group.add(index);
+        frontier.add(index);
+        while (!frontier.isEmpty()) {
+            RideElement at = all.get(frontier.remove(frontier.size() - 1));
+            for (int j = 0; j < all.size(); j++) {
+                if (group.contains(j)) {
+                    continue;
+                }
+                RideElement other = all.get(j);
+                if (sameSettings(at, other) && (continues(at, other, network) || continues(other, at, network))) {
+                    group.add(j);
+                    frontier.add(j);
+                }
+            }
+        }
+        return group;
+    }
+
+    private static boolean sameSettings(RideElement a, RideElement b) {
+        if (a.getClass() != b.getClass()) {
+            return false;
+        }
+        // Settings list a launch's speed without its sign and a brake's target without its mode;
+        // a forward and a backward launch, or a trim and a block brake, are never one piece.
+        if (a instanceof LaunchTrack
+            && Math.signum(((LaunchTrack) a).targetSpeed()) != Math.signum(((LaunchTrack) b).targetSpeed())) {
+            return false;
+        }
+        if (a instanceof BrakeRun && ((BrakeRun) a).mode() != ((BrakeRun) b).mode()) {
+            return false;
+        }
+        List<Setting> sa = settingsOf(a, 0, 1.0D);
+        List<Setting> sb = settingsOf(b, 0, 1.0D);
+        if (sa.isEmpty() || sa.size() != sb.size()) {
+            return false;
+        }
+        for (int i = 0; i < sa.size(); i++) {
+            if (Math.abs(sa.get(i).value - sb.get(i).value) > 1.0e-9D) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** Whether {@code b} starts where {@code a} ends, in the direction of travel. */
+    private static boolean continues(RideElement a, RideElement b, TrackNetwork network) {
+        final double eps = 1.0e-6D;
+        if (a.sectionId() == b.sectionId() && Math.abs(a.endDistance() - b.startDistance()) < eps) {
+            return true;
+        }
+        if (network == null || b.startDistance() > eps) {
+            return false;
+        }
+        TrackSection from = network.section(a.sectionId());
+        if (from == null || Math.abs(a.endDistance() - from.totalLength()) > eps) {
+            return false;
+        }
+        if (a.sectionId() == b.sectionId()) {
+            return from.isClosed();
+        }
+        TrackNetwork.SectionEnd joined = network.joinedTo(
+            new TrackNetwork.SectionEnd(a.sectionId(), TrackNetwork.End.END));
+        return joined != null && joined.sectionId == b.sectionId() && joined.end == TrackNetwork.End.START;
+    }
+
+    /** The adjustable values of one element; see {@link #settingsFor}. */
+    private static List<Setting> settingsOf(RideElement element, int i, double tickSeconds) {
+        List<Setting> out = new ArrayList<>();
+        if (element instanceof ChainLift) {
+            out.add(new Setting(i, Parameter.LIFT_SPEED, ((ChainLift) element).chainSpeed()));
+        }
+        else if (element instanceof LaunchTrack) {
+            LaunchTrack launch = (LaunchTrack) element;
+            // The magnitude: a backward launch is still set by how fast, not by a minus sign.
+            out.add(new Setting(i, Parameter.LAUNCH_SPEED, Math.abs(launch.targetSpeed())));
+            out.add(new Setting(i, Parameter.LAUNCH_FORCE, launch.constantAcceleration()));
+        }
+        else if (element instanceof BrakeRun) {
+            out.add(new Setting(i, Parameter.BRAKE_SPEED, ((BrakeRun) element).targetSpeed()));
+        }
+        else if (element instanceof DriveTyres) {
+            out.add(new Setting(i, Parameter.TYRE_SPEED, ((DriveTyres) element).driveSpeed()));
+        }
+        else if (element instanceof StationPlatform) {
+            out.add(new Setting(i, Parameter.STATION_DWELL,
+                ((StationPlatform) element).dwellTicks() * tickSeconds));
+            out.add(new Setting(i, Parameter.STATION_PASSES,
+                ((StationPlatform) element).passThroughs()));
+        }
+        return out;
     }
 
     /** A copy of {@code e} with {@code parameter} set to {@code v}, or {@code null} if it has none. */

@@ -139,8 +139,20 @@ public final class SectionSurgeries {
                 clearedBlocks.add(key);
             }
         }
+        // One ride stays one ride: a split's new half joins the ride it was cut from, and a merged
+        // section carries on the ride of whichever of the two had one.
+        for (TrackSection section : r.sections()) {
+            if (!touched.contains(section.id()) && !touched.isEmpty()) {
+                state.rides().join(section.id(), touched.iterator().next());
+            }
+        }
         for (int id : r.removedIds()) {
-            state.rides().remove(id);
+            for (int survivor : touched) {
+                if (!r.removedIds().contains(survivor)) {
+                    state.rides().absorb(id, survivor);
+                    break;
+                }
+            }
         }
 
         TransitSystem transit = state.transit();

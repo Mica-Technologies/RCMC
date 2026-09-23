@@ -85,4 +85,36 @@ class RideTuningTest {
             "no such element");
         assertEquals(5.0D, ((ChainLift) set.elements().get(2)).chainSpeed(), 1e-9, "untouched");
     }
+
+    @Test
+    @DisplayName("a lift in two pieces, split across two joined sections, is one lift at one speed")
+    void liftInTwoPiecesIsOneSetting() {
+        com.micatechnologies.minecraft.rcmc.track.TrackNetwork network =
+            new com.micatechnologies.minecraft.rcmc.track.TrackNetwork();
+        java.util.List<com.micatechnologies.minecraft.rcmc.track.TrackNode> a = java.util.Arrays.asList(
+            new com.micatechnologies.minecraft.rcmc.track.TrackNode(new com.micatechnologies.minecraft.rcmc.track.math.Vec3(0, 64, 0)),
+            new com.micatechnologies.minecraft.rcmc.track.TrackNode(new com.micatechnologies.minecraft.rcmc.track.math.Vec3(40, 70, 0)));
+        java.util.List<com.micatechnologies.minecraft.rcmc.track.TrackNode> b = java.util.Arrays.asList(
+            new com.micatechnologies.minecraft.rcmc.track.TrackNode(new com.micatechnologies.minecraft.rcmc.track.math.Vec3(40, 70, 0)),
+            new com.micatechnologies.minecraft.rcmc.track.TrackNode(new com.micatechnologies.minecraft.rcmc.track.math.Vec3(80, 76, 0)));
+        network.addSection(new com.micatechnologies.minecraft.rcmc.track.TrackSection(1, a, false, null));
+        network.addSection(new com.micatechnologies.minecraft.rcmc.track.TrackSection(2, b, false, null));
+        network.connect(new com.micatechnologies.minecraft.rcmc.track.TrackNetwork.SectionEnd(1,
+                com.micatechnologies.minecraft.rcmc.track.TrackNetwork.End.END),
+            new com.micatechnologies.minecraft.rcmc.track.TrackNetwork.SectionEnd(2,
+                com.micatechnologies.minecraft.rcmc.track.TrackNetwork.End.START));
+        double lengthA = network.section(1).totalLength();
+        RideElementSet set = new RideElementSet();
+        set.add(new ChainLift(1, 10.0D, lengthA, 5.0D, 12.0D, TICK));
+        set.add(new ChainLift(2, 0.0D, 30.0D, 5.0D, 12.0D, TICK));
+        java.util.Set<Integer> ride = new java.util.TreeSet<>(java.util.Arrays.asList(1, 2));
+
+        List<Setting> settings = RideTuning.settingsFor(set, ride, network, TICK);
+        assertEquals(1, settings.size(), "the operator should see one lift, not two: " + settings);
+
+        RideTuning.apply(set, ride, network, settings.get(0).elementIndex, Parameter.LIFT_SPEED, 8.0D, TICK);
+        assertEquals(8.0D, ((ChainLift) set.elements().get(0)).chainSpeed(), 1e-9);
+        assertEquals(8.0D, ((ChainLift) set.elements().get(1)).chainSpeed(), 1e-9,
+            "the second piece was left at the old speed");
+    }
 }

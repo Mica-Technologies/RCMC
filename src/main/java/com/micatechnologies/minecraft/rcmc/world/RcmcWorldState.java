@@ -360,6 +360,8 @@ public final class RcmcWorldState {
             this.elements = restoredElements;
             this.transit = restoredTransit;
             this.blocks = restoredBlocks;
+            // Which sections form one ride is part of the track; the rides' operator state is not.
+            this.rides.setHomes(com.micatechnologies.minecraft.rcmc.track.storage.RideCodec.readHomes(snapshot));
             RcmcTrackData.get(world).install(restoredNetwork, restoredElements, restoredTransit,
                 restoredBlocks);
 

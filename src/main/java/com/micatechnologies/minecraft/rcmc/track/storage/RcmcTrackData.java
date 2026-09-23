@@ -202,6 +202,7 @@ public class RcmcTrackData extends WorldSavedData {
             com.micatechnologies.minecraft.rcmc.RcmcConfig.maxSpeed));
         this.pendingServices = nbt;
         this.rides = RideCodec.read(nbt);
+        this.rides.setHomes(RideCodec.readHomes(nbt));
     }
 
     @Override
@@ -230,6 +231,7 @@ public class RcmcTrackData extends WorldSavedData {
         }
         TransitCodec.write(transit, compound);
         BlockCodec.write(blocks, compound);
+        RideCodec.writeHomes(rides, compound);
         return compound;
     }
 }
