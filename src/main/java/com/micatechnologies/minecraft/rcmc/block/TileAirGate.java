@@ -80,6 +80,13 @@ public class TileAirGate extends TileEntity implements ITickable {
         IBlockState here = world.getBlockState(pos);
         if (here.getBlock() instanceof BlockAirGate && here.getValue(BlockAirGate.OPEN) != open) {
             world.setBlockState(pos, here.withProperty(BlockAirGate.OPEN, open), 3);
+            // One gate in four sounds: a platform's gates move together, and forty iron doors at
+            // once would drown everything else and use up the sound channels.
+            if (Math.floorMod(pos.getX() + pos.getZ(), 4) == 0) {
+                world.playSound(null, pos, open ? net.minecraft.init.SoundEvents.BLOCK_IRON_TRAPDOOR_OPEN
+                        : net.minecraft.init.SoundEvents.BLOCK_IRON_TRAPDOOR_CLOSE,
+                    net.minecraft.util.SoundCategory.BLOCKS, 0.7F, 0.85F);
+            }
         }
     }
 

@@ -32,4 +32,5 @@ rcmc.subtitle.coaster_wind=Wind rushes
 rcmc.subtitle.coaster_brake=Coaster brakes
 rcmc.subtitle.coaster_tyres=Drive tyres whir
 rcmc.subtitle.coaster_launch=Coaster launches
+rcmc.subtitle.coaster_dispatch=Coaster brakes release
 death.attack.rcmc.train=%1$s was hit by a train

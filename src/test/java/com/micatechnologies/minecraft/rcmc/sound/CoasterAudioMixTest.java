@@ -119,4 +119,18 @@ class CoasterAudioMixTest {
         assertTrue(CoasterAudioMix.bystanderRange(25.0D) > CoasterAudioMix.bystanderRange(2.0D));
         assertTrue(CoasterAudioMix.bystanderRange(0.0D) >= 1.0F, "never under the 16-block default");
     }
+
+    @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName("a station's brakes are heard stopping a train, and letting it go once")
+    void stationBrakesAndDispatch() {
+        org.junit.jupiter.api.Assertions.assertTrue(CoasterAudioMix.level(CoasterAudioMix.Channel.BRAKE, 5.0D, -4.0D,
+            CoasterAudioMix.STATION, false).volume > 0.0F, "braking into the station");
+        org.junit.jupiter.api.Assertions.assertEquals(0.0F, CoasterAudioMix.level(CoasterAudioMix.Channel.BRAKE, 0.0D,
+            0.0D, CoasterAudioMix.STATION, false).volume, "standing in it, silent");
+        org.junit.jupiter.api.Assertions.assertTrue(CoasterAudioMix.dispatchFires(0.0D, 0.5D, CoasterAudioMix.STATION));
+        org.junit.jupiter.api.Assertions.assertFalse(CoasterAudioMix.dispatchFires(0.5D, 1.0D, CoasterAudioMix.STATION),
+            "once, on the edge, not every tick it moves");
+        org.junit.jupiter.api.Assertions.assertFalse(CoasterAudioMix.dispatchFires(0.0D, 0.5D, CoasterAudioMix.LIFT),
+            "a train starting anywhere else is not a dispatch");
+    }
 }

@@ -60,6 +60,9 @@ public final class RcmcSounds {
     /** A linear-motor launch firing: one shot, a thump and a rising surge. */
     public static final SoundEvent COASTER_LAUNCH = create("coaster_launch");
 
+    /** A coaster's station brakes letting go as it is dispatched: one shot, a hiss of air. */
+    public static final SoundEvent COASTER_DISPATCH = create("coaster_dispatch");
+
     private RcmcSounds() {
         throw new AssertionError("No instances.");
     }

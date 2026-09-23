@@ -131,7 +131,10 @@ public final class CoasterSoundDirector {
 
             if (CoasterAudioMix.launchFires(lastSpan.get(trainId),
                 lastAcceleration.getOrDefault(trainId, 0.0D), span, acceleration)) {
-                playLaunch(mc.getSoundHandler(), onBoard, master, x, y, z);
+                playLaunch(mc.getSoundHandler(), RcmcSounds.COASTER_LAUNCH, onBoard, 2.5F * master, x, y, z);
+            }
+            if (lastSpeed.containsKey(trainId) && CoasterAudioMix.dispatchFires(previous, speed, span)) {
+                playLaunch(mc.getSoundHandler(), RcmcSounds.COASTER_DISPATCH, onBoard, master, x, y, z);
             }
             lastSpeed.put(trainId, speed);
             lastAcceleration.put(trainId, acceleration);
@@ -177,17 +180,19 @@ public final class CoasterSoundDirector {
         lastSpan.keySet().retainAll(state.trains().asMap().keySet());
     }
 
-    private static void playLaunch(SoundHandler handler, boolean onBoard, float master,
+    /**
+     * A one-shot from the train: heard inside it by a rider, from where it is by everyone else.
+     * {@code volume} above 1 only widens a bystander's range (16 blocks a unit); the gain clamps at 1.
+     */
+    private static void playLaunch(SoundHandler handler, SoundEvent event, boolean onBoard, float volume,
                                    double x, double y, double z) {
-        SoundEvent event = RcmcSounds.COASTER_LAUNCH;
         if (onBoard) {
             handler.playSound(new PositionedSoundRecord(event.getSoundName(), SoundCategory.BLOCKS,
-                master, 1.0F, false, 0, ISound.AttenuationType.NONE, 0.0F, 0.0F, 0.0F));
+                Math.min(1.0F, volume), 1.0F, false, 0, ISound.AttenuationType.NONE, 0.0F, 0.0F, 0.0F));
         }
         else {
-            // Volume above 1 only widens the range (to 40 blocks); the gain itself clamps at 1.
             handler.playSound(new PositionedSoundRecord(event, SoundCategory.BLOCKS,
-                2.5F * master, 1.0F, (float) x, (float) y, (float) z));
+                volume, 1.0F, (float) x, (float) y, (float) z));
         }
     }
 

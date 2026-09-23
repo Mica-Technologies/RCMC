@@ -76,6 +76,7 @@ public final class CoasterAudioMix {
     public static final String LAUNCH = "launch";
     public static final String BRAKES = "brake";
     public static final String TYRE_SPAN = "drive_tyres";
+    public static final String STATION = "station";
 
     private CoasterAudioMix() {
     }
@@ -107,7 +108,9 @@ public final class CoasterAudioMix {
                 // Only while the fins are genuinely taking speed off. A train rolling through an
                 // open (trim) brake at its target speed makes no brake noise, and neither does one
                 // standing in a block brake.
-                if (!BRAKES.equals(spanType) || v <= MOVING || acceleration >= -0.5D) {
+                // A station's brakes too, stopping an arriving train: they are brakes all the same.
+                if (!(BRAKES.equals(spanType) || STATION.equals(spanType)) || v <= MOVING
+                    || acceleration >= -0.5D) {
                     return Level.SILENT;
                 }
                 return new Level((float) Math.min(1.0D, -acceleration / BRAKE_FULL),
@@ -147,6 +150,14 @@ public final class CoasterAudioMix {
             return false;
         }
         return !LAUNCH.equals(previousSpanType) || previousAcceleration < LAUNCH_ACCELERATION;
+    }
+
+    /**
+     * Whether the dispatch sound should fire this tick: the train is in its station and has just
+     * started to move — the platform's brakes letting go. On the edge, so it is heard once.
+     */
+    public static boolean dispatchFires(double previousSpeed, double speed, String spanType) {
+        return STATION.equals(spanType) && Math.abs(previousSpeed) <= MOVING && Math.abs(speed) > MOVING;
     }
 
     /**

@@ -29,6 +29,9 @@ class CoasterAudioSpanNamesTest {
             ElementCodec.typeOf(new LaunchTrack(1, 0.0D, 50.0D, 22.0D, 8.0D)));
         assertEquals(CoasterAudioMix.BRAKES,
             ElementCodec.typeOf(new BrakeRun(1, 0.0D, 50.0D, 6.0D, 6.0D, BrakeRun.Mode.TRIM, TICK)));
+        assertEquals(CoasterAudioMix.STATION, ElementCodec.typeOf(
+            new com.micatechnologies.minecraft.rcmc.physics.element.StationPlatform(1, 0.0D, 50.0D, 47.0D,
+                6.0D, 60, 4.0D, 6.0D, TICK)));
         assertEquals(CoasterAudioMix.TYRE_SPAN,
             ElementCodec.typeOf(new DriveTyres(1, 0.0D, 50.0D, 6.0D, 2.0D, TICK)));
     }
