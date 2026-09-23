@@ -232,7 +232,7 @@ each block brake, the end of the station and the top of the lift — and needs a
 A number divides it into that many equal blocks instead, wherever they fall. `off` removes block
 signalling. Either way it reports the safe train count. Block sections
 are saved with the world and can be undone like any other edit. See
-[multi-train operation](../guide/riding-and-operations.md#multi-train-operation).
+[running more than one train](../guide/operating-a-coaster.md#running-more-than-one-train).
 
 ### `/rcmc ride`
 
@@ -245,7 +245,7 @@ are saved with the world and can be undone like any other edit. See
 The operator panel's state controls, for an admin or a command block. `open` lets riders board;
 `test` runs trains with nobody aboard; `close` lets trains finish their lap and hold them in the
 station; `stop` is the emergency stop; `reset` clears it and leaves the ride closed. See
-[operating a ride](../guide/riding-and-operations.md#operating-a-ride).
+[operating a coaster](../guide/operating-a-coaster.md).
 
 `platform` lays a platform along the ride's station: decking at the cars' floor, a warning-striped
 edge, and air gates on the edge where the train stops. Both sides by default, 3 blocks wide

@@ -5,6 +5,14 @@ retextured coaster. They run on **the same track, the same arc-length parameteri
 same integrator** — the difference is entirely in what pushes the train and what decides where it
 should be.
 
+<div class="grid" markdown>
+
+![A roller coaster: the demo coaster's station, lift and drop](../assets/images/coaster-station.jpg)
+
+![A metro: two trains berthed at an island platform underground](../assets/images/metro-island-station.jpg)
+
+</div>
+
 ## The shared core
 
 ```mermaid
@@ -28,7 +36,7 @@ coaster train does — a *powered* train is that same scalar with a different fo
 | --- | --- | --- |
 | **What moves it** | Gravity, plus track-side elements it passes over | Motors it carries, under an automatic driver |
 | **Force model** | Track-side spans (`ChainLift`, `BrakeRun`, `StationPlatform`, drive tyres) | Per-train controller: traction curve, service brake, jerk limiter |
-| **Who decides speed** | The layout. You design potential energy and let it go | The ATO driver, targeting min(line speed, braking curve to the next stop or signal) |
+| **Who decides speed** | The layout. You design potential energy and let it go | The ATO driver, targeting the lowest of line speed, the curve limits ahead, and a braking curve to the next stop, signal or train |
 | **Stopping** | A brake run, at a fixed place on the track | A computed stopping curve to wherever the next stop happens to be |
 | **Route** | The circuit. It goes round | A line: an ordered list of stations, walked as a route, with terminus turnback |
 | **Signalling** | Fixed block sections, exclusive occupancy, stop at the block brake | Movement authority (ATO/ATP style) — distance to the nearest occupied block, fed into the same braking law |
@@ -36,7 +44,7 @@ coaster train does — a *powered* train is that same scalar with a different fo
 | **Doors** | None | Real sliding leaves; boarding is gated on them being open |
 | **Riding** | Seated, camera locked to the car including roll | Seated *or standing* — you can walk around inside a moving car |
 | **Rating** | Excitement / intensity / nausea, from a simulated run | None. Those are coaster concepts; a punctuality metric would be a different number measuring a different thing |
-| **Typical speed** | Whatever the drop gives you | A cruise speed you set, held by the driver |
+| **Typical speed** | Whatever the drop gives you | A cruise speed you set, held by the driver, and eased for curves |
 | **Build tool** | [Track tool](building-a-coaster.md#the-track-tool-freeform) or [piece builder](building-a-coaster.md#the-piece-builder-prefabs) | [Transit tool](building-a-metro.md), on track laid with either coaster tool |
 | **Track style** | `coaster` (the default look) | `transit`, `transit-catenary`, `transit-portal`, `transit-tunnel` — wider gauge, heavier rail, ballast, electrification |
 

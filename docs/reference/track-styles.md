@@ -39,6 +39,8 @@ overhanging its track rather than balancing on it.
 
 ### `transit-catenary`
 
+![Transit track with overhead wires, on the surface metro demo](../assets/images/metro-surface-demo.jpg)
+
 Adds a mast with a bracket arm every **24 blocks**, a contact wire swept along the alignment, a
 parabolic-sag messenger wire above it with droppers between the two, and a registration drop tying
 the contact wire to the hardware at each mast.
@@ -52,6 +54,8 @@ The same wires on two-legged gantries rather than single masts — what a multi-
 actually uses.
 
 ### `transit-tunnel`
+
+![A lit underground tunnel on the demo network, in the transit-tunnel style](../assets/images/metro-tunnel.jpg)
 
 A **rigid conductor bar** with clamp stubs, no sag, hung at 7.0 blocks by default. Rigid overhead
 conductor rail is what real tunnels use precisely because it needs no sag clearance.

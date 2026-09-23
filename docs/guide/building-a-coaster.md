@@ -17,6 +17,8 @@ Both feed the same track. Start a run with pieces, continue it freehand, finish 
 
 Item: **`rcmc:track_tool`**.
 
+![The Track Builder: the builder panel at top left and the ghost of the track being laid](../assets/images/track-tool-preview.jpg)
+
 | Action | Effect |
 | --- | --- |
 | Right-click a block | Place a track node one block above it |
@@ -101,6 +103,8 @@ let back through the platform once, between the two launches, and caught the tim
 0 and the station catches the train the first time it comes back — right for a ride with a single
 launch and a spike at one end. `/rcmc demo shuttle` builds a complete one.
 
+![The demo shuttle coaster: a launch through the station and a spike at each end](../assets/images/shuttle-demo.jpg)
+
 !!! tip "A launch is a force, not a promise"
 
     Unlike a chain lift, a launch has nothing physically holding the train at its target — the
@@ -117,7 +121,7 @@ Committing a section with a **station** segment lays its platform for you: decki
 the cars' floor, a warning-striped edge, and **air gates** along the edge where the train stops.
 Blocks only go into air, plants or natural ground, never over anything you built. Change it with
 [`/rcmc ride <id> platform`](../reference/commands.md#rcmc-ride), and see
-[boarding](riding-and-operations.md#boarding) for how the gates and boarding work.
+[boarding](riding.md#boarding-a-coaster) for how the gates and boarding work.
 
 ### Committing and validation
 
@@ -146,6 +150,8 @@ Clicking near the **first** node of a run closes the circuit instead of adding a
 ## The piece builder (prefabs)
 
 Item: **`rcmc:piece_tool`**.
+
+![The Piece Builder showing a vertical loop ready to place](../assets/images/piece-tool-loop.jpg)
 
 | Action | Effect |
 | --- | --- |
@@ -254,6 +260,8 @@ curve is too tight or a slope too steep.
 Right-clicking track opens a panel along the bottom of the screen, so the track stays in view
 while you edit it. A yellow post marks the node being edited, drawn through terrain so it is never
 hidden.
+
+![The editor screen on the demo coaster's lift: node controls on the left, segment types on the right](../assets/images/track-editor.jpg)
 
 | Control | Effect |
 | --- | --- |
@@ -368,5 +376,5 @@ not touched, so it is safe on a circuit that already has a train running. It rep
 out an incomplete lap explicitly, so a coaster that stalls halfway cannot produce a
 plausible-looking rating.
 
-See [Riding and operations](riding-and-operations.md) for boarding, the ride HUD, G-force effects
+See [Riding](riding.md) and [Operating a coaster](operating-a-coaster.md) for boarding, the ride HUD, G-force effects
 and multi-train block signalling.

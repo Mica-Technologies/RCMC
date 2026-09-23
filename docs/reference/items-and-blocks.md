@@ -82,7 +82,8 @@ hold it the metro checks are drawn on the track too — see
 [building a metro](../guide/building-a-metro.md#1-lay-the-alignment).
 
 **Rename the tool in an anvil to name what you place next** — the tool called `Central` places a
-station called Central. Unnamed falls back to `Station N` / `Line N`.
+station called Central. Unnamed falls back to `Station1`, `Line1` and so on. Keep names to one word:
+commands take a name as a single word, and the tool warns when one has a space.
 
 ---
 
@@ -110,10 +111,10 @@ because each tool gives them its own meaning:
 | `rcmc:station_sign` | Post-mounted line map: the line's stops in order with a "you are here" marker, scrolled to keep that marker in view on a long line. At a station with more than one platform it also names the platform it stands at — both, on an island between two tracks. Right-click cycles lines at an interchange |
 | `rcmc:arrival_board` | Ceiling-hung amber-on-black board, double-sided. Per-direction rows reading minutes (`3 min`), or `1 stop` / `N stops` until the line's trains have been timed, `APPR` when this station is the train's next stop and `BRD` while it is berthed, with the platform in brackets for a train due here (`BRD (2)`). A **multiblock**: needs 5 blocks across, centred on where you place it, and 2 down |
 | `rcmc:station_speaker` | Wall- or ceiling-mounted PA announcing approaching trains. At a station with more than one platform the arrival call names the platform ("…is now approaching platform 2"). Mounts on the face you click |
-| `rcmc:air_gate` | A gate for a coaster platform's edge, gate side toward the track. Links to the nearest coaster station; opens while a train is loading there and shuts before it leaves, and the train waits for it. Laid automatically with a coaster station's platform — see [Boarding](../guide/riding-and-operations.md#boarding) |
+| `rcmc:air_gate` | A gate for a coaster platform's edge, gate side toward the track. Links to the nearest coaster station; opens while a train is loading there and shuts before it leaves, and the train waits for it. Laid automatically with a coaster station's platform — see [Boarding a coaster](../guide/riding.md#boarding-a-coaster) |
 | `rcmc:line_desk` | A metro control desk. Right-click for a live view of a line's trains, with buttons to add, remove and hold them and set the line's dwell and headway. Runs any line, opening on the one serving the nearest station — see [running the line](../guide/building-a-metro.md#running-the-line) |
 | `rcmc:ride_sign` | Post-mounted board for a coaster's queue: the ride's name, open / closed / testing / stopped, and its rating and statistics. Links to the nearest coaster station within 32 blocks; right-click to relink |
-| `rcmc:operator_panel` | A coaster's control desk. Links to the nearest coaster station within 24 blocks when placed (or when first used, if none was near). Right-click to operate the ride: open / test / close, emergency stop, automatic or manual dispatch, the ride's hardware settings, and its trains. See [Operating a ride](../guide/riding-and-operations.md#operating-a-ride) |
+| `rcmc:operator_panel` | A coaster's control desk. Links to the nearest coaster station within 24 blocks when placed (or when first used, if none was near). Right-click to operate the ride: open / test / close, emergency stop, automatic or manual dispatch, the ride's hardware settings, and its trains. See [Operating a coaster](../guide/operating-a-coaster.md) |
 
 The three signage blocks **auto-link to the nearest station** on placement — including via
 `/setblock` — and store only that station's name, resolving against the live registry every frame.

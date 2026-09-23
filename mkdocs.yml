@@ -81,21 +81,39 @@ markdown_extensions:
 plugins:
   - search
 
+# Anchors are checked too, so a link to a heading that has been renamed fails the strict build
+# instead of silently landing at the top of the page.
+validation:
+  anchors: warn
+
 nav:
   - Home: index.md
-  - Guides:
-      - Getting started: guide/getting-started.md
+  - Get started:
+      - Installing: start/installing.md
+      - Try the demos: start/demos.md
+      - Your first coaster: start/first-coaster.md
+      - Your first metro line: start/first-metro.md
       - Coasters vs metro: guide/coasters-vs-metro.md
+  - Coasters:
       - Building a coaster: guide/building-a-coaster.md
+      - Operating a coaster: guide/operating-a-coaster.md
+  - Metro:
       - Building a metro line: guide/building-a-metro.md
-      - Riding and operations: guide/riding-and-operations.md
+      - Running a metro line: guide/running-a-metro.md
+  - Riding: guide/riding.md
   - Reference:
       - Commands: reference/commands.md
       - Items and blocks: reference/items-and-blocks.md
       - Track styles: reference/track-styles.md
       - Train types: reference/train-types.md
       - Configuration: reference/config.md
+  - Help:
+      - Troubleshooting: help/troubleshooting.md
+      - Glossary: help/glossary.md
+      - Release notes: help/release-notes.md
   - Internals:
+      - Conventions: design/conventions.md
       - Track geometry: design/TRACK_GEOMETRY.md
       - Physics: design/PHYSICS.md
       - Transit systems: design/TRANSIT.md
+      - Building from source: design/building-from-source.md

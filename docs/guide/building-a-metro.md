@@ -36,6 +36,8 @@ What differs is how you shape it. Transit alignments want:
 
 ### Give it the transit look
 
+![Metro track with overhead wires, on the surface demo](../assets/images/metro-surface-demo.jpg)
+
 ```
 /rcmc style <sectionId> transit-catenary
 /rcmc style <sectionId> transit-catenary 12      raise the wire to 12 blocks
@@ -57,6 +59,8 @@ is scenery: there is **no "requires power" mechanic**, and that stays the promis
 ---
 
 ## 2. Place stations
+
+![The Transit Builder in station mode, showing where a click would place a station](../assets/images/transit-tool-station.jpg)
 
 Item: **`rcmc:transit_tool`**.
 
@@ -84,7 +88,8 @@ from it.
     Central. Rename it to `Orange` and the next line you create is the Orange line. 1.12.2 gives an
     item no text-entry affordance, and place-then-rename-by-command would have left the command as
     the real authoring path — the exact thing the tool exists to remove. An unnamed tool falls back
-    to `Station N` / `Line N`, so it works the moment you pick it up.
+    to `Station1`, `Line1` and so on, so it works the moment you pick it up. Keep names to one word:
+    commands such as `/rcmc platform` take a name as a single word.
 
 By command instead:
 
@@ -158,40 +163,16 @@ valleyed parked train** — taking control *is* the recovery.
 
 ### Running the line
 
-```
-/rcmc line trains [lineName]
-/rcmc line set <lineName> dwell <seconds>
-/rcmc line set <lineName> headway <seconds|off>
-```
-
-`line trains` lists every train in service — or every one on a line — with its direction, where it
-is heading, and whether it is running, boarding, or being held — and if it is waiting out on the
-line, which train it is waiting behind.
-
-**Or run it from a Line Control Desk** (`rcmc:line_desk`). Right-click it for a live view of a
-line's trains and what each is doing, with buttons to **add a train** (it goes to the first clear
-platform and starts in service), **remove** one, **hold** one at its next platform with its doors
-open (and release it), and set the dwell and headway. The desk runs every line: it opens on the one
-serving the station nearest it, and the arrows step through the rest.
-
-**Trains never run into each other.** With or without signals, a train stops five blocks short of
-any train ahead of it, and one standing at a platform holds its brakes, grade or not. Two trains
-running *at each other* on one track stop short and stay there; `line trains` shows them in red,
-and a train started facing the wrong way on a line is turned to run with the rest.
-
-**Dwell** is how long the doors stay open at each stop; the default is 10 seconds. **Headway** is
-the least time between two trains leaving the same platform in the same direction. With a headway
-set, a train that has caught up with the one ahead keeps its doors open until the gap has opened
-up again — which is what stops a line bunching, where a late train collects more passengers, runs
-later still, and ends up nose to tail with the early one behind it. Pick a headway a little under a
-lap time divided by the number of trains. Both settings are saved with the line, undo like any
-other edit, and reach trains already running at their next stop.
+Watching the service, the **Line Control Desk**, dwell and headway, holding and removing trains, and
+keeping trains apart all have their own page: [Running a metro line](running-a-metro.md).
 
 ---
 
 ## Making a station feel like a place
 
 ### Platforms
+
+![An island platform on the underground demo, trains berthed on both sides](../assets/images/metro-island-station.jpg)
 
 ```
 /rcmc platform <station> [length] [width] [left|right|both]
@@ -282,6 +263,8 @@ right door when it opens. A rider can only walk out through a door that actually
 
 ### Signage
 
+![An arrival board over a platform, with a line-map sign on its post below](../assets/images/metro-arrival-board.jpg)
+
 | Block | What it shows |
 | --- | --- |
 | `rcmc:station_sign` | Post-mounted line map: the linked line's stops in order, with a "you are here" marker. Right-click cycles lines at an interchange |
@@ -291,6 +274,17 @@ right door when it opens. A rider can only walk out through a door that actually
 All three **auto-link to the nearest station** when placed, and store only that station's *name*.
 Every frame resolves against the live registry, so a sign can never go stale — rename or move a
 station and the signs follow.
+
+<div class="grid" markdown>
+
+![A line-map sign on an island between two tracks: "Platforms 1 & 2"](../assets/images/line-map-sign-island.jpg)
+
+![A line-map sign on a side platform: "Platform 1"](../assets/images/line-map-sign-side.jpg)
+
+</div>
+
+A line-map sign at a station with more than one platform names the platform it stands at: both, on an
+island between two tracks.
 
 The trains carry signs of their own, driven by the same live service data, and blank on a car
 that is not in service:
@@ -360,36 +354,12 @@ blades.
 
 ## Running more than one train
 
-```
-/rcmc line signals <lineName> <count|off>
-```
-
-This divides every section the line's stations sit on into equal blocks and installs signalling.
-The driver then targets the **nearer** of two limits: the next station, or the movement authority
-its signals grant it. One braking law serves both — a train held at red simply has a stopping
-distance of zero, doors shut, and proceeds when the authority extends.
-
-Equal division is a starting point, not a design. A real layout puts boundaries where a train can
-sensibly be held — on the approach to a platform, clear of the one before — so place them by hand:
-in the transit tool's **signal** mode, click the track where a signal goes and the block it lands in
-is split in two; sneak-click one to take it out. Every signal is marked while you are in signal mode.
-It signals every line that stops on that track. The tool warns when a block is shorter than the
-trains running on it, or when the signal stands inside a platform, where a held train would be half
-in the station.
+Trains never run into each other: each stops short of the train ahead. To space several trains out
+properly, give the line **signals**, placed with the Transit Builder's signal mode. See
+[Signals](running-a-metro.md#signals).
 
 ---
 
 ## Known gaps
 
-Things you will run into, listed so they read as gaps rather than bugs:
-
-- **A resumed service restarts its stop cycle.** Trains and their services *do* persist, but a
-  train saved berthed with its doors open reloads berthed with them shut and opens them again, and
-  one saved mid-dwell serves a full dwell. It is indistinguishable from a train that has just
-  arrived — which, after a reload, is what it is.
-- **No door-alignment markers.** The platform knows where the train berths, but nothing marks where
-  each doorway will land.
-- **Holds are not saved.** A train held at the desk is released by a restart.
-- **In multiplayer, a *remote* player walking inside a moving car appears frozen** where they
-  boarded. Their own client is correct; per-passenger offsets are not synced yet.
-- **No per-agency liveries.** Metro stock is one look, painted by `/rcmc paint`.
+See [Troubleshooting](../help/troubleshooting.md#known-gaps).
