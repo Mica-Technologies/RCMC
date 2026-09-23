@@ -42,6 +42,15 @@ public final class ParallelTransportFrames {
      *                     accurate as long as neighbouring frames are close.
      */
     public ParallelTransportFrames(ArcLengthTable arcLength, int sampleCount) {
+        this(arcLength, sampleCount, null);
+    }
+
+    /**
+     * As above, seeded from {@code startUp} rather than world-up — for a section that continues
+     * another, whose frames must carry on from where that one's had got to rather than restart
+     * level. {@code null} seeds from world-up.
+     */
+    public ParallelTransportFrames(ArcLengthTable arcLength, int sampleCount, Vec3 startUp) {
         if (arcLength == null) {
             throw new IllegalArgumentException("arcLength must not be null");
         }
@@ -57,7 +66,8 @@ public final class ParallelTransportFrames {
         // Seed `up` from world-up. Any perpendicular vector is a valid seed — transport only
         // guarantees the frame doesn't *acquire* twist, not that it starts at a particular
         // roll — and world-up is the one that makes a flat station platform come out level.
-        frames[0] = new TrackFrame(arcLength.positionAtDistance(0.0D), tangent, Vec3.UP);
+        frames[0] = new TrackFrame(arcLength.positionAtDistance(0.0D), tangent,
+            startUp == null ? Vec3.UP : startUp);
 
         for (int i = 1; i < sampleCount; i++) {
             double s = i * spacing;

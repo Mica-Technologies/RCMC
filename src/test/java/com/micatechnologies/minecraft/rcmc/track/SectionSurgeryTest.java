@@ -86,18 +86,52 @@ class SectionSurgeryTest {
         assertEquals(1, r.cutsOn(1).size());
         assertEquals(cut, r.cutsOn(1).get(0), 1e-9);
 
-        // Spans next to the cut change shape a little, since their ends are estimated now; the rest
-        // are the same curve.
-        for (double d = 0.0D; d < open.nodeDistance(2); d += 1.3D) {
-            assertSamePlace(open, d, r, 0.05D);
-        }
-        for (double d = open.nodeDistance(4); d < open.totalLength(); d += 1.3D) {
-            assertSamePlace(open, d, r, 0.05D);
+        // Every point, right up to the cut: each half keeps the neighbour it was cut from as its
+        // handle there, so neither half's curve changes at all.
+        for (double d = 0.0D; d < open.totalLength(); d += 0.7D) {
+            assertSamePlace(open, d, r, 0.02D);
         }
         assertEquals(new SectionEnd(9, End.END), r.endOf(new SectionEnd(1, End.END)));
         SectionEnd[] join = r.joins().get(0);
         assertEquals(new SectionEnd(1, End.END), join[0]);
         assertEquals(new SectionEnd(9, End.START), join[1]);
+    }
+
+    @Test
+    @DisplayName("the halves of a split meet without a bend or a twist")
+    void splitJoinIsSmooth() {
+        List<TrackNode> nodes = new ArrayList<>();
+        // A climbing, turning, banked run: where a restarted frame would come out rolled.
+        for (int i = 0; i < 8; i++) {
+            double a = i * 0.6D;
+            nodes.add(new TrackNode(new Vec3(Math.cos(a) * 25.0D, 64.0D + i * 3.0D, Math.sin(a) * 25.0D),
+                i * 7.0D, null));
+        }
+        TrackSection whole = new TrackSection(1, nodes, false, null);
+        SectionSurgery.Result r = SectionSurgery.split(whole, 4, 2);
+        TrackSection a = sectionIn(r, 1);
+        TrackSection b = sectionIn(r, 2);
+        com.micatechnologies.minecraft.rcmc.track.math.TrackFrame end = a.frameAtDistance(a.totalLength());
+        com.micatechnologies.minecraft.rcmc.track.math.TrackFrame start = b.frameAtDistance(0.0D);
+        double bend = Math.toDegrees(Math.acos(Math.min(1.0D, end.forward.dot(start.forward))));
+        double twist = Math.toDegrees(Math.acos(Math.min(1.0D, end.up.dot(start.up))));
+        assertTrue(bend < 0.5D, "the join bends " + bend + " degrees");
+        assertTrue(twist < 0.5D, "the join twists " + twist + " degrees");
+    }
+
+    @Test
+    @DisplayName("splitting a run and joining it back gives the same track as before")
+    void splitThenMergeRestoresTheCurve() {
+        TrackSection whole = run(1, 0.0D, 7);
+        SectionSurgery.Result split = SectionSurgery.split(whole, 3, 2);
+        SectionSurgery.Result merged = SectionSurgery.merge(sectionIn(split, 1), End.END,
+            sectionIn(split, 2), End.START);
+        TrackSection again = sectionIn(merged, 1);
+        assertEquals(whole.totalLength(), again.totalLength(), 1e-6);
+        for (double d = 0.0D; d < whole.totalLength(); d += 0.9D) {
+            assertTrue(whole.positionAtDistance(d).distanceTo(again.positionAtDistance(d)) < 1e-6,
+                "the rejoined track moved at " + d);
+        }
     }
 
     @Test

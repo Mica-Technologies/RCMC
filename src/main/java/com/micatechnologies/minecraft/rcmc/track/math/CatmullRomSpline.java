@@ -72,6 +72,19 @@ public final class CatmullRomSpline {
      * @param throughPoints at least 2 points, all of which the curve will pass through
      */
     public static CatmullRomSpline withPhantomEndpoints(List<Vec3> throughPoints) {
+        return withEndHandles(throughPoints, null, null);
+    }
+
+    /**
+     * As {@link #withPhantomEndpoints}, but with either phantom given rather than reflected: the
+     * point the curve would have run on to beyond that end. A section split from a longer run keeps
+     * the neighbour it was cut from as its handle, so its end leaves at exactly the angle the
+     * original did and the two halves meet without a bend.
+     *
+     * @param leadIn  the control point before the first, or {@code null} to reflect one
+     * @param leadOut the control point after the last, or {@code null} to reflect one
+     */
+    public static CatmullRomSpline withEndHandles(List<Vec3> throughPoints, Vec3 leadIn, Vec3 leadOut) {
         if (throughPoints == null || throughPoints.size() < 2) {
             throw new IllegalArgumentException(
                 "Need at least 2 points, got " + (throughPoints == null ? 0 : throughPoints.size()));
@@ -82,9 +95,9 @@ public final class CatmullRomSpline {
         Vec3 last = throughPoints.get(throughPoints.size() - 1);
         Vec3 penultimate = throughPoints.get(throughPoints.size() - 2);
 
-        padded.add(first.scale(2.0D).subtract(second));
+        padded.add(leadIn != null ? leadIn : first.scale(2.0D).subtract(second));
         padded.addAll(throughPoints);
-        padded.add(last.scale(2.0D).subtract(penultimate));
+        padded.add(leadOut != null ? leadOut : last.scale(2.0D).subtract(penultimate));
         return new CatmullRomSpline(padded);
     }
 
