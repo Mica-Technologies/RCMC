@@ -601,6 +601,7 @@ public final class RcmcWorldState {
                     // Every tick rather than once: an undo swaps in a fresh element set, and a gate
                     // installed only at load would silently fall back to "always dispatch".
                     state.elements.setDispatchGates(state.rides::gateFor);
+                    TransferOperations.armHolds(state);
                     if (state.blocks.isEmpty()) {
                         control = state.elements;
                     }
@@ -632,6 +633,7 @@ public final class RcmcWorldState {
                 }
                 if (!state.remote) {
                     stopRolledBackRides(event.world, state);
+                    TransferOperations.carryOut(event.world, state);
                 }
 
                 // After the tick, so the phases the sounds react to are this tick's. Server only;

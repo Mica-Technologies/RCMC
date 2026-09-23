@@ -128,9 +128,56 @@ public final class RideOperations {
                 return removeTrain(world, state, sectionId, first);
             case TUNE:
                 return tune(world, state, sectionId, first, second, value);
+            case STORE_TRAIN:
+                return transfer(world, state, sectionId, ride, RideController.TransferRequest.STORE);
+            case RETRIEVE_TRAIN:
+                return transfer(world, state, sectionId, ride, RideController.TransferRequest.RETRIEVE);
             default:
                 return "";
         }
+    }
+
+    /** Asks the ride's transfer table to store or retrieve; asking again for the same cancels it. */
+    private static String transfer(World world, RcmcWorldState state, int sectionId,
+                                   RideController ride, RideController.TransferRequest request) {
+        com.micatechnologies.minecraft.rcmc.physics.element.TransferTrack transfer =
+            transferOf(state, sectionId);
+        if (transfer == null || !transfer.isLinked()) {
+            return "This ride has no transfer track linked to storage — see /rcmc transfer.";
+        }
+        if (ride.transferRequest() == request) {
+            ride.setTransferRequest(RideController.TransferRequest.NONE);
+            return changed(world, state, "Transfer cancelled.");
+        }
+        Integer stored = com.micatechnologies.minecraft.rcmc.physics.ride.Transfers.stored(
+            transfer, state.trains().asMap());
+        if (request == RideController.TransferRequest.STORE && stored != null) {
+            return "Storage is full: train #" + stored + " is already in it.";
+        }
+        if (request == RideController.TransferRequest.RETRIEVE && stored == null) {
+            return "Storage is empty.";
+        }
+        ride.setTransferRequest(request);
+        return changed(world, state, request == RideController.TransferRequest.STORE
+            ? "The next train onto the transfer track goes to storage."
+            : "Train #" + stored + " comes back as soon as the transfer track is clear.");
+    }
+
+    /** The transfer track on {@code sectionId}, or {@code null}; for the transfer command. */
+    public static com.micatechnologies.minecraft.rcmc.physics.element.TransferTrack transferTrackOn(
+        RcmcWorldState state, int sectionId) {
+        return transferOf(state, sectionId);
+    }
+
+    static com.micatechnologies.minecraft.rcmc.physics.element.TransferTrack transferOf(
+        RcmcWorldState state, int sectionId) {
+        for (RideElement element : state.elements().elements()) {
+            if (element.sectionId() == sectionId
+                && element instanceof com.micatechnologies.minecraft.rcmc.physics.element.TransferTrack) {
+                return (com.micatechnologies.minecraft.rcmc.physics.element.TransferTrack) element;
+            }
+        }
+        return null;
     }
 
     /** Operator state changed: make sure the save picks it up. */
@@ -214,10 +261,19 @@ public final class RideOperations {
                 setting.value));
         }
         int blocks = blockCount(state, sectionId);
+        com.micatechnologies.minecraft.rcmc.physics.element.TransferTrack transfer =
+            transferOf(state, sectionId);
+        int transferState = transfer == null ? RideView.NO_TRANSFER
+            : transfer.isLinked() ? RideView.TRANSFER_LINKED : RideView.TRANSFER_UNLINKED;
+        Integer stored = transfer == null ? null
+            : com.micatechnologies.minecraft.rcmc.physics.ride.Transfers.stored(transfer,
+                state.trains().asMap());
         return new RideView(sectionId, "Coaster #" + sectionId, ride.state().ordinal(),
             ride.dispatchMode().ordinal(), ride.isEmergencyStopped(),
             ride.stopCause() == null ? "" : ride.stopCause().name(), ride.carsPerTrain(),
-            RideController.maxTrains(blocks), blocks, message, trains, settings);
+            RideController.maxTrains(blocks), blocks, message, trains, settings)
+            .withTransfer(transferState, ride.transferRequest().ordinal(),
+                stored == null ? -1 : stored);
     }
 
     static StationPlatform stationOf(RcmcWorldState state, int sectionId) {

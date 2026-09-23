@@ -62,12 +62,31 @@ nodes it should cover:
 | **Brake run** | A trim brake, bleeding speed to a target |
 | **Block brake** | A brake that trims every train to a crawl and ends a block section: with `/rcmc block <id> auto` a train waits at its end while the block ahead is occupied |
 | **Drive tyres** | Station friction wheels holding a 2 blocks/s creep — for positioning a train on the platform |
+| **Transfer track** | Drive tyres that can slide sideways onto a storage track, train and all — how a ride takes a train out of service. See [storage](#storing-trains) |
 | **Station** | A station platform: stop, dwell, dispatch |
 
 !!! note "Launches never fight the train"
     A launch only pushes a train that is at rest or moving its way. A train running back over it the
     other way coasts through with the motors off — which is what lets a shuttle coaster put a forward
     and a backward launch on the same stretch of track it runs both ways.
+
+### Storing trains
+
+A **transfer track** takes a train off the circuit without anyone lifting it off by hand. Lay a
+*Transfer track* segment on the approach to the station, at least a train's length long and after
+the brakes, then lay a straight, level, open section beside it — the storage track, within 16
+blocks and at least as long. Link them:
+
+```
+/rcmc transfer <rideSectionId> <storageSectionId>
+```
+
+From then on the ride's operator panel has **Store train** and **Retrieve** buttons. *Store* stops
+the next train that reaches the transfer track, at its far end, and slides it across to storage;
+*Retrieve* slides the stored train back as soon as the transfer track and a train's length either
+side of it are clear, and it rolls on into the station. Each button, pressed again, cancels. Storage
+holds one train. Until it is linked, and whenever nothing is asked of it, a transfer track is just
+drive tyres.
 
 ### Shuttle coasters
 

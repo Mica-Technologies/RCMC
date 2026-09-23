@@ -116,6 +116,9 @@ public final class SegmentElements {
         if (element instanceof DriveTyres) {
             return TrackBuildSession.SegmentType.TYRES;
         }
+        if (element instanceof com.micatechnologies.minecraft.rcmc.physics.element.TransferTrack) {
+            return TrackBuildSession.SegmentType.TRANSFER;
+        }
         if (element instanceof StationPlatform) {
             return TrackBuildSession.SegmentType.STATION;
         }
@@ -159,6 +162,11 @@ public final class SegmentElements {
                 // Walking pace. Drive tyres position a train within a station; anything faster
                 // reads as a launch, which is the element next to this one in the palette.
                 return new DriveTyres(sectionId, from, to, 2.0D, 3.0D, tick);
+            case TRANSFER:
+                // Tyres, at the same walking pace, until /rcmc transfer links a storage track.
+                return new com.micatechnologies.minecraft.rcmc.physics.element.TransferTrack(
+                    sectionId, from, to, 2.0D, 3.0D, tick,
+                    com.micatechnologies.minecraft.rcmc.physics.element.TransferTrack.UNLINKED, 0.0D);
             case STATION:
                 // Stop shortly before the far end, leaving room to accelerate away from the
                 // platform before whatever follows takes over.

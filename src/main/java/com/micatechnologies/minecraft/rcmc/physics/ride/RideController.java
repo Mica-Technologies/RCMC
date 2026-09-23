@@ -107,6 +107,25 @@ public final class RideController implements DispatchGate {
 
     private StopCause stopCause;
 
+    /** What the ride's transfer table has been asked to do. */
+    public enum TransferRequest {
+        NONE,
+        /** Stop the next train on the table and slide it to storage. */
+        STORE,
+        /** Slide the stored train back onto the table as soon as it is clear. */
+        RETRIEVE
+    }
+
+    private TransferRequest transferRequest = TransferRequest.NONE;
+
+    public TransferRequest transferRequest() {
+        return transferRequest;
+    }
+
+    public void setTransferRequest(TransferRequest request) {
+        this.transferRequest = request == null ? TransferRequest.NONE : request;
+    }
+
     /**
      * Stops every train on the ride where it is and holds it there, until {@link #resetEmergency}.
      * Also closes the ride, as a real e-stop does: coming back into service is a deliberate act.

@@ -49,6 +49,7 @@ public final class TrackBuildSession {
         BRAKE("Brake run"),
         BLOCK_BRAKE("Block brake"),
         TYRES("Drive tyres"),
+        TRANSFER("Transfer track"),
         STATION("Station");
 
         private final String label;

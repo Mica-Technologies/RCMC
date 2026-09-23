@@ -47,7 +47,7 @@ class DemoCoasterRunTest {
             demo.stationStop, 6.0D, 60, 4.0D, 6.0D, TICK));
         elements.add(new ChainLift(1, demo.liftStart, demo.liftEnd, 5.0D, 12.0D, TICK));
         elements.add(new BrakeRun(1, demo.brakeStart, demo.brakeEnd,
-            6.0D, 6.0D, BrakeRun.Mode.TRIM, TICK));
+            6.0D, 6.0D, BrakeRun.Mode.BLOCK, TICK));
 
         Train train = new Train(new TrainSpec(5, 3.0D, 0.5D, 4),
             new PhysicsIntegrator(9.81D, 0.01D, 0.0015D, 60.0D),

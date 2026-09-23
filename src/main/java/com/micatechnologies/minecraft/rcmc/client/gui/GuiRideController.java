@@ -41,6 +41,8 @@ public class GuiRideController extends GuiScreen {
     private static final int ID_ADD_TRAIN = 7;
     private static final int ID_CARS_DOWN = 8;
     private static final int ID_CARS_UP = 9;
+    private static final int ID_STORE = 10;
+    private static final int ID_RETRIEVE = 11;
     /** Remove-train buttons are numbered from here, one per listed train. */
     private static final int ID_REMOVE_BASE = 100;
     /** Setting buttons: down at 200 + 2i, up at 201 + 2i. */
@@ -131,6 +133,20 @@ public class GuiRideController extends GuiScreen {
         buttonList.add(new GuiButton(ID_CARS_UP, x + 154, y + 182, 16, 16, "+"));
 
         int rx = left() + 188;
+        if (view.transfer == RideView.TRANSFER_LINKED) {
+            // Pressed again, each cancels what it asked for.
+            boolean storing = view.transferRequest == RideController.TransferRequest.STORE.ordinal();
+            boolean retrieving = view.transferRequest == RideController.TransferRequest.RETRIEVE.ordinal();
+            GuiButton store = new GuiButton(ID_STORE, rx, y + 180, 80, 16,
+                storing ? TextFormatting.YELLOW + "Cancel store" : "Store train");
+            store.enabled = storing || view.storedTrain < 0;
+            GuiButton retrieve = new GuiButton(ID_RETRIEVE, rx + 82, y + 180, 80, 16,
+                retrieving ? TextFormatting.YELLOW + "Cancel"
+                    : view.storedTrain >= 0 ? "Retrieve #" + view.storedTrain : "Storage empty");
+            retrieve.enabled = retrieving || view.storedTrain >= 0;
+            buttonList.add(store);
+            buttonList.add(retrieve);
+        }
         for (int i = 0; i < Math.min(MAX_SETTING_ROWS, view.settings.size()); i++) {
             int rowY = y + 20 + i * 20;
             buttonList.add(new GuiButton(ID_SETTING_BASE + 2 * i, rx + 126, rowY, 16, 16, "-"));
@@ -165,6 +181,12 @@ public class GuiRideController extends GuiScreen {
                 return;
             case ID_ADD_TRAIN:
                 send(Action.ADD_TRAIN);
+                return;
+            case ID_STORE:
+                send(Action.STORE_TRAIN);
+                return;
+            case ID_RETRIEVE:
+                send(Action.RETRIEVE_TRAIN);
                 return;
             case ID_CARS_DOWN:
                 RcmcNetwork.sendToServer(new PacketRideAction(view.sectionId, Action.SET_CARS,
