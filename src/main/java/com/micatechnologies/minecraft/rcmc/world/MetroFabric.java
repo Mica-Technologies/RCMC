@@ -85,37 +85,11 @@ public final class MetroFabric {
         }
         collectStationBoxes(plan, origin, interior);
 
-        loadAround(world, interior);
         int placed = 0;
         placed += carve(world, interior);
         placed += line(world, interior, origin);
         placed += decks(world, plan, origin);
         return placed;
-    }
-
-    /**
-     * Loads every chunk the network's light can reach, before anything is placed.
-     *
-     * <p>{@code setBlockState} recalculates light only where the area around a block is loaded, and
-     * the network reaches hundreds of blocks from whoever ran the command. Built into unloaded
-     * chunks, the far loop's lanterns lit nothing (light 2 on its floor, and zombies), and the sky
-     * light that was there before the tunnel was stayed inside it — read as light 4 to 9 from the
-     * sky on a sealed tunnel's floor. With the chunks loaded, every block placed relights as it
-     * goes in.</p>
-     */
-    private static void loadAround(World world, Set<Long> interior) {
-        Set<Long> chunks = new HashSet<>();
-        for (long packed : interior) {
-            BlockPos pos = BlockPos.fromLong(packed);
-            // A block's light reaches 15 blocks, so the chunks either side of this one too.
-            for (int cx = (pos.getX() >> 4) - 1; cx <= (pos.getX() >> 4) + 1; cx++) {
-                for (int cz = (pos.getZ() >> 4) - 1; cz <= (pos.getZ() >> 4) + 1; cz++) {
-                    if (chunks.add(((long) cx << 32) ^ (cz & 0xFFFFFFFFL))) {
-                        world.getChunk(cx, cz);
-                    }
-                }
-            }
-        }
     }
 
     /** Every block inside the running tunnel around one section. */
@@ -193,6 +167,7 @@ public final class MetroFabric {
      */
     private static int line(World world, Set<Long> interior, Vec3 origin) {
         int placed = 0;
+        java.util.List<BlockPos> lanterns = new java.util.ArrayList<>();
         for (long packed : interior) {
             BlockPos pos = BlockPos.fromLong(packed);
             for (net.minecraft.util.EnumFacing face : net.minecraft.util.EnumFacing.values()) {
@@ -215,6 +190,9 @@ public final class MetroFabric {
                     material = lit(pos, interior)
                         ? Blocks.SEA_LANTERN.getDefaultState()
                         : Blocks.STONEBRICK.getDefaultState();
+                    if (material.getBlock() == Blocks.SEA_LANTERN) {
+                        lanterns.add(neighbour);
+                    }
                 }
                 else {
                     material = Blocks.STONEBRICK.getDefaultState();
@@ -223,7 +201,53 @@ public final class MetroFabric {
                 placed++;
             }
         }
+        relight(world, interior, lanterns);
         return placed;
+    }
+
+    /**
+     * Puts the network's light right once it is built: the sky's, chunk by chunk, and the
+     * lanterns', one by one.
+     *
+     * <p>{@code setBlockState} recalculates light only where the area around a block is loaded, and
+     * the network reaches hundreds of blocks from whoever ran the command. Left alone, the far
+     * loop's lanterns lit nothing (light 2 on its floor, and zombies), and the sky light from before
+     * the tunnel existed stayed inside it (4 to 9 on a sealed floor). Loading everything first
+     * fixed both but relit every one of seventy thousand blocks as it went in, and the build took
+     * 23 seconds instead of 7. This relights only what needs it: each chunk the tunnel passes
+     * through has its sky light worked out again, straight down and then sideways, and each
+     * lantern has its own light spread.</p>
+     */
+    private static void relight(World world, Set<Long> interior, java.util.List<BlockPos> lanterns) {
+        Set<Long> tunnel = new HashSet<>();
+        for (long packed : interior) {
+            BlockPos pos = BlockPos.fromLong(packed);
+            tunnel.add(chunkKey(pos.getX() >> 4, pos.getZ() >> 4));
+        }
+        if (world.provider.hasSkyLight()) {
+            for (long key : tunnel) {
+                net.minecraft.world.chunk.Chunk chunk = world.getChunk((int) (key >> 32), (int) key);
+                chunk.generateSkylightMap();
+                chunk.checkLight();
+                chunk.markDirty();
+            }
+        }
+        // A lantern's light is only spread where the chunks it reaches are loaded.
+        Set<Long> loaded = new HashSet<>(tunnel);
+        for (BlockPos lantern : lanterns) {
+            for (int cx = (lantern.getX() - 16) >> 4; cx <= (lantern.getX() + 16) >> 4; cx++) {
+                for (int cz = (lantern.getZ() - 16) >> 4; cz <= (lantern.getZ() + 16) >> 4; cz++) {
+                    if (loaded.add(chunkKey(cx, cz))) {
+                        world.getChunk(cx, cz);
+                    }
+                }
+            }
+            world.checkLightFor(net.minecraft.world.EnumSkyBlock.BLOCK, lantern);
+        }
+    }
+
+    private static long chunkKey(int cx, int cz) {
+        return ((long) cx << 32) ^ (cz & 0xFFFFFFFFL);
     }
 
 
