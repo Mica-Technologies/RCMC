@@ -243,6 +243,12 @@ appears only on those rows, and deliberately: a train still stops away has picke
 station it is running to, not at this one, so a number against it would send you to the wrong side
 of the island on the strength of somebody else's platform.
 
+Further out, a board shows **minutes**. They are not predicted from speeds: each line learns how long
+its trains actually take from stop to stop — dwell, hills, signals and headway holds included — and
+the board adds up the legs between a train and this station. A freshly built line has not been timed
+yet, so its boards count stops until its trains have run each leg once; after a reload they relearn
+within a lap.
+
 Useful for a platform built out of other blocks, which the detector cannot see, or for an island
 platform you only want served on one side. `auto` re-runs the detection.
 
@@ -255,7 +261,7 @@ right door when it opens. A rider can only walk out through a door that actually
 | Block | What it shows |
 | --- | --- |
 | `rcmc:station_sign` | Post-mounted line map: the linked line's stops in order, with a "you are here" marker. Right-click cycles lines at an interchange |
-| `rcmc:arrival_board` | Ceiling-hung amber-on-black board: per-direction rows reading `1 stop` or `N stops`, `APPR` when this station is the train's next stop, and `BRD` while it is berthed here. Hang it under a ceiling with **5 blocks of clearance across and 2 down** — the panel is physically the size it looks |
+| `rcmc:arrival_board` | Ceiling-hung amber-on-black board: per-direction rows reading minutes (`3 min`) — or `1 stop` / `N stops` until the line has been timed — `APPR` when this station is the train's next stop, and `BRD` while it is berthed here. Hang it under a ceiling with **5 blocks of clearance across and 2 down** — the panel is physically the size it looks |
 | `rcmc:station_speaker` | Wall- or ceiling-mounted PA that announces approaching trains |
 
 All three **auto-link to the nearest station** when placed, and store only that station's *name*.

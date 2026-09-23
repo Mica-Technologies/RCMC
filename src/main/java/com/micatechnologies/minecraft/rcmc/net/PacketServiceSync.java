@@ -49,9 +49,14 @@ public class PacketServiceSync implements IMessage {
             float distanceToNextStop = buf.readFloat();
             int doorSide = buf.readInt();
             String platformLabel = ByteBufUtils.readUTF8String(buf);
+            int estimates = buf.readShort();
+            double[] seconds = new double[Math.max(0, estimates)];
+            for (int j = 0; j < seconds.length; j++) {
+                seconds[j] = buf.readFloat();
+            }
             snapshots.add(new ServiceSnapshot(trainId, lineName, direction, nextStop, atPlatform,
                 doorsOpen, doorFraction, distanceToNextStop, DoorSide.byOrdinal(doorSide),
-                platformLabel));
+                platformLabel, seconds));
         }
     }
 
@@ -75,6 +80,12 @@ public class PacketServiceSync implements IMessage {
             // client cannot walk the track to work out which of an island's two berths a train
             // will reach.
             ByteBufUtils.writeUTF8String(buf, snapshot.platformLabel());
+            // Seconds to each station of the line, so a board need only look up its own.
+            double[] seconds = snapshot.secondsToStations();
+            buf.writeShort(seconds.length);
+            for (double s : seconds) {
+                buf.writeFloat((float) s);
+            }
         }
     }
 

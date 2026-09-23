@@ -30,7 +30,8 @@ physics/transit/          Pure Java. Zero Minecraft types, like the rest of phys
   TransitLine             An ordered list of stations: loop, shuttle or turnback
   LineService             Per-train route following
   LineSignals             Movement authority
-  ArrivalEstimator        "N stops away", by replaying the service pattern
+  ArrivalEstimator        "N stops away" and minutes, by replaying the service pattern
+  LineTimings             Stop-to-stop times, learned from the trains running the line
   TransitSignText         Every piece of signage and announcement phrasing
   ServiceSnapshot         The small per-service state that gets synced
   TransitSystem           Per-world registry + the composed tick

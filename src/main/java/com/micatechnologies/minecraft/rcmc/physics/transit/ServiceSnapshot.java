@@ -47,6 +47,12 @@ public final class ServiceSnapshot {
      */
     private final String platformLabel;
 
+    /**
+     * Seconds until this train reaches each station of its line, by station index; negative where
+     * there is no estimate yet. See {@link ArrivalEstimator#secondsToStations}.
+     */
+    private final double[] secondsToStations;
+
     public ServiceSnapshot(int trainId, String lineName, int serviceDirection, int nextStopIndex,
                            boolean atPlatform, boolean doorsOpen, double doorFraction,
                            double distanceToNextStop) {
@@ -64,6 +70,14 @@ public final class ServiceSnapshot {
     public ServiceSnapshot(int trainId, String lineName, int serviceDirection, int nextStopIndex,
                            boolean atPlatform, boolean doorsOpen, double doorFraction,
                            double distanceToNextStop, DoorSide doorSide, String platformLabel) {
+        this(trainId, lineName, serviceDirection, nextStopIndex, atPlatform, doorsOpen,
+            doorFraction, distanceToNextStop, doorSide, platformLabel, new double[0]);
+    }
+
+    public ServiceSnapshot(int trainId, String lineName, int serviceDirection, int nextStopIndex,
+                           boolean atPlatform, boolean doorsOpen, double doorFraction,
+                           double distanceToNextStop, DoorSide doorSide, String platformLabel,
+                           double[] secondsToStations) {
         if (lineName == null || lineName.isEmpty()) {
             throw new IllegalArgumentException("lineName is required");
         }
@@ -83,6 +97,25 @@ public final class ServiceSnapshot {
         this.distanceToNextStop = distanceToNextStop;
         this.doorSide = doorSide == null ? DoorSide.BOTH : doorSide;
         this.platformLabel = platformLabel == null ? "" : platformLabel;
+        this.secondsToStations = secondsToStations == null
+            ? new double[0] : secondsToStations.clone();
+    }
+
+    /** This snapshot with arrival estimates attached. */
+    public ServiceSnapshot withSecondsToStations(double[] seconds) {
+        return new ServiceSnapshot(trainId, lineName, serviceDirection, nextStopIndex, atPlatform,
+            doorsOpen, doorFraction, distanceToNextStop, doorSide, platformLabel, seconds);
+    }
+
+    /** Seconds until this train reaches station {@code stationIndex}, or negative if unknown. */
+    public double secondsTo(int stationIndex) {
+        return stationIndex >= 0 && stationIndex < secondsToStations.length
+            ? secondsToStations[stationIndex] : -1.0D;
+    }
+
+    /** Every estimate, by station index — for the wire. */
+    public double[] secondsToStations() {
+        return secondsToStations.clone();
     }
 
     /**
@@ -148,11 +181,6 @@ public final class ServiceSnapshot {
         return doorFraction;
     }
 
-    /**
-     * Remaining track distance to the train's next stop. Lets a station speaker hold the "now
-     * approaching" announcement until the train is genuinely close, instead of the moment this
-     * station becomes its next stop.
-     */
     /** Which side of the track the doors open at the current stop. Never null. */
     public DoorSide doorSide() {
         return doorSide;
@@ -169,6 +197,11 @@ public final class ServiceSnapshot {
         return platformLabel;
     }
 
+    /**
+     * Remaining track distance to the train's next stop. Lets a station speaker hold the "now
+     * approaching" announcement until the train is genuinely close, instead of the moment this
+     * station becomes its next stop.
+     */
     public double distanceToNextStop() {
         return distanceToNextStop;
     }

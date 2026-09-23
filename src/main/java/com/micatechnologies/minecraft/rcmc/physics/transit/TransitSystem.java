@@ -46,6 +46,15 @@ public final class TransitSystem {
      */
     private final Map<String, Long> lastDepartures = new java.util.HashMap<>();
 
+    /** Each line's learned stop-to-stop times, by line key. Runtime only; relearned after a load. */
+    private final Map<String, LineTimings> timingsByLine = new java.util.HashMap<>();
+
+    /** Per train in service: the tick it last arrived at a stop, and whether it was running. */
+    private final Map<Integer, long[]> arrivals = new java.util.HashMap<>();
+
+    /** Minecraft's fixed tick, for turning learned tick counts into seconds on a board. */
+    private static final double TICK_SECONDS = 1.0D / 20.0D;
+
     /** Ticks this system has run — {@link #beginTick} calls, the clock headways are measured on. */
     private long tick;
 
@@ -93,6 +102,7 @@ public final class TransitSystem {
         if (removed != null) {
             signalsByLine.remove(key(name));
             operationsByLine.remove(key(name));
+            timingsByLine.remove(key(name));
             services.values().removeIf(service -> service.line() == removed);
         }
         return removed;
@@ -172,9 +182,54 @@ public final class TransitSystem {
             TransitPlatform berth = berthFor(entry.getValue());
             snapshots.add(ServiceSnapshot.of(entry.getKey(), entry.getValue(),
                 berth == null ? DoorSide.BOTH : berth.doorSide(),
-                berth == null ? "" : berth.label()));
+                berth == null ? "" : berth.label())
+                .withSecondsToStations(secondsToStations(entry.getKey(), entry.getValue())));
         }
         return snapshots;
+    }
+
+    /** Learned stop-to-stop times for {@code lineName}, or {@code null} before any train has run it. */
+    public LineTimings timingsFor(String lineName) {
+        return timingsByLine.get(key(lineName));
+    }
+
+    /**
+     * Times legs as they are run: on the tick a train arrives at a stop, the leg it has just
+     * finished is the time since it arrived at the one before.
+     */
+    private void observeArrival(int trainId, LineService service) {
+        boolean running = service.controller().phase() == TransitStopController.Phase.APPROACHING;
+        long[] seen = arrivals.get(trainId);
+        if (seen == null) {
+            // First sight of this service: no arrival to time from yet.
+            arrivals.put(trainId, new long[] {-1L, running ? 1L : 0L});
+            return;
+        }
+        if (seen[1] == 1L && !running) {
+            if (seen[0] >= 0L) {
+                TransitLine line = service.line();
+                timingsByLine.computeIfAbsent(key(line.name()),
+                        k -> new LineTimings(line.stationCount()))
+                    .record(service.currentStopIndex(), service.serviceDirection(), tick - seen[0]);
+            }
+            seen[0] = tick;
+        }
+        seen[1] = running ? 1L : 0L;
+    }
+
+    /** Seconds from now until {@code service}'s train reaches each station; see {@link ArrivalEstimator}. */
+    private double[] secondsToStations(int trainId, LineService service) {
+        TransitStopController controller = service.controller();
+        long[] seen = arrivals.get(trainId);
+        long since = seen == null || seen[0] < 0L ? -1L : tick - seen[0];
+        double distance = service.distanceToNextStop();
+        double fallback = controller.cruiseSpeed() > 0.0D && distance >= 0.0D
+            && !Double.isInfinite(distance)
+            ? distance / controller.cruiseSpeed() / TICK_SECONDS : -1.0D;
+        return ArrivalEstimator.secondsToStations(service.line(), timingsFor(service.line().name()),
+            service.serviceDirection(), service.currentStopIndex(),
+            controller.phase() == TransitStopController.Phase.APPROACHING, since, fallback,
+            TICK_SECONDS);
     }
 
     /**
@@ -318,6 +373,7 @@ public final class TransitSystem {
         controller.setDwellTicks(operationsFor(line.name()).dwellTicks());
         service.setDepartureGate(this::mayDepart);
         services.put(trainId, service);
+        arrivals.remove(trainId);
         // A train sitting at rest before service has usually already latched VALLEYED (zero
         // force, zero speed, nothing claiming it) — and TrainManager skips faulted trains before
         // any control is consulted, so the service alone could never move it. Taking control IS
@@ -424,6 +480,7 @@ public final class TransitSystem {
 
     /** Takes a train out of service. The train keeps rolling under whatever else controls it. */
     public LineService exitService(int trainId) {
+        arrivals.remove(trainId);
         return services.remove(trainId);
     }
 
@@ -457,6 +514,11 @@ public final class TransitSystem {
         if (previous == null || previous == this) {
             return 0;
         }
+        // Runtime state an undo must not wipe: the clock headways and leg times are measured on,
+        // when trains last left each platform, and what the line's legs have been timed at.
+        tick = previous.tick;
+        lastDepartures.putAll(previous.lastDepartures);
+        timingsByLine.putAll(previous.timingsByLine);
         int adopted = 0;
         for (Map.Entry<Integer, LineService> entry : previous.services.entrySet()) {
             int trainId = entry.getKey();
@@ -468,6 +530,10 @@ public final class TransitSystem {
             try {
                 enterService(trainId, train, network, old.line().name(),
                     TransitDrives.metro(old.controller().cruiseSpeed(), tickSeconds), old.facing());
+                long[] seen = previous.arrivals.get(trainId);
+                if (seen != null) {
+                    arrivals.put(trainId, seen.clone());
+                }
                 adopted++;
             }
             catch (IllegalArgumentException e) {
@@ -485,6 +551,8 @@ public final class TransitSystem {
         services.clear();
         operationsByLine.clear();
         lastDepartures.clear();
+        timingsByLine.clear();
+        arrivals.clear();
     }
 
     // --- Operations: dwell and headway. ---------------------------------------------------------
@@ -575,6 +643,7 @@ public final class TransitSystem {
                 it.remove();
             }
         }
+        arrivals.keySet().retainAll(services.keySet());
         for (LineSignals signals : signalsByLine.values()) {
             signals.updateOccupancy(trains);
         }
@@ -597,7 +666,9 @@ public final class TransitSystem {
                 double authority = signals == null
                     ? TrainDriver.NO_STOP
                     : signals.authorityFor(trainId, train, tickNetwork, service.facing());
-                return service.tick(train, tickNetwork, authority);
+                double acceleration = service.tick(train, tickNetwork, authority);
+                observeArrival(trainId, service);
+                return acceleration;
             }
 
             @Override
