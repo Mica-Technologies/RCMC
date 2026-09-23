@@ -679,49 +679,18 @@ public class EntityCoasterCar extends Entity {
     }
 
     /**
-     * Makes the car solid to <em>other</em> entities, so a player cannot walk through a train.
+     * Nothing: the car's solid body is not its entity box.
      *
-     * <p>Returning a non-null box here is what Minecraft uses to push other entities out; it does
-     * not affect this entity's own movement, which stays governed by the track. That distinction
-     * is the whole reason this is safe: {@link #noClip} keeps the CAR from colliding with the
-     * world — which must remain true, since at 1.5 blocks per tick vanilla collision does not
-     * behave and "off the rails" is not a representable state — while this makes the WORLD collide
-     * with the car.</p>
-     *
-     * <p>Riders are exempt automatically: Minecraft never collides an entity with the thing it is
-     * riding, so boarding does not eject you.</p>
-     */
-    /**
-     * Solid as a whole car normally; solid as <em>just its floor</em> while the doors are open.
-     *
-     * <p>A single {@code AxisAlignedBB} cannot be hollow, so a car that admits people has to give
-     * up being a box. Dropping the box entirely was the first attempt and it left nothing at all to
-     * stand on — you walked through the doorway and straight out of the bottom of the train.
-     * Returning the floor slab instead keeps the one surface that matters and loses only the walls,
-     * which the doorway was going to breach anyway.</p>
-     *
-     * <p>This is the entity's own collision box rather than a shape contributed through
-     * {@code GetCollisionBoxesEvent}: {@code World.getCollisionBoxes} reads
-     * {@code entity.getCollisionBoundingBox()} directly for every nearby entity, which is the same
-     * path that made the car solid in the first place and is therefore the one already known to
-     * work here. One mechanism, not two.</p>
-     *
-     * <p>Safe precisely because doors only open when the train is berthed and stationary: there is
-     * no moment where a moving car is missing its walls and could sweep through someone.</p>
+     * <p>An entity box is square in plan, so on a long car it covered only the middle — you could
+     * walk into either end of a train — and on a moving train it swept over whoever stood in the
+     * way and trapped them inside it. {@code TrainFloors} now gives a standing train a solid body
+     * as a chain of slices along its real length, and an open metro car just its floor;
+     * {@code TrainStrikes} throws people clear of a moving one. {@link #noClip} still keeps the
+     * CAR from colliding with the world, which must stay true: at 1.5 blocks per tick vanilla
+     * collision does not behave, and "off the rails" is not a representable state.</p>
      */
     @Override
     public AxisAlignedBB getCollisionBoundingBox() {
-        if (this.isDead) {
-            return null;
-        }
-        if (!com.micatechnologies.minecraft.rcmc.world.MetroDoors.areOpen(this.world, trainId())) {
-            return getEntityBoundingBox();
-        }
-        // Doors open: nothing solid from the entity itself. The floor a passenger walks in on is
-        // contributed by TrainFloorCollision instead, because it takes more than one box to
-        // describe — this entity's box is square in plan, so the slab this method used to return
-        // covered about a fifth of a 20-block car, in the middle, nowhere near a doorway. Walking
-        // in off a platform put a player over the gap and dropped them through the floor.
         return null;
     }
 

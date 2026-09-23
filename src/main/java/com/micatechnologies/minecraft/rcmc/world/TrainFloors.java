@@ -3,6 +3,7 @@ package com.micatechnologies.minecraft.rcmc.world;
 import com.micatechnologies.minecraft.rcmc.physics.CarSeating;
 import com.micatechnologies.minecraft.rcmc.physics.Train;
 import com.micatechnologies.minecraft.rcmc.physics.TrainSpec;
+import com.micatechnologies.minecraft.rcmc.physics.TrainStrike;
 import com.micatechnologies.minecraft.rcmc.track.math.TrackFrame;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -12,7 +13,8 @@ import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.world.World;
 
 /**
- * Solid floors for metro cars whose doors are open, so a passenger can walk aboard.
+ * Solid bodies for standing trains, and solid floors for metro cars whose doors are open, so a
+ * passenger can walk aboard. A moving train has neither; see {@link TrainStrikes}.
  *
  * <h2>Why this is not one bounding box</h2>
  *
@@ -83,25 +85,62 @@ public final class TrainFloors {
         for (Map.Entry<Integer, Train> entry : state.trains().asMap().entrySet()) {
             Train train = entry.getValue();
             TrainSpec spec = train.spec();
-            if (spec.carStyle() != TrainSpec.CarStyle.METRO) {
-                continue;
-            }
-            if (!MetroDoors.areOpen(world, entry.getKey())) {
-                // A shut car keeps its ordinary solid box; only an open one needs a floor, because
-                // only an open one can be walked into.
-                continue;
-            }
             if (!state.network().hasSection(train.reference().sectionId())) {
+                continue;
+            }
+            boolean open = spec.carStyle() == TrainSpec.CarStyle.METRO && MetroDoors.areOpen(world, entry.getKey());
+            // A standing train is solid along its whole body, so nobody walks into the end of a
+            // long car. A moving one is not solid at all: a box sweeping over someone would pin them
+            // inside it. TrainStrikes throws them clear instead.
+            boolean standing = Math.abs(train.velocity()) < TrainStrikes.STANDING_SPEED;
+            if (!open && !standing) {
                 continue;
             }
             if (boxes == null) {
                 boxes = new ArrayList<>();
             }
             for (int car = 0; car < spec.carCount(); car++) {
-                addCarFloor(boxes, train.bodyFrameOfCar(state.network(), car), spec);
+                TrackFrame frame = train.bodyFrameOfCar(state.network(), car);
+                if (open) {
+                    addCarFloor(boxes, frame, spec);
+                }
+                else {
+                    TrainStrike.Body body = TrainStrike.bodyOf(spec);
+                    addSlices(boxes, frame, body.halfLength, body.halfWidth, body.bottom, body.top);
+                }
             }
         }
         return boxes == null ? Collections.<AxisAlignedBB>emptyList() : boxes;
+    }
+
+    /** Slices a car's whole body, {@code bottom} to {@code top} above the track, into boxes. */
+    private static void addSlices(List<AxisAlignedBB> boxes, TrackFrame frame, double halfLength,
+                                  double halfWidth, double bottom, double top) {
+        int slices = Math.max(1, (int) Math.ceil(halfLength * 2.0D / SLICE_LENGTH));
+        double sliceHalf = halfLength / slices;
+        for (int i = 0; i < slices; i++) {
+            double centre = -halfLength + sliceHalf * (2 * i + 1);
+            double minX = Double.MAX_VALUE, minY = Double.MAX_VALUE, minZ = Double.MAX_VALUE;
+            double maxX = -Double.MAX_VALUE, maxY = -Double.MAX_VALUE, maxZ = -Double.MAX_VALUE;
+            for (int sa = -1; sa <= 1; sa += 2) {
+                for (int sw = -1; sw <= 1; sw += 2) {
+                    for (double u : new double[] {bottom, top}) {
+                        double along = centre + sa * sliceHalf;
+                        double across = sw * halfWidth;
+                        double x = frame.position.x + frame.forward.x * along + frame.right.x * across + frame.up.x * u;
+                        double y = frame.position.y + frame.forward.y * along + frame.right.y * across + frame.up.y * u;
+                        double z = frame.position.z + frame.forward.z * along + frame.right.z * across + frame.up.z * u;
+                        minX = Math.min(minX, x);
+                        maxX = Math.max(maxX, x);
+                        minY = Math.min(minY, y);
+                        maxY = Math.max(maxY, y);
+                        minZ = Math.min(minZ, z);
+                        maxZ = Math.max(maxZ, z);
+                    }
+                }
+            }
+            boxes.add(new AxisAlignedBB(minX, minY, minZ, maxX, maxY, maxZ));
+        }
     }
 
     /** Slices one car's floor into axis-aligned boxes along its length. */

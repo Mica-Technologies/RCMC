@@ -6,7 +6,8 @@ import net.minecraftforge.event.world.GetCollisionBoxesEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 
 /**
- * Makes the floor of an open metro car solid, so a passenger can walk aboard from a platform.
+ * Makes trains solid: a standing train along its whole body, and an open metro car as just its
+ * floor, so a passenger can walk aboard from a platform.
  *
  * <p>The car's own {@code getCollisionBoundingBox} cannot express this: one axis-aligned box cannot
  * describe a 20-block car that is not aligned to an axis, and the entity's box is square in plan, so

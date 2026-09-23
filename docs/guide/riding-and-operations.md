@@ -29,6 +29,17 @@ as it should.
 Boarding a train **in service** is gated on its doors being open. If it refuses, it says so: a
 closed door and a broken feature look identical otherwise.
 
+## Standing on the track
+
+Trains are solid, and a moving one is dangerous. A standing train blocks you along its whole length.
+A moving train throws anyone it hits clear of the track, players and mobs alike, and hurts them in
+proportion to its speed. A train creeping in at walking pace only pushes you aside, a lift hurts, and
+a coaster at speed kills — the death message is *was hit by a train*. A train's own riders are never
+hit, and nothing that is hit affects the train.
+
+Server owners can scale the damage, or turn it off and keep just the push, with
+[`trainDamageMultiplier`](../reference/config.md#gameplay).
+
 ## The camera
 
 The rider camera is locked to the car — yaw, pitch **and roll**. Roll is what makes a banked turn

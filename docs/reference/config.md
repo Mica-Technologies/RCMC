@@ -37,6 +37,14 @@ Values are read into static fields at load time — never queried per tick.
   lookups. That property is what makes client prediction exact — and it is why the values must
   match across a server and its clients.
 
+## `gameplay`
+
+Read by the server. Clients' values are not used.
+
+| Key | Default | Effect |
+| --- | --- | --- |
+| `trainDamageMultiplier` | `1.0` | How much a moving train hurts the players and mobs it hits, from `0` to `10`. At `1`, a train over 3 blocks/s hurts, faster hurts more, and a coaster at full speed kills. At `0`, trains only shove people clear |
+
 ## `client`
 
 ### Camera and HUD

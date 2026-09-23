@@ -634,6 +634,7 @@ public final class RcmcWorldState {
                     stopCollidedRides(event.world, state);
                 }
                 if (!state.remote) {
+                    TrainStrikes.tick(event.world, state);
                     stopRolledBackRides(event.world, state);
                     TransferOperations.carryOut(event.world, state);
                 }

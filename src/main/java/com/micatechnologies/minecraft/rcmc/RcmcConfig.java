@@ -24,6 +24,7 @@ public final class RcmcConfig {
 
     public static final String CATEGORY_PHYSICS = "physics";
     public static final String CATEGORY_CLIENT = "client";
+    public static final String CATEGORY_GAMEPLAY = "gameplay";
 
     /**
      * Downward acceleration in blocks/s². Real gravity (9.81) reads far too floaty at
@@ -59,6 +60,13 @@ public final class RcmcConfig {
      * starts producing artefacts that no amount of interpolation hides.
      */
     public static double maxSpeed = 60.0D;
+
+    /**
+     * How much a moving train hurts whoever it hits: 1 is the default, 0 means trains shove people
+     * clear without harming them. Server-side only — damage is decided by the server — so it is
+     * not synced and does not change the simulation.
+     */
+    public static double trainDamageMultiplier = 1.0D;
 
     /** Whether the client applies camera roll to riders in banked track and inversions. */
     public static boolean enableCameraRoll = true;
@@ -149,6 +157,12 @@ public final class RcmcConfig {
                 + "costs CPU only, not bandwidth.", 1, 32).getInt();
         maxSpeed = config.get(CATEGORY_PHYSICS, "maxSpeed", maxSpeed,
             "Hard speed ceiling in blocks/s.").getDouble();
+        config.addCustomCategoryComment(CATEGORY_GAMEPLAY,
+            "How trains affect the world around them. Read by the server; clients' values are unused.");
+        trainDamageMultiplier = config.get(CATEGORY_GAMEPLAY, "trainDamageMultiplier", trainDamageMultiplier,
+            "How much a moving train hurts players and mobs it hits. 1 is the default: a train over "
+                + "3 blocks/s hurts, faster hurts more, and a fast coaster kills. 0 means trains only "
+                + "shove people clear.", 0.0D, 10.0D).getDouble();
 
         enableCameraRoll = config.get(CATEGORY_CLIENT, "enableCameraRoll", enableCameraRoll,
             "Roll the rider's camera with banked track and inversions. Disable if it causes "
