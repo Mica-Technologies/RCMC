@@ -210,7 +210,7 @@ hidden.
 | **Add node** | Add a node halfway along the span to the next node (or beyond the end of open track) |
 | **Delete node** | Remove this node. A section keeps at least two nodes, or three for a circuit |
 | **Delete section** | Delete the whole section. Press it twice to confirm |
-| Segment type list | Set what the span from this node to the next *is*: plain track, a lift, a launch, a brake and so on. The span's current type is highlighted |
+| Segment type list | Set what the span from this node to the next *is*: plain track, a lift, a launch, a brake and so on. The span's current type is highlighted. Hardware running on past either end of the span keeps those parts: retyping one span of a long lift leaves the lift on the spans either side |
 
 Everything on the track goes with an edit. Moving, adding or removing a node keeps each piece of
 hardware, station, block section and train in the same place between the same two nodes, and
