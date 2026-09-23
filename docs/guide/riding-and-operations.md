@@ -179,7 +179,9 @@ block ahead is occupied, and lets it through when it is not.
 A number instead of `auto` cuts the circuit into that many equal blocks, whatever is there, which
 can hold a train mid-drop on a brake that does not exist. It is kept for testing.
 
-Without block sections, nothing keeps two trains apart. If two trains on one coaster run into each
+Without block sections, the only thing keeping two trains apart is the station: a train that runs
+onto the platform while another is still there waits, held where it stopped, until the first has
+left. Anywhere else nothing does. If two trains on one coaster run into each
 other, the ride **emergency-stops** and everyone in the dimension is told. It stays stopped while
 the trains overlap, so take one off at the [operator panel](#operating-a-ride) (or add block
 sections) before resetting it.

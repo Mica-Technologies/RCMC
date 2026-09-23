@@ -340,6 +340,24 @@ public final class StationPlatform extends RideElementSpan {
         return servingTrain;
     }
 
+    /**
+     * Whether the platform is busy with a train other than {@code trainId}. A second train running
+     * onto a platform used to be claimed on the spot, resetting the first one's cycle — and the two
+     * then took turns every tick, neither ever dwelling or leaving. The platform finishes with the
+     * train it has; the next waits.
+     */
+    public boolean servesAnother(int trainId) {
+        return servingTrain != NO_TRAIN && servingTrain != trainId;
+    }
+
+    /**
+     * Holds a train waiting for this platform at rest where it is, with the platform's own brakes.
+     * It is met as a fresh arrival once the train ahead has gone.
+     */
+    public double holdWaiting(Train train) {
+        return VelocityServo.accelerationToHold(train.velocity(), 0.0D, brakeDeceleration, tickSeconds);
+    }
+
     /** The same platform, fresh: waiting for its first arrival, serving nobody. */
     public StationPlatform freshCopy() {
         return new StationPlatform(sectionId(), startDistance(), endDistance(), stopDistance,
