@@ -58,10 +58,25 @@ nodes it should cover:
 | **Plain track** | Nothing — just track |
 | **Chain lift** | A chain lift: constant pull up to a target speed, and the train cannot outrun the chain while engaged |
 | **Launch track** | An LSM-style launch: pushes at ~8 blocks/s² toward 22 blocks/s, then switches the motors off |
+| **Backward launch** | The same launch fired the other way, toward where you started laying — what sends a shuttle coaster up its rear spike |
 | **Brake run** | A trim brake, bleeding speed to a target |
 | **Block brake** | A brake that trims every train to a crawl and ends a block section: with `/rcmc block <id> auto` a train waits at its end while the block ahead is occupied |
 | **Drive tyres** | Station friction wheels holding a 2 blocks/s creep — for positioning a train on the platform |
 | **Station** | A station platform: stop, dwell, dispatch |
+
+!!! note "Launches never fight the train"
+    A launch only pushes a train that is at rest or moving its way. A train running back over it the
+    other way coasts through with the motors off — which is what lets a shuttle coaster put a forward
+    and a backward launch on the same stretch of track it runs both ways.
+
+### Shuttle coasters
+
+A shuttle runs out and back rather than round. Lay an open section with a spike at each end, a
+station in the middle, a **Launch track** segment ahead of the station and a **Backward launch**
+behind it. Then open the operator panel and set the station's **Pass-throughs** to 1: the train is
+let back through the platform once, between the two launches, and caught the time after. Set it to
+0 and the station catches the train the first time it comes back — right for a ride with a single
+launch and a spike at one end. `/rcmc demo shuttle` builds a complete one.
 
 !!! tip "A launch is a force, not a promise"
 

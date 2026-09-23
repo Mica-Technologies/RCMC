@@ -32,12 +32,14 @@ class RideTuningTest {
     @DisplayName("a ride lists every adjustable value of its own hardware, and nobody else's")
     void listsTheRidesSettings() {
         List<Setting> settings = RideTuning.settingsFor(park(), 1, TICK);
-        assertEquals(3, settings.size(), settings.toString());
+        assertEquals(4, settings.size(), settings.toString());
         assertEquals(Parameter.STATION_DWELL, settings.get(0).parameter);
         assertEquals(3.0D, settings.get(0).value, 1e-9, "60 ticks is a 3 s dwell");
-        assertEquals(Parameter.LIFT_SPEED, settings.get(1).parameter);
-        assertEquals(5.0D, settings.get(1).value, 1e-9);
-        assertEquals(Parameter.BRAKE_SPEED, settings.get(2).parameter);
+        assertEquals(Parameter.STATION_PASSES, settings.get(1).parameter);
+        assertEquals(0.0D, settings.get(1).value, 1e-9, "an ordinary station catches every train");
+        assertEquals(Parameter.LIFT_SPEED, settings.get(2).parameter);
+        assertEquals(5.0D, settings.get(2).value, 1e-9);
+        assertEquals(Parameter.BRAKE_SPEED, settings.get(3).parameter);
 
         List<Setting> launch = RideTuning.settingsFor(park(), 2, TICK);
         assertEquals(2, launch.size(), "a launch has a speed and a force");

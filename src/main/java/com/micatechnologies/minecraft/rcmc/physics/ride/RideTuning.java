@@ -31,7 +31,8 @@ public final class RideTuning {
         LAUNCH_FORCE("Launch force", "b/s²", 1.0D, 30.0D, 0.5D),
         BRAKE_SPEED("Brake target", "b/s", 0.0D, 30.0D, 0.5D),
         TYRE_SPEED("Tyre speed", "b/s", 1.0D, 20.0D, 0.5D),
-        STATION_DWELL("Station dwell", "s", 0.0D, 60.0D, 1.0D);
+        STATION_DWELL("Station dwell", "s", 0.0D, 60.0D, 1.0D),
+        STATION_PASSES("Pass-throughs", "", 0.0D, 5.0D, 1.0D);
 
         public final String label;
         public final String unit;
@@ -89,7 +90,8 @@ public final class RideTuning {
             }
             else if (element instanceof LaunchTrack) {
                 LaunchTrack launch = (LaunchTrack) element;
-                out.add(new Setting(i, Parameter.LAUNCH_SPEED, launch.targetSpeed()));
+                // The magnitude: a backward launch is still set by how fast, not by a minus sign.
+                out.add(new Setting(i, Parameter.LAUNCH_SPEED, Math.abs(launch.targetSpeed())));
                 out.add(new Setting(i, Parameter.LAUNCH_FORCE, launch.constantAcceleration()));
             }
             else if (element instanceof BrakeRun) {
@@ -101,6 +103,8 @@ public final class RideTuning {
             else if (element instanceof StationPlatform) {
                 out.add(new Setting(i, Parameter.STATION_DWELL,
                     ((StationPlatform) element).dwellTicks() * tickSeconds));
+                out.add(new Setting(i, Parameter.STATION_PASSES,
+                    ((StationPlatform) element).passThroughs()));
             }
         }
         return Collections.unmodifiableList(out);
@@ -141,8 +145,9 @@ public final class RideTuning {
         }
         if (e instanceof LaunchTrack && parameter == Parameter.LAUNCH_SPEED) {
             LaunchTrack launch = (LaunchTrack) e;
+            double sign = launch.targetSpeed() < 0.0D ? -1.0D : 1.0D;
             return new LaunchTrack(launch.sectionId(), launch.startDistance(), launch.endDistance(),
-                v, launch.constantAcceleration());
+                sign * v, launch.constantAcceleration());
         }
         if (e instanceof LaunchTrack && parameter == Parameter.LAUNCH_FORCE) {
             LaunchTrack launch = (LaunchTrack) e;
@@ -151,7 +156,10 @@ public final class RideTuning {
         }
         if (e instanceof BrakeRun && parameter == Parameter.BRAKE_SPEED) {
             BrakeRun brake = (BrakeRun) e;
-            return new BrakeRun(brake.sectionId(), brake.startDistance(), brake.endDistance(), v,
+            // A trim brake that stops a train is a block brake; it cannot be tuned to zero.
+            double target = brake.mode() == BrakeRun.Mode.TRIM
+                ? Math.max(Parameter.BRAKE_SPEED.step, v) : v;
+            return new BrakeRun(brake.sectionId(), brake.startDistance(), brake.endDistance(), target,
                 brake.deceleration(), brake.mode(), tickSeconds);
         }
         if (e instanceof DriveTyres && parameter == Parameter.TYRE_SPEED) {
@@ -163,7 +171,13 @@ public final class RideTuning {
             StationPlatform s = (StationPlatform) e;
             return new StationPlatform(s.sectionId(), s.startDistance(), s.endDistance(),
                 s.stopDistance(), s.brakeDeceleration(), (int) Math.round(v / tickSeconds),
-                s.dispatchAcceleration(), s.dispatchSpeed(), tickSeconds);
+                s.dispatchAcceleration(), s.dispatchSpeed(), tickSeconds, s.passThroughs());
+        }
+        if (e instanceof StationPlatform && parameter == Parameter.STATION_PASSES) {
+            StationPlatform s = (StationPlatform) e;
+            return new StationPlatform(s.sectionId(), s.startDistance(), s.endDistance(),
+                s.stopDistance(), s.brakeDeceleration(), s.dwellTicks(),
+                s.dispatchAcceleration(), s.dispatchSpeed(), tickSeconds, (int) Math.round(v));
         }
         return null;
     }

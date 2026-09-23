@@ -16,6 +16,7 @@ styles.
 
 ```
 /rcmc demo [scale] [liftHeight]
+/rcmc demo shuttle
 ```
 
 Builds a complete demo coaster at your feet: station, chain lift, drop, banked turn, airtime hill,
@@ -26,6 +27,11 @@ the exact `/rcmc train` line to run next.
 | --- | --- | --- |
 | `scale` | 0.4 – 4.0 | 1.0 |
 | `liftHeight` | 8 – 120 | 34 |
+
+`/rcmc demo shuttle` builds a launched shuttle coaster instead: a straight station with a forward
+launch ahead of it, a backward launch behind it, and a 45-block spike at each end. The train goes
+out the front, falls back through the station, is launched up the rear spike, and is caught in the
+station on its way forward again.
 
 ### `/rcmc metrodemo`
 

@@ -106,7 +106,8 @@ public final class SegmentElements {
             return TrackBuildSession.SegmentType.LIFT;
         }
         if (element instanceof LaunchTrack) {
-            return TrackBuildSession.SegmentType.LAUNCH;
+            return ((LaunchTrack) element).targetSpeed() < 0.0D
+                ? TrackBuildSession.SegmentType.LAUNCH_BACKWARD : TrackBuildSession.SegmentType.LAUNCH;
         }
         if (element instanceof BrakeRun) {
             return ((BrakeRun) element).mode() == BrakeRun.Mode.BLOCK
@@ -141,6 +142,11 @@ public final class SegmentElements {
                 // Positive target = the direction of increasing distance, which is the direction
                 // the builder was laying track in when they tagged the span.
                 return new LaunchTrack(sectionId, from, to, LAUNCH_TARGET_SPEED, LAUNCH_ACCELERATION);
+            case LAUNCH_BACKWARD:
+                // The same motors fired the other way: toward decreasing distance, against the
+                // direction the track was laid. What a shuttle coaster uses to send a train back
+                // up its rear spike.
+                return new LaunchTrack(sectionId, from, to, -LAUNCH_TARGET_SPEED, LAUNCH_ACCELERATION);
             case BRAKE:
                 return new BrakeRun(sectionId, from, to, 6.0D, 6.0D, BrakeRun.Mode.TRIM, tick);
             case BLOCK_BRAKE:

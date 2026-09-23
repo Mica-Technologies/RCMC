@@ -108,6 +108,13 @@ public final class LaunchTrack extends RideElementSpan {
         if (direction == 0.0D || direction * v >= Math.abs(targetSpeed)) {
             return 0.0D;
         }
+        // Nor do they fire against a train running the other way. A shuttle coaster runs over its
+        // launches in both directions — out on one, back over it on the way to the other — and a
+        // launch that pushed regardless braked the train on every return, as its controller would
+        // never let it.
+        if (direction * v < -OPPOSING_SPEED) {
+            return 0.0D;
+        }
         double span = endDistance - startDistance;
         double distance = train.reference().distance();
         double fraction = span <= 0.0D ? 0.0D : clamp01((distance - startDistance) / span);
@@ -122,6 +129,9 @@ public final class LaunchTrack extends RideElementSpan {
     public double constantAcceleration() {
         return constantAcceleration;
     }
+
+    /** Speed against the launch direction above which the motors stay off, blocks/s. */
+    static final double OPPOSING_SPEED = 0.05D;
 
     public double targetSpeed() {
         return targetSpeed;
