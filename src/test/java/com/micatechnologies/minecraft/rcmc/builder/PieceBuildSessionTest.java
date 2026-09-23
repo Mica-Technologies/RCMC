@@ -342,4 +342,17 @@ class PieceBuildSessionTest {
         }
         return worst;
     }
+
+    @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName("/rcmc build piece finds every piece by the name the docs give it")
+    void everyPieceHasADocumentedName() {
+        java.util.List<String> documented = java.util.Arrays.asList("straight", "slope", "curve_left",
+            "curve_right", "helix_left", "helix_right", "vertical_loop", "corkscrew", "zero_g_roll",
+            "immelmann", "dive_loop", "airtime_hill");
+        org.junit.jupiter.api.Assertions.assertEquals(documented, PiecePalette.names());
+        for (int i = 0; i < documented.size(); i++) {
+            org.junit.jupiter.api.Assertions.assertEquals(i, PiecePalette.find(documented.get(i).toUpperCase()));
+        }
+        org.junit.jupiter.api.Assertions.assertEquals(-1, PiecePalette.find("monorail"));
+    }
 }

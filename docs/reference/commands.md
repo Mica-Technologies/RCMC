@@ -95,8 +95,16 @@ Settings for the in-hand track builder. Operates on *your* build session.
 /rcmc build status                  pending node count, current bank, circuit mode
 /rcmc build bank <degrees>          bank applied to nodes placed from now on (-180 to 180)
 /rcmc build circuit [true|false]    close the next section into a circuit (needs 3+ nodes)
+/rcmc build piece <name> [value]    select a piece for the piece tool, and set its parameter
 /rcmc build cancel                  discard pending nodes and reset bank/circuit mode
 ```
+
+`/rcmc build piece` does what ++g++ and shift + scroll do for the
+[piece tool](items-and-blocks.md#piece-tool), for when you have no scroll wheel or want an exact
+value: `/rcmc build piece immelmann 26`. The pieces are `straight`, `slope`, `curve_left`,
+`curve_right`, `helix_left`, `helix_right`, `vertical_loop`, `corkscrew`, `zero_g_roll`,
+`immelmann`, `dive_loop` and `airtime_hill`, and tab completion lists them.
+Leave the value out to keep the piece's current setting.
 
 ### `/rcmc style`
 

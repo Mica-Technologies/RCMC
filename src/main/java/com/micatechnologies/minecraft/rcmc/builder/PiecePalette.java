@@ -202,6 +202,30 @@ public final class PiecePalette {
         return ENTRIES;
     }
 
+    /** The entry whose element id is {@code name} ({@code zero_g_roll}, {@code curve_left}), any
+     *  case, or -1. The id, not the display name: a slope's name changes with its sign. */
+    public static int find(String name) {
+        for (int i = 0; i < ENTRIES.size(); i++) {
+            if (id(ENTRIES.get(i)).equalsIgnoreCase(name)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /** Every entry's element id, in palette order. */
+    public static List<String> names() {
+        List<String> names = new ArrayList<>();
+        for (Entry entry : ENTRIES) {
+            names.add(id(entry));
+        }
+        return names;
+    }
+
+    private static String id(Entry entry) {
+        return entry.element(entry.defaultValue()).id();
+    }
+
     public static int size() {
         return ENTRIES.size();
     }

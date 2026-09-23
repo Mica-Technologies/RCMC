@@ -128,7 +128,11 @@ public class CommandRcmc extends CommandBase {
             return getListOfStringsMatchingLastWord(args, "add", "remove", "list", "label");
         }
         if (args.length == 2 && "build".equalsIgnoreCase(args[0])) {
-            return getListOfStringsMatchingLastWord(args, "bank", "circuit", "status", "cancel");
+            return getListOfStringsMatchingLastWord(args, "bank", "circuit", "piece", "status", "cancel");
+        }
+        if (args.length == 3 && "build".equalsIgnoreCase(args[0]) && "piece".equalsIgnoreCase(args[1])) {
+            return getListOfStringsMatchingLastWord(args,
+                com.micatechnologies.minecraft.rcmc.builder.PiecePalette.names());
         }
         if (args.length == 5 && "train".equalsIgnoreCase(args[0])) {
             List<String> ids = new ArrayList<>();
@@ -1575,6 +1579,30 @@ public class CommandRcmc extends CommandBase {
                 reply(sender, TextFormatting.GREEN, closing
                     ? "Next section will close into a circuit (needs at least 3 nodes)."
                     : "Next section will be an open run.");
+                break;
+            }
+            case "piece": {
+                // The piece tool's selection without the keys: for anyone without a scroll wheel,
+                // and for setting a parameter exactly.
+                if (args.length < 3) {
+                    throw new CommandException("/rcmc build piece <name> [value] — "
+                        + String.join(", ", com.micatechnologies.minecraft.rcmc.builder.PiecePalette.names()));
+                }
+                int index = com.micatechnologies.minecraft.rcmc.builder.PiecePalette.find(args[2]);
+                if (index < 0) {
+                    throw new CommandException("No piece called '" + args[2] + "' — "
+                        + String.join(", ", com.micatechnologies.minecraft.rcmc.builder.PiecePalette.names()));
+                }
+                com.micatechnologies.minecraft.rcmc.builder.PieceBuildSession pieces =
+                    com.micatechnologies.minecraft.rcmc.builder.PieceBuildSession.of(player.getUniqueID());
+                com.micatechnologies.minecraft.rcmc.builder.PiecePalette.Entry entry =
+                    com.micatechnologies.minecraft.rcmc.builder.PiecePalette.get(index);
+                double value = args.length > 3
+                    ? parseDouble(args[3], entry.minimum(), entry.maximum()) : pieces.parametersFor(index);
+                pieces.select(index, value);
+                com.micatechnologies.minecraft.rcmc.item.ItemPieceTool.pushSession(player, pieces);
+                reply(sender, TextFormatting.GREEN, "Piece tool: " + entry.displayName(value) + ", "
+                    + entry.describeParameter(value) + ".");
                 break;
             }
             case "cancel": {

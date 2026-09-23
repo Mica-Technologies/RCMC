@@ -149,6 +149,18 @@ public final class PieceBuildSession {
         return selectedEntry();
     }
 
+    /** The parameter palette entry {@code index} is currently set to. */
+    public double parametersFor(int index) {
+        return parameters[PiecePalette.wrap(index)];
+    }
+
+    /** Selects palette entry {@code index} (wrapped) and sets its parameter, clamped to its range. */
+    public PiecePalette.Entry select(int index, double parameter) {
+        selected = PiecePalette.wrap(index);
+        parameters[selected] = selectedEntry().clamp(parameter);
+        return selectedEntry();
+    }
+
     /** Nudges the selected piece's parameter by {@code notches} steps, clamped to its range. */
     public double adjustParameter(int notches) {
         PiecePalette.Entry entry = selectedEntry();
