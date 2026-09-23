@@ -2,23 +2,36 @@ package com.micatechnologies.minecraft.rcmc.debug;
 
 import com.micatechnologies.minecraft.rcmc.track.TrackNode;
 import com.micatechnologies.minecraft.rcmc.track.TrackSection;
+import com.micatechnologies.minecraft.rcmc.track.math.TrackFrame;
 import com.micatechnologies.minecraft.rcmc.track.math.Vec3;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Builds a complete demonstration coaster: station, lift hill, first drop, airtime hill, banked
- * turnaround, and a brake run back into the station.
+ * Builds a complete demonstration coaster: brake run, station, lift hill, a first drop that curves
+ * through the far turnaround, a camelback on the return straight, and a banked climbing turn back
+ * into the brakes.
  *
- * <p>An earlier version was a parametric ellipse with a sinusoidal height profile. It exercised the
- * geometry, but it was not a <em>coaster</em> — there was no station to leave from, no lift to
- * climb, and a train started at the crest of a hill instead of at rest on a platform. A layout you
- * can point at and name the parts of is worth more as a demo than a mathematically tidy one.</p>
+ * <p>The layout is an oval in plan. Along the near side lie the brakes, the platform and the
+ * lift, in the order a train meets them. The rest of the ride goes round the far end and back.</p>
+ *
+ * <p>An earlier version placed every node, height and bank by hand. It ran, but it failed its own
+ * ride check: up to 6 g sideways, because a bank chosen by eye matches the speed through a turn only
+ * by luck. It also only worked at the size it was tuned at: a bigger layout stalled, and a taller
+ * lift on the same footprint pulled impossible G. So this version doesn't guess. Two numbers come
+ * from the physics:</p>
+ * <ul>
+ *   <li><b>Heights.</b> Each hill after the lift is a fraction of the energy the train still has
+ *       there, estimated by marching the same rolling resistance and air drag the integrator
+ *       applies. Hills get lower as the ride goes on, and a long layout gets gentler hills rather
+ *       than one the train cannot climb.</li>
+ *   <li><b>Banks.</b> Every node is rolled so that the load the rider feels, from the curve at the
+ *       speed the train has there plus gravity, points straight down through the seat. That is what
+ *       a real designer does to a turn, and it is why the check finds nothing sideways.</li>
+ * </ul>
  *
  * <p>The build returns the element spans alongside the geometry, so the caller places the station,
- * lift and brakes exactly where the layout intends rather than guessing at fractions of the lap.
- * Guessing is what the previous version did, and it only appeared to work because the shape was
- * uniform.</p>
+ * lift and brakes exactly where the layout intends.</p>
  */
 public final class DemoCoaster {
 
@@ -36,8 +49,11 @@ public final class DemoCoaster {
         public final double brakeStart;
         public final double brakeEnd;
 
+        /** The size the layout was built at: the scale asked for, held to what suits the lift. */
+        public final double scale;
+
         Result(TrackSection section, double stationStart, double stationEnd, double stationStop,
-               double liftStart, double liftEnd, double brakeStart, double brakeEnd) {
+               double liftStart, double liftEnd, double brakeStart, double brakeEnd, double scale) {
             this.section = section;
             this.stationStart = stationStart;
             this.stationEnd = stationEnd;
@@ -46,112 +62,368 @@ public final class DemoCoaster {
             this.liftEnd = liftEnd;
             this.brakeStart = brakeStart;
             this.brakeEnd = brakeEnd;
+            this.scale = scale;
         }
     }
+
+    /** The lift the layout's proportions were drawn for; scale 1.0 is right for it. */
+    private static final double REFERENCE_LIFT = 34.0D;
+
+    /**
+     * How far the scale may stray from what suits the lift, either way. G in a hill or turn goes as
+     * the square of height over size: a tall lift on a small layout is violent, and a big layout on
+     * a low lift runs out of energy before it gets home.
+     */
+    private static final double MIN_SCALE_PER_LIFT = 1.0D;
+    private static final double MAX_SCALE_PER_LIFT = 1.4D;
+
+    /** Radius of the two turnarounds at scale 1, in blocks. */
+    private static final double TURN_RADIUS = 36.0D;
+
+    /** Length of the return straight at scale 1. The near side is at least as long as the
+     *  brakes, platform and lift need. */
+    private static final double STRAIGHT_LENGTH = 105.0D;
+
+    /** Platform length: holds a five-car train with room to stop short of the lift. */
+    private static final double PLATFORM_LENGTH = 26.0D;
+
+    /** Horizontal run of the lift per block of rise — a climb of about 29°. */
+    private static final double LIFT_RUN_PER_RISE = 1.8D;
+
+    /** Horizontal run of the first drop per block of fall. Long enough that the pull-out at the
+     *  bottom, at the ride's top speed, stays within what a rider can take. */
+    private static final double DROP_RUN_PER_FALL = 2.1D;
+
+    /** The camelback's crest and the turnaround's rise, as fractions of the energy left there. */
+    private static final double CAMELBACK = 0.75D;
+    private static final double TURNAROUND_RISE = 0.5D;
+
+    /** How far out of their seats the camelback's crest lifts riders, in g: enough to feel, well
+     *  inside what the ride check allows. Throwing riders up is what a camelback is for. */
+    private static final double CAMELBACK_AIRTIME = 0.3D;
+
+    /** How much sharper a hill is at its top than at its foot — see {@code Plan.height}. */
+    private static final double HILL_SHAPE = 1.4D;
+
+    /** What the brakes are built for: the trim speed they hold and how hard they slow. These
+     *  match what {@code /rcmc demo} installs. */
+    private static final double BRAKE_SPEED = 6.0D;
+    private static final double BRAKE_DECELERATION = 6.0D;
+    private static final double MIN_BRAKE_LENGTH = 12.0D;
+
+    /** Speed the chain carries the train over the crest at; what {@code /rcmc demo} installs. */
+    private static final double CHAIN_SPEED = 5.0D;
+
+    /** The integrator's defaults, which the energy estimate marches — see {@code RcmcConfig}. The
+     *  losses are overstated a little, so a hill is never quite as tall as the train could climb. */
+    private static final double GRAVITY = 9.81D;
+    private static final double ROLLING_RESISTANCE = 0.01D;
+    private static final double AIR_DRAG = 0.0015D;
+    private static final double LOSS_MARGIN = 1.25D;
+
+    /** Steepest bank the builder will give a node, in degrees. */
+    private static final double MAX_BANK = 75.0D;
 
     private DemoCoaster() {
         throw new AssertionError("No instances.");
     }
 
+    /** Sensible defaults: a mid-sized layout with a 34-block lift. */
+    public static Result build(int sectionId, Vec3 origin) {
+        return build(sectionId, origin, 1.0D, REFERENCE_LIFT);
+    }
+
     /**
      * @param origin     the station's position — where the player is standing
-     * @param scale      overall size multiplier; 1.0 gives roughly a 120x70 block footprint
+     * @param scale      overall size multiplier, held to a range that suits {@code liftHeight}
      * @param liftHeight height of the lift crest above the station, in blocks
      */
     public static Result build(int sectionId, Vec3 origin, double scale, double liftHeight) {
+        double h = liftHeight;
+        double s = Math.max(h / REFERENCE_LIFT * MIN_SCALE_PER_LIFT,
+            Math.min(h / REFERENCE_LIFT * MAX_SCALE_PER_LIFT, scale));
+
+        // The brakes' length depends on how fast the train comes home, which depends on the layout,
+        // whose near side includes the brakes. A few rounds settle it.
+        Plan plan = null;
+        double brakeLength = MIN_BRAKE_LENGTH;
+        for (int round = 0; round < 4; round++) {
+            plan = new Plan(h, s, brakeLength);
+            double home = Math.max(0.0D, plan.headAt(plan.total));
+            double arrival = 2.0D * GRAVITY * home;
+            brakeLength = Math.max(MIN_BRAKE_LENGTH,
+                (arrival - BRAKE_SPEED * BRAKE_SPEED) / (2.0D * BRAKE_DECELERATION) + 4.0D);
+        }
+
+        List<Double> stations = plan.nodeStations();
         List<TrackNode> nodes = new ArrayList<>();
+        for (double u : stations) {
+            nodes.add(new TrackNode(plan.position(u, origin), 0.0D, null));
+        }
+        TrackSection flat = new TrackSection(sectionId, nodes, true, null);
 
-        double baseY = origin.y;
-        double topY = baseY + liftHeight;
-        // Heights after the lift are given as fractions of the lift above a first valley dug
-        // VALLEY_DIG of the lift below the station — the surplus energy that carries a train round
-        // the rest of the circuit. But the layout is built at the player's feet, where below the
-        // station means inside the ground: every dip ran through the dirt and the terrain hid it,
-        // which read from above as track with pieces missing. So nothing goes below the station:
-        // each height keeps its place relative to the dig where that is above ground, and is held
-        // at station level where it is not. The hills keep their heights, and so the train keeps
-        // the energy that gets it over them.
+        // Bank each node for the load felt there. Brakes, platform and lift stay level.
+        List<TrackNode> banked = new ArrayList<>();
+        for (int i = 0; i < nodes.size(); i++) {
+            double u = stations.get(i);
+            double bank = u <= plan.crest ? 0.0D : idealBank(flat, flat.nodeDistance(i),
+                plan.speedSquaredAt(u));
+            banked.add(new TrackNode(nodes.get(i).position(), bank, null));
+        }
+        TrackSection section = new TrackSection(sectionId, banked, true, null);
 
-        double w = 60.0D * scale;   // half-width, across the layout
-        double l = 55.0D * scale;   // half-length, along it
-
-        // --- Station: level, straight, along +X ---
-        int stationFirst = nodes.size();
-        add(nodes, origin.x - l, baseY, origin.z - w, 0);
-        add(nodes, origin.x - l * 0.55D, baseY, origin.z - w, 0);
-        int stationLast = nodes.size();
-        add(nodes, origin.x - l * 0.1D, baseY, origin.z - w, 0);
-
-        // --- Lift hill: steady climb to the crest ---
-        //
-        // The lift ELEMENT deliberately starts back at the platform end (stationLast), not here.
-        // The first climbing node already sits a quarter of the way up, so anchoring the chain to
-        // it leaves the train to climb that first stretch on dispatch momentum alone — which it
-        // cannot do, and it rolls back into the station. A chain has to grab a train the moment it
-        // leaves the platform, exactly as a real one does.
-        add(nodes, origin.x + l * 0.25D, baseY + liftHeight * 0.25D, origin.z - w, 0);
-        add(nodes, origin.x + l * 0.55D, baseY + liftHeight * 0.65D, origin.z - w, 0);
-        add(nodes, origin.x + l * 0.8D, baseY + liftHeight * 0.93D, origin.z - w, 0);
-        int liftLast = nodes.size();
-        add(nodes, origin.x + l, topY, origin.z - w * 0.86D, 0);
-
-        // --- First drop: over the crest and down, curving away ---
-        add(nodes, origin.x + l * 1.05D, topY - liftHeight * 0.22D, origin.z - w * 0.55D, -12);
-        add(nodes, origin.x + l * 0.98D, above(baseY, liftHeight, 0.28D), origin.z - w * 0.18D, -22);
-        add(nodes, origin.x + l * 0.78D, baseY, origin.z + w * 0.12D, -10);
-
-        // --- Airtime hill: a brisk crest, then straight down the far side ---
-        add(nodes, origin.x + l * 0.4D, above(baseY, liftHeight, 0.42D), origin.z + w * 0.35D, 0);
-        add(nodes, origin.x + l * 0.05D, above(baseY, liftHeight, 0.5D), origin.z + w * 0.5D, 8);
-        add(nodes, origin.x - l * 0.3D, above(baseY, liftHeight, 0.15D), origin.z + w * 0.62D, 18);
-
-        // --- Banked turnaround: hard left, back toward the station ---
-        add(nodes, origin.x - l * 0.75D, above(baseY, liftHeight, 0.1D), origin.z + w * 0.72D, 42);
-        add(nodes, origin.x - l * 1.08D, above(baseY, liftHeight, 0.3D), origin.z + w * 0.45D, 48);
-        add(nodes, origin.x - l * 1.12D, above(baseY, liftHeight, 0.45D), origin.z + w * 0.05D, 40);
-
-        // --- Second, smaller hill on the return leg ---
-        add(nodes, origin.x - l * 0.9D, above(baseY, liftHeight, 0.62D), origin.z - w * 0.3D, 14);
-        add(nodes, origin.x - l * 0.6D, above(baseY, liftHeight, 0.45D), origin.z - w * 0.58D, 0);
-
-        // --- Brake run: level out at station height, aimed back into the platform ---
-        int brakeFirst = nodes.size();
-        add(nodes, origin.x - l * 1.25D, baseY, origin.z - w * 0.72D, 0);
-        int brakeLast = nodes.size();
-        add(nodes, origin.x - l * 1.35D, baseY, origin.z - w * 0.88D, 0);
-
-        TrackSection section = new TrackSection(sectionId, nodes, true, null);
-
-        // Element spans come from the node distances the section computed, so they track the
-        // layout exactly even if the shape above is retuned.
-        // The platform's far end doubles as the lift's start, so there is no unpowered gap
-        // between them. They touch rather than overlap: RideElementSet is first-match-wins by
-        // insertion order, so an overlap would let the station keep claiming a train the lift
-        // should already have.
-        double platformEnd = section.nodeDistance(stationLast);
-
-        return new Result(section,
-            section.nodeDistance(stationFirst), platformEnd,
+        double stationStart = section.nodeDistance(plan.stationFirst);
+        double platformEnd = section.nodeDistance(plan.platformLast);
+        // The platform's far end is the lift's start, so there is no unpowered gap between them.
+        // They touch rather than overlap: RideElementSet is first-match-wins, so an overlap would
+        // let the station keep claiming a train the lift should already have. The chain runs right
+        // to the crest; a train left to coast the last stretch rolls back into the station.
+        return new Result(section, stationStart, platformEnd,
             // Stop short of the platform end so there is room to accelerate before the chain.
             platformEnd - 3.0D,
-            platformEnd, section.nodeDistance(liftLast),
-            section.nodeDistance(brakeFirst), section.nodeDistance(brakeLast));
+            platformEnd, section.nodeDistance(plan.crestNode),
+            0.0D, stationStart, s);
     }
 
-    /** Sensible defaults: a mid-sized layout with a 34-block lift. */
-    public static Result build(int sectionId, Vec3 origin) {
-        return build(sectionId, origin, 1.0D, 34.0D);
+    /**
+     * The bank, in degrees, that puts the felt load at {@code distance} straight through the seat:
+     * the curve's centripetal pull at {@code speedSquared}, plus gravity, has no sideways part.
+     */
+    private static double idealBank(TrackSection section, double distance, double speedSquared) {
+        double half = 1.5D;
+        double total = section.totalLength();
+        Vec3 before = section.tangentAtDistance((distance - half + total) % total);
+        Vec3 after = section.tangentAtDistance((distance + half) % total);
+        Vec3 curvature = after.subtract(before).scale(1.0D / (2.0D * half));
+        Vec3 felt = curvature.scale(speedSquared).add(new Vec3(0.0D, GRAVITY, 0.0D));
+        TrackFrame level = section.unbankedFrameAtDistance(distance);
+        double across = felt.dot(level.right);
+        double down = felt.dot(level.up);
+        // Over a crest with airtime the load points up out of the seat, and "straight through the
+        // seat" would be a bank of nearly 180°. Rolling a rider upside down to meet a light moment
+        // is not what anyone wants; bank as if the seat still carried some weight.
+        double radians = Math.atan2(across, Math.max(down, 0.5D * GRAVITY));
+        // The sign of a roll is the frame's convention, not ours: take whichever leaves no
+        // sideways load.
+        if (Math.abs(felt.dot(level.withBank(-radians).right)) < Math.abs(felt.dot(level.withBank(radians).right))) {
+            radians = -radians;
+        }
+        double degrees = Math.toDegrees(radians);
+        return Math.max(-MAX_BANK, Math.min(MAX_BANK, degrees));
     }
 
-    /** How far below the station the first valley would be dug, as a fraction of the lift. */
-    private static final double VALLEY_DIG = 0.12D;
+    /**
+     * The layout in plan and profile, as a function of {@code u}: distance round the oval in plan,
+     * starting at the brakes. The spline is fitted through points on this afterwards.
+     */
+    private static final class Plan {
+        final double h;
+        final double r;
+        final double brakeLength;
+        final double halfStraight;
+        final double liftStart;
+        final double crest;
+        final double total;
 
-    /** A height {@code fraction} of the lift above the dug valley, never below the station. */
-    private static double above(double baseY, double liftHeight, double fraction) {
-        return baseY + Math.max(0.0D, fraction - VALLEY_DIG) * liftHeight;
-    }
+        /** Where the profile's hills and valleys are, in u, and their heights as fractions of the
+         *  energy left there (crest and brakes are absolute). */
+        final double[] keyU;
+        final double[] keyFraction;
+        final double[] keyHeight;
 
-    private static void add(List<TrackNode> nodes, double x, double y, double z, double bankDegrees) {
-        nodes.add(new TrackNode(new Vec3(x, y, z), bankDegrees, null));
+        int stationFirst;
+        int platformLast;
+        int crestNode;
+
+        /** Energy head (height the train could reach) sampled every block of u from the crest. */
+        private final double[] head;
+        private final double[] fastHead;
+
+        Plan(double h, double s, double brakeLength) {
+            this.h = h;
+            this.r = TURN_RADIUS * s;
+            this.brakeLength = brakeLength;
+            double lift = LIFT_RUN_PER_RISE * h;
+            this.halfStraight = Math.max(brakeLength + PLATFORM_LENGTH + lift, STRAIGHT_LENGTH * s) / 2.0D;
+            this.crest = 2.0D * halfStraight;
+            this.liftStart = crest - lift;
+            this.total = 4.0D * halfStraight + 2.0D * Math.PI * r;
+
+            double farTurn = crest;
+            double returnStraight = farTurn + Math.PI * r;
+            double nearTurn = returnStraight + 2.0D * halfStraight;
+            double dropBottom = Math.min(crest + DROP_RUN_PER_FALL * h, returnStraight);
+            // The camelback sits in the middle of the return straight, level track either side;
+            // the near turn climbs to its apex and falls to the brakes.
+            double middle = (dropBottom + nearTurn) / 2.0D;
+            double room = (nearTurn - dropBottom) / 2.0D;
+            keyU = new double[] {crest, dropBottom, middle - room, middle, middle + room,
+                nearTurn, nearTurn + Math.PI * r / 2.0D, total};
+            keyFraction = new double[] {-1.0D, 0.0D, 0.0D, CAMELBACK, 0.0D, 0.0D, TURNAROUND_RISE, 0.0D};
+            keyHeight = new double[keyU.length];
+            keyHeight[0] = h;
+
+            // Heights depend on the energy left, and the energy left on the heights before: settle
+            // it by marching the profile a few times.
+            int steps = (int) Math.ceil(total - crest) + 1;
+            head = new double[steps];
+            fastHead = new double[steps];
+            for (int i = 1; i < keyU.length; i++) {
+                keyHeight[i] = keyFraction[i] * h;
+            }
+            for (int round = 0; round < 6; round++) {
+                march();
+                for (int i = 1; i < keyU.length; i++) {
+                    keyHeight[i] = keyFraction[i] * Math.max(0.0D, headAt(keyU[i]));
+                }
+                // The camelback is as long as it has to be for its crest to lift riders by
+                // CAMELBACK_AIRTIME at the speed the train carries over it, and no shorter: at the
+                // top of this profile the track curves by (pi^2 / 2) * shape^2 * rise / half^2.
+                double rise = keyHeight[3];
+                double overTheTop = speedSquaredAt(middle);
+                double half = Math.sqrt(Math.PI * Math.PI / 2.0D * HILL_SHAPE * HILL_SHAPE * rise * overTheTop
+                    / ((1.0D + CAMELBACK_AIRTIME) * GRAVITY));
+                half = Math.max(8.0D, Math.min(room, half));
+                keyU[2] = middle - half;
+                keyU[4] = middle + half;
+            }
+            march();
+        }
+
+        /**
+         * Energy head along the ride from the crest, losing what rolling resistance and drag take —
+         * twice. {@code head} overstates the losses, and sets how tall a hill may be, so the train
+         * always has the energy to climb it. {@code fastHead} takes them as they are, and gives the
+         * speed the train really carries: what the G and the banks are worked out for. Sizing a
+         * crest for the cautious speed makes it too sharp for the real one.
+         */
+        private void march() {
+            march(head, LOSS_MARGIN);
+            march(fastHead, 1.0D);
+        }
+
+        private void march(double[] into, double margin) {
+            into[0] = h + CHAIN_SPEED * CHAIN_SPEED / (2.0D * GRAVITY);
+            double previousY = height(crest);
+            for (int i = 1; i < into.length; i++) {
+                double u = Math.min(total, crest + i);
+                double y = height(u);
+                double run = Math.hypot(u - Math.min(total, crest + i - 1), y - previousY);
+                double v = Math.sqrt(Math.max(0.0D, 2.0D * GRAVITY * (into[i - 1] - y)));
+                double deceleration = ROLLING_RESISTANCE * v + AIR_DRAG * v * v;
+                into[i] = into[i - 1] - run * deceleration / GRAVITY * margin;
+                previousY = y;
+            }
+        }
+
+        double headAt(double u) {
+            if (u <= crest) {
+                return h;
+            }
+            int i = (int) Math.min(head.length - 1, Math.round(u - crest));
+            return head[i];
+        }
+
+        /** The square of the speed the train really has at {@code u}, from {@code fastHead}. */
+        double speedSquaredAt(double u) {
+            double energy = u <= crest ? h
+                : fastHead[(int) Math.min(fastHead.length - 1, Math.round(u - crest))];
+            return Math.max(0.0D, 2.0D * GRAVITY * (energy - height(u)));
+        }
+
+        /** Height above the station at {@code u}. */
+        double height(double u) {
+            if (u <= liftStart) {
+                return 0.0D;
+            }
+            if (u <= crest) {
+                return h * liftProfile((u - liftStart) / (crest - liftStart));
+            }
+            for (int i = 1; i < keyU.length; i++) {
+                if (u <= keyU[i]) {
+                    double t = (u - keyU[i - 1]) / (keyU[i] - keyU[i - 1]);
+                    // Gentle at the low end, where the train is fast, and tighter at the high end,
+                    // where it is slow: the same G either way needs a much wider valley than crest.
+                    double w = keyHeight[i] >= keyHeight[i - 1]
+                        ? Math.pow(t, HILL_SHAPE) : 1.0D - Math.pow(1.0D - t, HILL_SHAPE);
+                    return keyHeight[i - 1] + (keyHeight[i] - keyHeight[i - 1]) * (1.0D - Math.cos(Math.PI * w)) / 2.0D;
+                }
+            }
+            return 0.0D;
+        }
+
+        /** A lift's climb: easing into a steady slope and out of it again at the top. */
+        private static double liftProfile(double t) {
+            double ease = 0.2D;
+            double slope = 1.0D / (1.0D - ease);
+            if (t < ease) {
+                return slope * t * t / (2.0D * ease);
+            }
+            if (t < 1.0D - ease) {
+                return slope * (ease / 2.0D + (t - ease));
+            }
+            double rest = 1.0D - t;
+            return 1.0D - slope * rest * rest / (2.0D * ease);
+        }
+
+        /** The point at {@code u}, in the world. The near side runs along +X, the oval off to +Z. */
+        Vec3 position(double u, Vec3 origin) {
+            double a = halfStraight;
+            double x;
+            double z;
+            double farTurn = crest;
+            double returnStraight = farTurn + Math.PI * r;
+            double nearTurn = returnStraight + 2.0D * a;
+            if (u <= farTurn) {
+                x = -a + u;
+                z = -r;
+            } else if (u <= returnStraight) {
+                double phi = (u - farTurn) / r;
+                x = a + r * Math.sin(phi);
+                z = -r * Math.cos(phi);
+            } else if (u <= nearTurn) {
+                x = a - (u - returnStraight);
+                z = r;
+            } else {
+                double phi = (u - nearTurn) / r;
+                x = -a - r * Math.sin(phi);
+                z = r * Math.cos(phi);
+            }
+            // The station sits at the player's feet: shift so the platform's middle is the origin.
+            double platformMiddle = -a + (brakeLength + liftStart) / 2.0D;
+            return new Vec3(origin.x + x - platformMiddle, origin.y + height(u), origin.z + z + r);
+        }
+
+        /** Where the nodes go, in u: sparse on the level and the lift, closer where the ride moves. */
+        List<Double> nodeStations() {
+            List<Double> us = new ArrayList<>();
+            us.add(0.0D);
+            stationFirst = us.size();
+            us.add(brakeLength);
+            us.add((brakeLength + liftStart) / 2.0D);
+            platformLast = us.size();
+            us.add(liftStart);
+            for (double t : new double[] {0.25D, 0.5D, 0.75D}) {
+                us.add(liftStart + (crest - liftStart) * t);
+            }
+            crestNode = us.size();
+            us.add(crest);
+            // After the crest: every key point, and enough between them to hold the shape.
+            double spacing = Math.min(12.0D, Math.PI * r / 10.0D);
+            for (int k = 1; k < keyU.length; k++) {
+                double from = keyU[k - 1];
+                double to = keyU[k];
+                // At least four to a piece, so the spline holds a short hill's shape and does
+                // not sharpen its crest.
+                int pieces = Math.max(4, (int) Math.ceil((to - from) / spacing));
+                for (int p = 1; p <= pieces; p++) {
+                    double u = from + (to - from) * p / pieces;
+                    if (u < total - 1.0e-6D) {
+                        us.add(u);
+                    }
+                }
+            }
+            return us;
+        }
     }
 }

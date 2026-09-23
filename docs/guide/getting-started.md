@@ -40,8 +40,8 @@ operator permission (`/rcmc` is permission level 2) and some open space.
     /rcmc train 1 5 0
     ```
 
-    `/rcmc demo` lays a full circuit — station, chain lift, drop, banked turn, airtime hill,
-    block brake — and tells you the section id it used (`1` if this is your first). `/rcmc train`
+    `/rcmc demo` lays a full circuit — station, chain lift, a curving first drop, an airtime
+    hill, a banked turn, block brake — and tells you the section id it used (`1` if this is your first). `/rcmc train`
     parks a five-car train in the station; it dispatches itself. Right-click a car to board.
 
     Then ask the game what you built:

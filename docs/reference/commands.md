@@ -20,14 +20,21 @@ subcommands and sides.
 /rcmc demo shuttle
 ```
 
-Builds a complete demo coaster at your feet: station, chain lift, drop, banked turn, airtime hill,
-block brake, back to the station — so `/rcmc block <id> auto` divides it for two trains as built. Reports the section id it allocated, the spans of each element, and
-the exact `/rcmc train` line to run next.
+Builds a complete demo coaster, with its platform at your feet: chain lift, a first drop that curves
+through the far turnaround, an airtime camelback, a banked climbing turn, and a block brake back
+into the station, so `/rcmc block <id> auto` divides it for two trains as built. Every bank and
+hill is worked out from the speed the train carries there, so the demo passes
+[`/rcmc check`](#rcmc-check) at any size. Reports the section id it allocated, the spans of each
+element, and the exact `/rcmc train` line to run next.
 
 | Argument | Range | Default |
 | --- | --- | --- |
 | `scale` | 0.4 – 4.0 | 1.0 |
 | `liftHeight` | 8 – 120 | 34 |
+
+The scale is held between 1.0 and 1.4 times `liftHeight / 34`: a tall lift on a small layout pulls
+more G than a rider can take, and a big layout on a low lift runs out of energy before it gets
+home. The reply says when it changed the scale you asked for.
 
 `/rcmc demo shuttle` builds a launched shuttle coaster instead: a straight station with a forward
 launch ahead of it, a backward launch behind it, and a 45-block spike at each end. The train goes

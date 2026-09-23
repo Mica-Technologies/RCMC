@@ -266,6 +266,11 @@ public class CommandRcmc extends CommandBase {
         reply(sender, TextFormatting.GREEN, "Built demo coaster #" + id + " — "
             + String.format("%.1f", section.totalLength()) + " blocks, "
             + section.nodes().size() + " nodes, " + String.format("%.0f", lift) + "-block lift.");
+        if (Math.abs(demo.scale - scale) > 1.0e-6D) {
+            reply(sender, TextFormatting.GRAY, "Built at scale " + String.format("%.2f", demo.scale)
+                + " rather than " + String.format("%.2f", scale) + ": the size a "
+                + String.format("%.0f", lift) + "-block lift can ride safely.");
+        }
         reply(sender, TextFormatting.GRAY, "Station " + fmt(demo.stationStart) + "-"
             + fmt(demo.stationEnd) + ", lift " + fmt(demo.liftStart) + "-" + fmt(demo.liftEnd)
             + ", brakes " + fmt(demo.brakeStart) + "-" + fmt(demo.brakeEnd) + ".");

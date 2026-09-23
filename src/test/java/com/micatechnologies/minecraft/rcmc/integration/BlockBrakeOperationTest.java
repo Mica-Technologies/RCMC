@@ -64,9 +64,10 @@ class BlockBrakeOperationTest {
         Ride ride = new Ride();
         List<Double> at = BlockLayout.boundaries(1, ride.elements.elements());
         assertEquals(3, at.size(), "station, lift, block brake: " + at);
-        assertEquals(ride.demo.stationEnd, at.get(0), 1e-9);
-        assertEquals(ride.demo.liftEnd, at.get(1), 1e-9);
-        assertEquals(ride.demo.brakeEnd, at.get(2), 1e-9);
+        // The demo's brakes lead straight into the platform, so the brake's end comes first.
+        assertEquals(ride.demo.brakeEnd, at.get(0), 1e-9);
+        assertEquals(ride.demo.stationEnd, at.get(1), 1e-9);
+        assertEquals(ride.demo.liftEnd, at.get(2), 1e-9);
     }
 
     @Test
@@ -88,7 +89,7 @@ class BlockBrakeOperationTest {
         assertTrue(closing.wraps());
         assertTrue(closing.contains(new TrackRef(1, length - 1.0D)), "before the seam");
         assertTrue(closing.contains(new TrackRef(1, 1.0D)), "after the seam");
-        assertFalse(closing.contains(new TrackRef(1, 200.0D)), "mid-course");
+        assertFalse(closing.contains(new TrackRef(1, ride.demo.stationStop)), "the platform is its own block");
 
         BlockSystems systems = new BlockSystems();
         BlockSystem system = new BlockSystem(true, true, 4.0D, TICK);
