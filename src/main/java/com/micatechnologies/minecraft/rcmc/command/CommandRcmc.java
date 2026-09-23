@@ -62,7 +62,7 @@ public class CommandRcmc extends CommandBase {
     @Override
     public String getUsage(ICommandSender sender) {
         return "/rcmc <demo|metrodemo|train|clear|info|build|paint|style|rate|block|station|line"
-            + "|switch|platform|rmsection>";
+            + "|switch|platform|rmsection|undo|redo>";
     }
 
     @Override
@@ -1183,7 +1183,8 @@ public class CommandRcmc extends CommandBase {
                     com.micatechnologies.minecraft.rcmc.physics.transit.LineSignals sig =
                         transit.signalsFor(l.name());
                     reply(sender, TextFormatting.AQUA, l.name() + " ("
-                        + (l.isLoop() ? "loop" : "shuttle") + "): " + stops
+                        + (l.isLoop() ? "loop" : l.turnsBackOnLoop() ? "out and back, turning loops" : "shuttle")
+                        + "): " + stops
                         + (sig == null ? "" : "  [" + sig.blocks().size() + " signal blocks]"));
                 }
                 return;
