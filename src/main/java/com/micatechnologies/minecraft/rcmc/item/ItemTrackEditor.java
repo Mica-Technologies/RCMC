@@ -289,6 +289,10 @@ public class ItemTrackEditor extends Item {
             }
         }
         state.network().removeSection(section.id());
+        // Its signalling and operator state go too: section ids are reused, and a new coaster must
+        // not inherit an old one's blocks or its CLOSED.
+        state.blocks().remove(section.id());
+        state.rides().remove(section.id());
 
         // Trains on a deleted section would be orphaned — they survive it safely, but a stranded
         // train nobody can reach is clutter, and the builder deleting the track clearly means the

@@ -125,6 +125,7 @@ public final class RcmcWorldState {
             created.transit = data.transit();
             created.trains = data.trains();
             created.rides = data.rides();
+            created.blocks = data.blocks();
             // Seed history with the loaded state so the first edit is undoable.
             created.history = new EditHistory(data.snapshot(), EditHistory.DEFAULT_DEPTH);
             // Must happen after the fields above are installed: putting a train back into service
@@ -215,7 +216,7 @@ public final class RcmcWorldState {
      * its own predicted train for a block it believes is occupied would fight the server's
      * correction, and occupancy depends on trains the client may not have been told about.
      */
-    private final com.micatechnologies.minecraft.rcmc.physics.block.BlockSystems blocks =
+    private com.micatechnologies.minecraft.rcmc.physics.block.BlockSystems blocks =
         new com.micatechnologies.minecraft.rcmc.physics.block.BlockSystems();
 
     public com.micatechnologies.minecraft.rcmc.physics.block.BlockSystems blocks() {
@@ -345,6 +346,8 @@ public final class RcmcWorldState {
                 com.micatechnologies.minecraft.rcmc.track.storage.ElementCodec.read(snapshot);
             com.micatechnologies.minecraft.rcmc.physics.transit.TransitSystem restoredTransit =
                 com.micatechnologies.minecraft.rcmc.track.storage.TransitCodec.read(snapshot);
+            com.micatechnologies.minecraft.rcmc.physics.block.BlockSystems restoredBlocks =
+                com.micatechnologies.minecraft.rcmc.track.storage.BlockCodec.read(snapshot);
 
             // A snapshot is authored state only, so the restored transit arrives with no services.
             // Carry the running ones across, or every undo stops the whole network.
@@ -354,7 +357,9 @@ public final class RcmcWorldState {
             this.network = restoredNetwork;
             this.elements = restoredElements;
             this.transit = restoredTransit;
-            RcmcTrackData.get(world).install(restoredNetwork, restoredElements, restoredTransit);
+            this.blocks = restoredBlocks;
+            RcmcTrackData.get(world).install(restoredNetwork, restoredElements, restoredTransit,
+                restoredBlocks);
 
             int dimension = world.provider.getDimension();
             RcmcNetwork.sendToAllIn(new PacketTrackSync(restoredNetwork), dimension);
@@ -382,6 +387,33 @@ public final class RcmcWorldState {
         private static final int SYNC_INTERVAL_TICKS = 5;
 
         private int tickCounter;
+
+        /**
+         * Emergency-stops any coaster whose trains have run into each other, and says so. Two trains
+         * on one circuit used to pass straight through each other. A ride stays stopped while its
+         * trains still overlap — resetting it just stops it again — so the operator has to take a
+         * train off first, which is the point.
+         */
+        private static void stopCollidedRides(World world, RcmcWorldState state) {
+            for (int section : com.micatechnologies.minecraft.rcmc.physics.ride.TrainCollisions
+                .sectionsWithCollisions(state.trains.asMap(), state.network)) {
+                com.micatechnologies.minecraft.rcmc.physics.ride.RideController ride =
+                    state.rides.getOrCreate(section);
+                if (ride.isEmergencyStopped()) {
+                    continue;
+                }
+                ride.emergencyStop();
+                state.markTrainsDirty(world);
+                net.minecraft.util.text.TextComponentString message =
+                    new net.minecraft.util.text.TextComponentString(
+                        net.minecraft.util.text.TextFormatting.RED + "Coaster #" + section
+                            + ": trains collided — emergency stop. Remove a train at its operator "
+                            + "panel before reopening, or add block sections with /rcmc block.");
+                for (net.minecraft.entity.player.EntityPlayer player : world.playerEntities) {
+                    player.sendMessage(message);
+                }
+            }
+        }
 
         /** True when no player is connected to the server at all, in any dimension. */
         private static boolean nobodyOnline(World world) {
@@ -560,6 +592,10 @@ public final class RcmcWorldState {
                 }
                 state.trains.tick(state.network, control,
                     RcmcConfig.physicsSubSteps, RcmcConstants.SECONDS_PER_TICK);
+
+                if (!state.remote && state.trains.count() > 1) {
+                    stopCollidedRides(event.world, state);
+                }
 
                 // After the tick, so the phases the sounds react to are this tick's. Server only;
                 // the client hears what the server broadcasts rather than deciding for itself,

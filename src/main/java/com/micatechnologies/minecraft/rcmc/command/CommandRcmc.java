@@ -1422,6 +1422,7 @@ public class CommandRcmc extends CommandBase {
         int sections = state.network().sectionCount();
         state.elements().clear();
         state.rides().clear();
+        state.blocks().clear();
 
         for (EntityCoasterCar car : new ArrayList<>(
             world.getEntities(EntityCoasterCar.class, entity -> true))) {
@@ -1657,6 +1658,7 @@ public class CommandRcmc extends CommandBase {
             if (state.blocks().remove(sectionId) == null) {
                 throw new CommandException("Section #" + sectionId + " has no block signalling");
             }
+            state.markTrackDirty(sender.getEntityWorld());
             reply(sender, TextFormatting.YELLOW, "Block signalling removed from section #"
                 + sectionId + " — trains on it are no longer separated.");
             return;
@@ -1674,6 +1676,8 @@ public class CommandRcmc extends CommandBase {
             system.addBlock(new BlockSection("b" + (i + 1), sectionId, from, to));
         }
         state.blocks().put(sectionId, system);
+        // Saved, and undoable, like the rest of the ride's layout.
+        state.markTrackDirty(sender.getEntityWorld());
 
         reply(sender, TextFormatting.GREEN, "Section #" + sectionId + " divided into " + count
             + " blocks of " + String.format("%.1f", length / count) + " blocks each"

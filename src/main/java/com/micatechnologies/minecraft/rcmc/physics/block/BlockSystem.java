@@ -299,6 +299,11 @@ public final class BlockSystem implements TrainManager.ExternalAcceleration {
         this.safetyEnabled = safetyEnabled;
     }
 
+    /** How hard a block brake stops a train held at a block boundary, blocks/s². */
+    public double brakeDeceleration() {
+        return brakeDeceleration;
+    }
+
     public boolean isClosedCircuit() {
         return closedCircuit;
     }
