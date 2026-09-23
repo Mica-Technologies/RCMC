@@ -14,7 +14,8 @@ Everything registers under the `rcmc:` prefix and appears in the mod's own creat
 | Sneak + right-click a block | Place a node and commit the section |
 | Right-click air | Commit the section |
 | Sneak + right-click air | Undo the last node. With no nodes pending it does nothing — `/rcmc build cancel` resets the session |
-| ++g++ | Cycle segment type: plain → chain lift → launch track → brake run → drive tyres → station |
+| ++g++ | Open the segment picker: plain track, chain lift, launch track, backward launch, brake run, block brake, drive tyres, transfer track, station |
+| Sneak + ++g++ | Step to the next segment type in that order |
 | ++r++ | Reset height and bank adjustments |
 | Shift + scroll | Height of the pending node, 0.5 blocks per notch |
 | ++ctrl++ + scroll | Bank, 5° per notch |
@@ -48,13 +49,17 @@ change one thing.
 
 | Input | Effect |
 | --- | --- |
-| Right-click near track | Select it and report what is there |
+| Right-click near track | Select it, report what is there, and open the editor screen on the nearest node |
 | ++g++ | Cycle the segment type of the selected span |
 | ++c++ | Cycle colour |
 | ++v++ | Cycle which part the colour applies to: rails, spine, ties, supports |
 | Sneak + right-click near track | Delete that section and its hardware |
 
 Edits act on **spans** — the stretch between two placed nodes — not on a point.
+
+The editor screen moves, banks, adds and deletes nodes, sets the type of the span leaving the node,
+paints, and deletes the section. See
+[The editor screen](../guide/building-a-coaster.md#the-editor-screen).
 
 ### Transit tool
 
@@ -67,6 +72,10 @@ Edits act on **spans** — the stretch between two placed nodes — not on a poi
 | ++c++ | Commit what is being assembled |
 | ++v++ | In line mode, cycle the line kind: loop / shuttle / turnback |
 | Sneak + right-click track | The mode's destructive counterpart |
+
+While you hold it, a coloured post and label mark the track under the crosshair and say what a
+click will do there — which station a platform joins, or which stop a line click adds. In line
+mode the stops already picked are marked in order.
 | Sneak + right-click air | Abandon what is being assembled |
 
 **Rename the tool in an anvil to name what you place next** — the tool called `Central` places a

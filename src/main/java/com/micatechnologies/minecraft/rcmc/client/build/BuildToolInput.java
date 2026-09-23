@@ -133,8 +133,17 @@ public final class BuildToolInput {
             return;
         }
         if (cycle) {
-            RcmcNetwork.sendToServer(
-                new PacketBuildAdjust(PacketBuildAdjust.Action.CYCLE_TYPE, 0.0D));
+            // A list to pick from rather than a cycle: there are nine types now, and the one wanted
+            // is rarely the next. Sneak+G still cycles, for anyone who has it in their fingers.
+            if (player.isSneaking()) {
+                RcmcNetwork.sendToServer(
+                    new PacketBuildAdjust(PacketBuildAdjust.Action.CYCLE_TYPE, 0.0D));
+            }
+            else {
+                Minecraft.getMinecraft().displayGuiScreen(
+                    new com.micatechnologies.minecraft.rcmc.client.gui.GuiSegmentPicker(
+                        ClientBuildSession.segmentType()));
+            }
         }
         if (reset) {
             RcmcNetwork.sendToServer(new PacketBuildAdjust(PacketBuildAdjust.Action.RESET, 0.0D));

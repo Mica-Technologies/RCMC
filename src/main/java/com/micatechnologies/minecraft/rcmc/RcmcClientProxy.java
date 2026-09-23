@@ -38,6 +38,10 @@ public class RcmcClientProxy extends RcmcCommonProxy {
         // ride visibly steps at the correction rate rather than the frame rate.
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new ClientTrainTicker());
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(
+            new com.micatechnologies.minecraft.rcmc.client.build.TrackEditorMarker());
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(
+            new com.micatechnologies.minecraft.rcmc.client.build.TransitToolPreview());
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(
             new com.micatechnologies.minecraft.rcmc.client.ClientPhysics.Hooks());
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(
             new com.micatechnologies.minecraft.rcmc.client.sound.CoasterSoundDirector());
@@ -129,6 +133,19 @@ public class RcmcClientProxy extends RcmcCommonProxy {
     @Override
     public void warmUpTts() {
         com.micatechnologies.minecraft.rcmc.client.TtsBridge.warmUp();
+    }
+
+    @Override
+    public void showTrackEditor(com.micatechnologies.minecraft.rcmc.net.TrackEditView view) {
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getMinecraft();
+        mc.addScheduledTask(() -> {
+            if (mc.currentScreen instanceof com.micatechnologies.minecraft.rcmc.client.gui.GuiTrackEditor) {
+                ((com.micatechnologies.minecraft.rcmc.client.gui.GuiTrackEditor) mc.currentScreen).update(view);
+            }
+            else {
+                mc.displayGuiScreen(new com.micatechnologies.minecraft.rcmc.client.gui.GuiTrackEditor(view));
+            }
+        });
     }
 
     @Override

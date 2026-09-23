@@ -168,6 +168,12 @@ public class ItemTrackEditor extends Item {
         int span = TrackPicker.spanIndexAt(section, hit.ref.distance());
         SELECTIONS.put(player.getUniqueID(), new Selection(section.id(), span, hit.ref.distance()));
         report(player, state, section, hit.ref.distance(), span);
+        if (player instanceof net.minecraft.entity.player.EntityPlayerMP) {
+            // The screen opens on the node nearest where they clicked: the one they meant.
+            com.micatechnologies.minecraft.rcmc.world.TrackEditOperations.open(
+                (net.minecraft.entity.player.EntityPlayerMP) player, section.id(),
+                nearestNode(section, hit.ref.distance()));
+        }
     }
 
     /**
@@ -207,38 +213,69 @@ public class ItemTrackEditor extends Item {
         }
 
         double from = section.nodeDistance(selection.spanIndex);
-        double to = selection.spanIndex + 1 < section.nodes().size()
-            ? section.nodeDistance(selection.spanIndex + 1)
-            : section.totalLength();
-
+        double to = spanEnd(section, selection.spanIndex);
         TrackBuildSession.SegmentType next = nextTypeFor(state, section.id(), from, to);
-        removeOverlapping(state, section.id(), from, to);
-
-        RideElement created = com.micatechnologies.minecraft.rcmc.builder.SegmentElements
-            .build(section, spanTypes(section, selection.spanIndex, next))
-            .stream().findFirst().orElse(null);
-        if (created != null) {
-            state.elements().add(created);
-        }
-
-        state.markTrackDirty(world);
-        broadcast(world, state);
-        say(player, TextFormatting.GREEN, "Span " + selection.spanIndex + " of section "
+        setSpanType(world, state, section, selection.spanIndex, next);
+        say(player, TextFormatting.GREEN, "Span " + (selection.spanIndex + 1) + " of section "
             + section.id() + " is now: " + next.label());
     }
 
     /**
-     * A type list that tags only the selected span, so {@code SegmentElements} produces exactly one
-     * element for it — reusing the builder's mapping rather than duplicating the type-to-element
-     * table here, where the two could drift apart.
+     * Lays {@code type} on span {@code spanIndex} of {@code section}, replacing whatever hardware
+     * overlapped it. Saved, undoable and synced. The track editor screen's type buttons use this.
      */
-    private static List<TrackBuildSession.SegmentType> spanTypes(TrackSection section, int spanIndex,
-                                                                 TrackBuildSession.SegmentType type) {
-        List<TrackBuildSession.SegmentType> types = new ArrayList<>();
-        for (int i = 0; i < section.nodes().size(); i++) {
-            types.add(i == spanIndex ? type : TrackBuildSession.SegmentType.PLAIN);
+    public static void setSpanType(World world, RcmcWorldState state, TrackSection section,
+                                   int spanIndex, TrackBuildSession.SegmentType type) {
+        double from = section.nodeDistance(spanIndex);
+        double to = spanEnd(section, spanIndex);
+        removeOverlapping(state, section.id(), from, to);
+        // Straight onto the span's own two ends. Going through the builder's node tags put it one
+        // span early — a tag describes the span arriving at its node, not the one leaving it — so
+        // the span the editor said it had changed was not the one that did.
+        RideElement created = com.micatechnologies.minecraft.rcmc.builder.SegmentElements
+            .forSpan(type, section.id(), from, to);
+        if (created != null) {
+            state.elements().add(created);
         }
-        return types;
+        state.markTrackDirty(world);
+        broadcast(world, state);
+    }
+
+    /** What span {@code spanIndex} of {@code section} is laid as; plain when it holds nothing. */
+    public static TrackBuildSession.SegmentType spanTypeOf(RcmcWorldState state, TrackSection section,
+                                                           int spanIndex) {
+        double from = section.nodeDistance(spanIndex);
+        double to = spanEnd(section, spanIndex);
+        for (RideElement element : state.elements().elements()) {
+            if (element.sectionId() == section.id() && element.endDistance() > from
+                && element.startDistance() < to) {
+                TrackBuildSession.SegmentType type =
+                    com.micatechnologies.minecraft.rcmc.builder.SegmentElements.segmentTypeOf(element);
+                if (type != null) {
+                    return type;
+                }
+            }
+        }
+        return TrackBuildSession.SegmentType.PLAIN;
+    }
+
+    /** Makes span {@code spanIndex} of section {@code sectionId} the player's selection. */
+    public static void select(EntityPlayer player, int sectionId, int spanIndex, double distance) {
+        SELECTIONS.put(player.getUniqueID(), new Selection(sectionId, spanIndex, distance));
+    }
+
+    /** Deletes section {@code sectionId} and everything on it, as sneak-right-click does. */
+    public static void deleteSection(EntityPlayer player, World world, int sectionId) {
+        RcmcWorldState state = RcmcWorldState.of(world);
+        TrackSection section = state == null ? null : state.network().section(sectionId);
+        if (section != null) {
+            deleteSection(player, world, state, section);
+        }
+    }
+
+    private static double spanEnd(TrackSection section, int spanIndex) {
+        return spanIndex + 1 < section.nodes().size()
+            ? section.nodeDistance(spanIndex + 1) : section.totalLength();
     }
 
     /**
@@ -324,7 +361,7 @@ public class ItemTrackEditor extends Item {
 
     private static void report(EntityPlayer player, RcmcWorldState state, TrackSection section,
                                double distance, int span) {
-        say(player, TextFormatting.AQUA, "Selected section " + section.id() + ", span " + span
+        say(player, TextFormatting.AQUA, "Selected section " + section.id() + ", span " + (span + 1)
             + " at " + String.format("%.1f", distance) + " of "
             + String.format("%.1f", section.totalLength()) + " blocks"
             + (section.isClosed() ? " (circuit)" : ""));
@@ -382,6 +419,29 @@ public class ItemTrackEditor extends Item {
         broadcast(world, state);
         say(player, TextFormatting.GREEN, part.name().toLowerCase(java.util.Locale.ROOT)
             + " -> " + next.label());
+    }
+
+    /** The node of {@code section} nearest distance {@code at} along it. */
+    private static int nearestNode(TrackSection section, double at) {
+        int best = 0;
+        double bestGap = Double.MAX_VALUE;
+        for (int i = 0; i < section.nodes().size(); i++) {
+            double gap = Math.abs(section.nodeDistance(i) - at);
+            if (section.isClosed()) {
+                gap = Math.min(gap, section.totalLength() - gap);
+            }
+            if (gap < bestGap) {
+                bestGap = gap;
+                best = i;
+            }
+        }
+        return best;
+    }
+
+    /** Which part of the track this player's colour changes apply to. */
+    public static com.micatechnologies.minecraft.rcmc.track.TrackPalette.Part paintPartOf(EntityPlayer player) {
+        return PAINT_PART.getOrDefault(player.getUniqueID(),
+            com.micatechnologies.minecraft.rcmc.track.TrackPalette.Part.values()[0]);
     }
 
     /** Switches which part subsequent colour changes apply to. */

@@ -55,6 +55,12 @@ public final class RcmcNetwork {
             nextId++, Side.CLIENT);
         CHANNEL.registerMessage(PacketStationAnnounce.Handler.class, PacketStationAnnounce.class,
             nextId++, Side.CLIENT);
+        CHANNEL.registerMessage(PacketTrackEdit.View.Handler.class, PacketTrackEdit.View.class,
+            nextId++, Side.CLIENT);
+        CHANNEL.registerMessage(PacketTrackEdit.Press.Handler.class, PacketTrackEdit.Press.class,
+            nextId++, Side.SERVER);
+        CHANNEL.registerMessage(PacketTransitToolSync.Handler.class, PacketTransitToolSync.class,
+            nextId++, Side.CLIENT);
         CHANNEL.registerMessage(PacketRideView.Handler.class, PacketRideView.class,
             nextId++, Side.CLIENT);
         CHANNEL.registerMessage(PacketRideAction.Handler.class, PacketRideAction.class,
