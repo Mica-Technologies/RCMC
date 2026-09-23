@@ -160,6 +160,7 @@ Steps back and forward through track edits, server-side.
 
 ```
 /rcmc train [sectionId] [cars] [startSpeed] [type] [distance]
+/rcmc train remove <trainId>
 ```
 
 Spawns a train on a section. A train parked in a station dispatches itself. Every argument is
@@ -178,6 +179,9 @@ On a metro circuit whose two directions are its two tracks, *where* a train star
 runs — so this is how you get an inbound and an outbound service running at the same time, rather
 than two trains nose to tail on the same track. `/rcmc info` reports section lengths and
 `/rcmc station list` reports each berth's distance along one.
+
+`remove` takes one train off the track, coaster or metro, in service or not — `/rcmc info` lists
+their ids. A train left parked on a line holds up every service behind it, which stops for it.
 
 The built-in types are `coaster`, `shoulder`, `wooden`, `metrocompact`, `metro` and `metrolong`; a
 server can add more. See [Train types](train-types.md), or run `/rcmc trains`.

@@ -386,6 +386,19 @@ public class CommandRcmc extends CommandBase {
 
     private void spawnTrain(ICommandSender sender, World world, RcmcWorldState state, String[] args)
         throws CommandException {
+        if (args.length > 1 && "remove".equalsIgnoreCase(args[1])) {
+            // A single train, whatever it is: the coaster panel can remove its own, but a metro
+            // train, or one left parked on a line, otherwise had no way off short of /rcmc clear.
+            if (args.length < 3) {
+                throw new CommandException("/rcmc train remove <trainId>");
+            }
+            int trainId = parseInt(args[2]);
+            if (!com.micatechnologies.minecraft.rcmc.world.TrainSpawner.remove(world, state, trainId)) {
+                throw new CommandException("No train with id " + trainId);
+            }
+            reply(sender, TextFormatting.GREEN, "Removed train #" + trainId + ".");
+            return;
+        }
         if (state.network().isEmpty()) {
             throw new CommandException("No track yet — run /rcmc demo first");
         }
