@@ -53,8 +53,19 @@ public final class MetroFabric {
     /** Sampling step along the alignment. Half a block never leaves a gap on the turnbacks. */
     private static final double STEP = 0.5D;
 
-    /** One sea lantern every this many blocks of ceiling, along the track. */
-    private static final int LIGHT_SPACING = 6;
+    /**
+     * The ceiling lights' pattern repeats every this many blocks: a lantern wherever
+     * {@code (x + 2z) mod 5 == 0}.
+     *
+     * <p>Set by mob spawning, not by looks. The bore is six blocks tall, so a mob's feet on the
+     * floor are six below the ceiling: directly under a lantern the light is 15 - 6 = 9, and it
+     * loses one more per block sideways, while hostile mobs spawn at 7 and below. So every floor
+     * block must be within one step of a lantern — and this pattern is the thinnest that does it,
+     * each lantern covering itself and its four neighbours exactly once. At the old square grid of
+     * six the darkest floor was at 3, and the tunnels filled with zombies for the trains to run
+     * down.</p>
+     */
+    private static final int LIGHT_PATTERN = 5;
 
     private MetroFabric() {
         throw new AssertionError("No instances.");
@@ -155,7 +166,6 @@ public final class MetroFabric {
      * running tracks without any special case for it.</p>
      */
     private static int line(World world, Set<Long> interior, Vec3 origin) {
-        int railLevel = (int) Math.floor(origin.y);
         int placed = 0;
         for (long packed : interior) {
             BlockPos pos = BlockPos.fromLong(packed);
@@ -176,7 +186,7 @@ public final class MetroFabric {
                 else if (face == net.minecraft.util.EnumFacing.UP) {
                     // Lit along the running line, so the tunnel reads as a tunnel and the door-side
                     // detector is not fooled by darkness (it is not, but a rider would be).
-                    material = lit(neighbour, railLevel)
+                    material = lit(pos, interior)
                         ? Blocks.SEA_LANTERN.getDefaultState()
                         : Blocks.STONEBRICK.getDefaultState();
                 }
@@ -190,10 +200,29 @@ public final class MetroFabric {
         return placed;
     }
 
-    /** A regular grid of ceiling lights, so spacing does not depend on which bore got there first. */
-    private static boolean lit(BlockPos pos, int railLevel) {
-        return Math.floorMod(pos.getX(), LIGHT_SPACING) == 0
-            && Math.floorMod(pos.getZ(), LIGHT_SPACING) == 0;
+    /**
+     * Whether the ceiling over {@code top}, the highest interior block of its column, is a light.
+     *
+     * <p>A fixed pattern, so spacing does not depend on which bore got there first — plus one
+     * more wherever the lantern that should cover a column would sit over the wall, where there is
+     * no ceiling to put it in. Without that, the row along each wall was a block too dark: measured
+     * at 7 in the first build of the pattern.</p>
+     */
+    private static boolean lit(BlockPos top, Set<Long> interior) {
+        if (onPattern(top)) {
+            return true;
+        }
+        for (net.minecraft.util.EnumFacing side : net.minecraft.util.EnumFacing.HORIZONTALS) {
+            BlockPos cover = top.offset(side);
+            if (onPattern(cover)) {
+                return !interior.contains(cover.toLong());
+            }
+        }
+        return false;
+    }
+
+    private static boolean onPattern(BlockPos pos) {
+        return Math.floorMod(pos.getX() + 2 * pos.getZ(), LIGHT_PATTERN) == 0;
     }
 
     /**
