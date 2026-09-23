@@ -181,6 +181,9 @@ public final class RideElementSet implements TrainManager.ExternalAcceleration {
         }
         if (element instanceof StationPlatform) {
             StationPlatform station = (StationPlatform) element;
+            if (station.servesAnother(trainId)) {
+                return station.holdWaiting(train);
+            }
             station.claim(trainId);
             station.setGate(gates.apply(station.sectionId()));
         }
@@ -228,6 +231,10 @@ public final class RideElementSet implements TrainManager.ExternalAcceleration {
     @Override
     public boolean isHolding(int trainId, Train train) {
         RideElement element = find(train.reference());
+        if (element instanceof StationPlatform && ((StationPlatform) element).servesAnother(trainId)) {
+            // Waiting its turn: held, not stalled.
+            return true;
+        }
         return element != null && element.isHolding();
     }
 

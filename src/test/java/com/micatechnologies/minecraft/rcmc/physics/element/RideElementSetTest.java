@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.micatechnologies.minecraft.rcmc.physics.Train;
 import com.micatechnologies.minecraft.rcmc.physics.TrainSpec;
@@ -124,5 +125,38 @@ class RideElementSetTest {
         assertEquals(1, elements.elements().size());
         org.junit.jupiter.api.Assertions.assertFalse(((TransferTrack) elements.elements().get(0)).isLinked(),
             "the table still links to storage that no longer exists");
+    }
+
+    @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName("a second train onto a busy platform waits its turn instead of stealing it")
+    void busyPlatformMakesTheNextTrainWait() {
+        TrackNetwork flat = flatNetwork(400.0D);
+        RideElementSet elements = new RideElementSet();
+        StationPlatform station = new StationPlatform(1, 0.0D, 80.0D, 75.0D, 4.0D, 40, 3.0D, 6.0D, TICK);
+        elements.add(station);
+        Train first = new Train(TrainSpec.singleCar(), frictionless(), new TrackRef(1, 60.0D), 3.0D);
+        Train second = new Train(TrainSpec.singleCar(), frictionless(), new TrackRef(1, 20.0D), 3.0D);
+
+        int changes = 0;
+        int serving = station.servingTrain();
+        boolean firstLeft = false;
+        for (int t = 0; t < 1200; t++) {
+            double a1 = elements.forTrain(1, first);
+            double a2 = elements.forTrain(2, second);
+            first.setHeld(elements.isHolding(1, first));
+            second.setHeld(elements.isHolding(2, second));
+            first.tick(flat, a1, 4, TICK);
+            second.tick(flat, a2, 4, TICK);
+            if (station.servingTrain() != serving) {
+                changes++;
+                serving = station.servingTrain();
+            }
+            firstLeft |= first.reference().distance() > 80.0D;
+        }
+        assertTrue(firstLeft, "the first train never got away from the platform");
+        assertTrue(changes <= 3, "the platform changed hands " + changes + " times; it should serve"
+            + " the first train, let it go, then take the second");
+        assertTrue(second.reference().distance() > 80.0D || station.servingTrain() == 2,
+            "the second train was never served");
     }
 }
