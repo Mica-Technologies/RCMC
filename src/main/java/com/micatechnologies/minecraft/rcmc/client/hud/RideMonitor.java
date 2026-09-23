@@ -83,7 +83,8 @@ public final class RideMonitor {
         }
         elapsedTicks++;
 
-        double gravity = Math.max(RcmcConfig.gravity, 0.01D);
+        double gravity = Math.max(
+            com.micatechnologies.minecraft.rcmc.client.ClientPhysics.current().gravity, 0.01D);
         RideTelemetry.Reading reading = RideTelemetry.compute(
             train, network, carIndex, previousVelocity, RcmcConstants.SECONDS_PER_TICK, gravity);
         // The train has one velocity for the whole rigid train regardless of which car the rider

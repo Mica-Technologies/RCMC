@@ -511,6 +511,10 @@ public final class RcmcWorldState {
             if (state == null) {
                 return;
             }
+            // First, so every train below is predicted with the server's constants from its
+            // first tick on this client.
+            RcmcNetwork.sendTo(new com.micatechnologies.minecraft.rcmc.net.PacketPhysicsSettings(
+                com.micatechnologies.minecraft.rcmc.net.PhysicsSettings.fromConfig()), player);
             RcmcNetwork.sendTo(new PacketTrackSync(state.network), player);
             RcmcNetwork.sendTo(new PacketElementSync(state.elements), player);
             RcmcNetwork.sendTo(new com.micatechnologies.minecraft.rcmc.net.PacketTransitSync(

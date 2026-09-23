@@ -1,7 +1,6 @@
 package com.micatechnologies.minecraft.rcmc.client;
 
 import com.micatechnologies.minecraft.rcmc.Rcmc;
-import com.micatechnologies.minecraft.rcmc.RcmcConfig;
 import com.micatechnologies.minecraft.rcmc.RcmcConstants;
 import com.micatechnologies.minecraft.rcmc.world.RcmcWorldState;
 import net.minecraft.client.Minecraft;
@@ -49,7 +48,7 @@ public final class ClientTrainTicker {
         }
         try {
             state.trains().tick(state.network(), null,
-                RcmcConfig.physicsSubSteps, RcmcConstants.SECONDS_PER_TICK);
+                ClientPhysics.current().subSteps, RcmcConstants.SECONDS_PER_TICK);
         }
         catch (RuntimeException e) {
             // A client-side prediction fault must never take the game down: the server's next

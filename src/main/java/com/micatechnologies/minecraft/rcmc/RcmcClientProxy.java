@@ -38,6 +38,8 @@ public class RcmcClientProxy extends RcmcCommonProxy {
         // ride visibly steps at the correction rate rather than the frame rate.
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new ClientTrainTicker());
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(
+            new com.micatechnologies.minecraft.rcmc.client.ClientPhysics.Hooks());
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(
             new com.micatechnologies.minecraft.rcmc.client.sound.CoasterSoundDirector());
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new RiderCamera());
         // Redraws the ridden train when vanilla's per-render-chunk entity loop skips it.
