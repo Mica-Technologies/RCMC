@@ -14,8 +14,10 @@ import net.minecraftforge.common.config.Configuration;
  *
  * <p><b>Server authority.</b> Everything in the {@code physics} category affects simulation
  * results, so it must match between client and server or riders will visibly desync. The
- * server's values are the truth; the client's copies are overwritten from a sync packet on
- * join once that packet exists. Client-only presentation settings belong in a separate
+ * server's values are the truth: they are sent on join ({@code PacketPhysicsSettings}) and a
+ * client predicts with them ({@code ClientPhysics}) rather than with these fields, which it
+ * leaves alone — on a singleplayer client they belong to the integrated server as well.
+ * Client-only presentation settings belong in a separate
  * {@code client} category that is deliberately never synced.</p>
  */
 public final class RcmcConfig {

@@ -1,7 +1,5 @@
 package com.micatechnologies.minecraft.rcmc.net;
 
-import com.micatechnologies.minecraft.rcmc.RcmcConfig;
-import com.micatechnologies.minecraft.rcmc.physics.PhysicsIntegrator;
 import com.micatechnologies.minecraft.rcmc.physics.Train;
 import com.micatechnologies.minecraft.rcmc.physics.TrainManager;
 import com.micatechnologies.minecraft.rcmc.physics.TrainSpec;
@@ -118,15 +116,13 @@ public class PacketTrainSync implements IMessage {
             TrackRef ref = new TrackRef(message.sectionId, message.distance);
 
             if (existing == null) {
-                // Physics constants come from the client's own config here. They MUST match the
-                // server's or prediction diverges — syncing them on join is outstanding work, and
-                // is why RcmcConfig documents the physics category as server-authoritative.
+                // The server's physics constants, sent on join — prediction with any others
+                // diverges between corrections.
                 manager.add(message.trainId, new Train(
                     new TrainSpec(message.carCount, message.carLength, message.couplingGap,
                         message.seatsPerCar, message.bodyColour, message.trimColour,
                         message.seatColour, TrainSpec.CarStyle.byOrdinal(message.carStyle)),
-                    new PhysicsIntegrator(RcmcConfig.gravity, RcmcConfig.rollingResistance,
-                        RcmcConfig.airDrag, RcmcConfig.maxSpeed),
+                    com.micatechnologies.minecraft.rcmc.client.ClientPhysics.current().integrator(),
                     ref, message.velocity));
             }
             else {
