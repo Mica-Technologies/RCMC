@@ -217,7 +217,8 @@ station; `stop` is the emergency stop; `reset` clears it and leaves the ride clo
 
 Links the transfer track on a coaster to a storage track: an open section laid alongside it, within
 16 blocks and long enough to hold what the transfer track holds. The point on the storage track
-nearest the start of the transfer track lines the two up. `off` unlinks it. Trains are stored and
+nearest the start of the transfer track lines the two up. `off` unlinks it. Unlinking, or linking
+different storage, is refused while a train is in storage: retrieve it first. Trains are stored and
 retrieved from the ride's operator panel — see
 [storing trains](../guide/building-a-coaster.md#storing-trains).
 
