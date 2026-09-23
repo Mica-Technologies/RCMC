@@ -28,8 +28,18 @@ public final class Heartline {
     public static final double HEIGHT =
         com.micatechnologies.minecraft.rcmc.track.element.HeartlineShaper.HEART_HEIGHT;
 
-    /** Spacing, in blocks of track, of the points the heart's curvature is sampled from. */
-    public static final double HALF_STEP = 0.5D;
+    /**
+     * Spacing, in blocks of track, of the points the heart's curvature is sampled from.
+     *
+     * <p>A block either side, not less. The track is a Catmull-Rom spline, which is smooth in
+     * direction but steps in curvature at every node; where the rail spirals round the riders'
+     * hearts in a roll, its curvature is large, and sampled finer than the node spacing those steps
+     * read as half a g of sideways noise flickering node to node. A rider's body, the seat and the
+     * car's wheels do not feel centimetre ripples either — ride accelerometer data is filtered for
+     * the same reason. Every real feature of a ride, a clothoid, a crest or a roll, is several blocks
+     * long and still shows in full.</p>
+     */
+    public static final double HALF_STEP = 1.0D;
 
     /** The heart's path at one point: how sharply it curves, toward where, and how fast it moves
      *  for each block the train travels. */

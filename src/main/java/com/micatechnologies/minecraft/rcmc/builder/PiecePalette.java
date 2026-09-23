@@ -3,13 +3,16 @@ package com.micatechnologies.minecraft.rcmc.builder;
 import com.micatechnologies.minecraft.rcmc.track.element.AirtimeHill;
 import com.micatechnologies.minecraft.rcmc.track.element.Corkscrew;
 import com.micatechnologies.minecraft.rcmc.track.element.Curve;
+import com.micatechnologies.minecraft.rcmc.track.element.DiveLoop;
 import com.micatechnologies.minecraft.rcmc.track.element.Helix;
+import com.micatechnologies.minecraft.rcmc.track.element.Immelmann;
 import com.micatechnologies.minecraft.rcmc.track.element.RollDirection;
 import com.micatechnologies.minecraft.rcmc.track.element.Slope;
 import com.micatechnologies.minecraft.rcmc.track.element.Straight;
 import com.micatechnologies.minecraft.rcmc.track.element.TrackElement;
 import com.micatechnologies.minecraft.rcmc.track.element.TurnDirection;
 import com.micatechnologies.minecraft.rcmc.track.element.VerticalLoop;
+import com.micatechnologies.minecraft.rcmc.track.element.ZeroGRoll;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -57,6 +60,10 @@ public final class PiecePalette {
     /** Arc of a single curve piece, in degrees. A quarter turn, so four of them make a square
      *  circuit and two make a U — the shapes a builder chains without thinking about it. */
     public static final double CURVE_ARC_DEGREES = 90.0D;
+
+    /** Slowest entry, in blocks/s, an inversion piece is offered for. The Immelmann needs more;
+     *  see {@code Immelmann.MIN_SPEED}. */
+    public static final double MIN_INVERSION_SPEED = 14.0D;
 
     /** Arc swept over an airtime hill's crest, in degrees. */
     public static final double HILL_CREST_ARC_DEGREES = 60.0D;
@@ -161,8 +168,16 @@ public final class PiecePalette {
                 DESIGN_SPEED_BLOCKS_PER_SECOND, MAX_BANK_DEGREES)));
         entries.add(new Entry("Top radius", 3.0D, 20.0D, 1.0D, 6.0D,
             parameter -> new VerticalLoop(parameter)));
-        entries.add(new Entry("Length", 8.0D, 48.0D, 2.0D, 18.0D,
-            parameter -> new Corkscrew(parameter, parameter / 3.0D, RollDirection.POSITIVE)));
+        // The heartline inversions are shaped for the speed the train enters them at, so that is
+        // what a builder dials in; each sizes itself to suit. See InversionPath.
+        entries.add(new Entry("Entry speed", MIN_INVERSION_SPEED, 40.0D, 1.0D, 18.0D,
+            parameter -> new Corkscrew(parameter, RollDirection.POSITIVE)));
+        entries.add(new Entry("Entry speed", MIN_INVERSION_SPEED, 40.0D, 1.0D, 18.0D,
+            parameter -> new ZeroGRoll(parameter, RollDirection.POSITIVE)));
+        entries.add(new Entry("Entry speed", Immelmann.MIN_SPEED, 40.0D, 1.0D, 24.0D,
+            parameter -> new Immelmann(parameter, RollDirection.POSITIVE)));
+        entries.add(new Entry("Entry speed", MIN_INVERSION_SPEED, 40.0D, 1.0D, 20.0D,
+            parameter -> new DiveLoop(parameter, RollDirection.POSITIVE)));
         entries.add(new Entry("Radius", 6.0D, 48.0D, 2.0D, 16.0D,
             parameter -> new AirtimeHill(parameter, HILL_CREST_ARC_DEGREES)));
         ENTRIES = Collections.unmodifiableList(entries);

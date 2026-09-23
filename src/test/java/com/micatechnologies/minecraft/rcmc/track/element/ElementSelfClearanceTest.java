@@ -103,10 +103,16 @@ class ElementSelfClearanceTest {
     }
 
     @Test
-    @DisplayName("a corkscrew clears itself in both roll directions")
-    void corkscrewClearsItself() {
+    @DisplayName("the heartline inversions clear themselves, in both roll directions, slow and fast")
+    void inversionsClearThemselves() {
         for (RollDirection roll : RollDirection.values()) {
-            assertClears(new Corkscrew(8.0D, 12.0D, roll), "corkscrew (" + roll + ")");
+            for (double speed : new double[] {14.0D, 20.0D, 32.0D}) {
+                assertClears(new Corkscrew(speed, roll), "corkscrew (" + roll + ", " + speed + ")");
+                assertClears(new ZeroGRoll(speed, roll), "zero-g roll (" + roll + ", " + speed + ")");
+                double immelmann = Math.max(speed, Immelmann.MIN_SPEED);
+                assertClears(new Immelmann(immelmann, roll), "Immelmann (" + roll + ", " + immelmann + ")");
+                assertClears(new DiveLoop(speed, roll), "dive loop (" + roll + ", " + speed + ")");
+            }
         }
     }
 

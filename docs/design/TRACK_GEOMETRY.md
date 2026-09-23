@@ -130,6 +130,19 @@ Turns are laid through **clothoid** transitions: curvature eases in from zero, r
 circle's full curvature from the first block, and the bank follows the curvature. A `Curve` still
 ends exactly where the circular arc of its radius would, so pieces fit the same footprint.
 
+### Inversions, shaped from the load
+
+The corkscrew, zero-g roll, Immelmann and dive loop are not drawn as curves. Each one sets the
+**load the rider should feel** at every point: pressed in while pulling up, weightless over the
+top, pressed in again pulling out. It then integrates the path that load produces for the stock
+five-car train entering at a design speed (`InversionPath`, and `Corkscrew` in three dimensions):
+`dα/ds = g(σn − cos α)/v²`. The speed comes from the average height of the train's cars, with
+rolling resistance and drag charged as the physics charges them. Every roll happens where the
+riders are weightless, so it throws nobody sideways. Each pull-out ends on a feedback law that
+leaves the element exactly level, and the design refuses any speed at which the train would slow
+below 5 blocks/s. Nodes are half a block apart, because the rail spirals round the riders' chests
+closer than that.
+
 ## Built on top of this
 
 This page covers one section's geometry. The layers above it all exist:

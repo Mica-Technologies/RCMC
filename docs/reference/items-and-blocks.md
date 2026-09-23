@@ -39,7 +39,7 @@ parameter.
 | ++r++ | Undo the last piece — the same as sneak + right-click air, without having to aim at nothing |
 
 Pieces: straight, slope (signed rise), curve left/right, helix left/right, vertical loop,
-corkscrew, airtime hill. Full parameter ranges are in
+corkscrew, zero-g roll, Immelmann, dive loop, airtime hill. Full parameter ranges are in
 [building a coaster](../guide/building-a-coaster.md#the-palette).
 
 ### Track editor

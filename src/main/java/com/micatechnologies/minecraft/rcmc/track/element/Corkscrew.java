@@ -1,65 +1,47 @@
 package com.micatechnologies.minecraft.rcmc.track.element;
 
-import com.micatechnologies.minecraft.rcmc.track.TrackNode;
-import com.micatechnologies.minecraft.rcmc.track.math.TrackFrame;
 import com.micatechnologies.minecraft.rcmc.track.math.Vec3;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * A barrel roll: one full 360-degree roll about the direction of travel, spread over a path that also
- * nudges sideways — a corkscrew displaces the rider laterally, it does not just spin them in place.
+ * A corkscrew: one full roll, the train rising as it turns over and floating across the top, its
+ * path swinging off to the side the way a corkscrew's does.
  *
- * <p><b>Two independent things, deliberately kept independent.</b> A corkscrew's <em>roll</em> (how the
- * car is oriented) and its <em>centerline path</em> (where the car is) are modelled completely separately
- * here:</p>
- * <ul>
- *   <li>The roll is authored bank, sweeping from {@code entryBankDegrees} to
- *       {@code entryBankDegrees +/- 360} via {@link ElementGeometry#smoothstep} of the element's parameter
- *       {@code t}. Because {@code TrackNode.bankDegrees} is an unbounded scalar, not wrapped to
- *       {@code [0, 360)} anywhere in {@code TrackNode}/{@code TrackSection}, feeding it values that sweep
- *       past 360 works with the existing bank machinery unmodified — no special "this is a roll, not a
- *       bank" case is needed downstream, and two corkscrews chained back to back keep spinning the same
- *       way instead of snapping back through zero at the join.</li>
- *   <li>The path is a gentle sideways S-curve: {@code lateralOffsetBlocks * smoothstep(t)} along the entry
- *       {@code right} direction, added to uniform forward travel. Zero lateral velocity at both ends
- *       (smoothstep's derivative vanishes there) blends cleanly into straight track before and after.</li>
- * </ul>
+ * <p>Shaped the way {@link InversionPath} shapes the planar elements — from the load the riders feel
+ * rather than from a curve — but in three dimensions, because the roll itself steers the path. The
+ * rider rolls smoothly through 360°; the load along their up is
+ * {@code n = 1 + A·cos(roll)·sin²(πf)}, {@code f} the fraction of the way through. So they are pressed
+ * in (up to {@code 1 + A} g) while upright and pulling up, weightless near the top where they are
+ * inverted, and pushed sideways by nothing, ever: the path curves exactly as that load demands, and
+ * at the ends the load is 1 g, the same as the track either side. The side of the roll carries the
+ * path sideways, which is the corkscrew's offset.</p>
  *
- * <p><b>Why not a true 3D spiral (a helix with its axis along {@code forward} instead of {@code up}).</b>
- * That is a more literal reading of "barrel roll" and was considered, but it reintroduces exactly the
- * curvature-step problem {@link VerticalLoop} exists to solve — a spiral path curving away from straight
- * track has the same zero-to-nonzero curvature jump at the join a circular loop does, and fixing it
- * properly means clothoid-tapering the lateral path too. The roll is what makes a corkscrew a corkscrew;
- * the lateral kink is a secondary, cosmetic part of the shape. Decoupling them gets a corkscrew that rolls
- * correctly and blends smoothly, without paying for machinery whose main job (in {@code VerticalLoop}) is
- * solving a problem this element does not really have — a mild sideways wiggle, unlike a full loop, does
- * not need to fight a large curvature step to begin with.</p>
+ * <p>{@code A} is solved for the design speed so the train leaves level. The heading it leaves on
+ * drifts by a degree or two, and the element reports it exactly, so what follows joins without a
+ * kink.</p>
  *
- * <p><b>The path stays in one plane</b> — spanned by the entry {@code forward} and {@code right}, i.e.
- * normal to entry {@code up} — exactly like {@link Curve}. So, just as in {@code Curve}, {@code up}
- * transports through the centerline unchanged; the roll the rider actually feels comes entirely from the
- * authored bank sweep, not from any change in the transported frame. {@link ElementResult#exitFrame}
- * therefore reports the un-banked exit frame with {@code up == entryUp}, and the full {@code +/-360}
- * degrees lives in {@link ElementResult#exitBankDegrees}, consistent with how every other element in this
- * package splits geometry from authored bank.</p>
+ * <p>It was once a roll about the rail along a sideways S-bend: 3 to 9 g sideways at the riders'
+ * hearts. Then a helix about the line of travel, whose felt load swung almost entirely sideways at
+ * both ends and snapped upright in the last half block.</p>
  */
 public final class Corkscrew implements TrackElement {
 
-    private static final int SEGMENTS_MIN = 8;
+    /** Element length per block/s of design speed: about a second and a quarter end to end. */
+    static final double LENGTH_PER_SPEED = 1.25D;
 
-    private final double lengthBlocks;
-    private final double lateralOffsetBlocks;
+    private static final double DS = 0.02D;
+    private static final double GRAVITY = InversionPath.GRAVITY;
+
+    private final double entrySpeed;
     private final RollDirection rollDirection;
 
-    public Corkscrew(double lengthBlocks, double lateralOffsetBlocks, RollDirection rollDirection) {
-        ElementGeometry.requirePositive(lengthBlocks, "lengthBlocks");
-        ElementGeometry.requireFinite(lateralOffsetBlocks, "lateralOffsetBlocks");
+    public Corkscrew(double entrySpeed, RollDirection rollDirection) {
+        ElementGeometry.requirePositive(entrySpeed, "entrySpeed");
         if (rollDirection == null) {
             throw new IllegalArgumentException("rollDirection must not be null");
         }
-        this.lengthBlocks = lengthBlocks;
-        this.lateralOffsetBlocks = lateralOffsetBlocks;
+        this.entrySpeed = entrySpeed;
         this.rollDirection = rollDirection;
     }
 
@@ -73,34 +55,116 @@ public final class Corkscrew implements TrackElement {
         return "Corkscrew";
     }
 
+    /** The heart's path and the rider's up along it. */
+    private static final class Path {
+        final List<Vec3> hearts = new ArrayList<>();
+        final List<Vec3> ups = new ArrayList<>();
+        final List<Double> rolls = new ArrayList<>();
+        final List<Double> arc = new ArrayList<>();
+        Vec3 tangent;
+    }
+
     @Override
     public ElementResult generate(ElementContext context) {
-        Vec3 entryPos = context.entryFrame.position;
-        Vec3 forward = context.entryFrame.forward;
-        Vec3 up = context.entryFrame.up;
-        Vec3 right = context.entryFrame.right;
-        double rollSign = rollDirection == RollDirection.POSITIVE ? 1.0D : -1.0D;
-
-        // `length` is treated as forward travel distance, not true arc length — the lateral wiggle adds a
-        // small amount of extra path length beyond it, exactly the same documented approximation Slope
-        // makes treating its `length` as horizontal run rather than solving for exact arc length.
-        int segments = ElementGeometry.segmentCount(lengthBlocks, context.nodeSpacing, SEGMENTS_MIN);
-
-        List<TrackNode> nodes = new ArrayList<>(segments);
-        for (int i = 1; i <= segments; i++) {
-            double t = (double) i / segments;
-            Vec3 pos = entryPos
-                .add(forward.scale(lengthBlocks * t))
-                .add(right.scale(lateralOffsetBlocks * ElementGeometry.smoothstep(t)));
-            double bank = context.entryBankDegrees + rollSign * 360.0D * ElementGeometry.smoothstep(t);
-            nodes.add(new TrackNode(pos, bank, null));
+        // More pull climbs higher and leaves pitched up; less leaves pitched down. Find level.
+        double lo = 0.2D;
+        double hi = 2.0D;
+        Path path = null;
+        for (int i = 0; i < 40; i++) {
+            double mid = (lo + hi) / 2.0D;
+            Path trial;
+            try {
+                trial = integrate(context, mid);
+            }
+            catch (IllegalArgumentException e) {
+                hi = mid;
+                continue;
+            }
+            path = trial;
+            if (trial.tangent.dot(context.entryFrame.up) > 0.0D) {
+                hi = mid;
+            } else {
+                lo = mid;
+            }
+        }
+        if (path == null) {
+            throw new IllegalArgumentException("too slow for a corkscrew: the train would stall");
         }
 
-        // The centerline never leaves the plane spanned by (forward, right), i.e. it is normal to `up`
-        // throughout, so — exactly as in Curve — `up` is a fixed point of the path's own rotation and
-        // passes through unchanged. The roll the rider feels is carried entirely by the bank sweep above.
-        TrackFrame exitFrame = new TrackFrame(nodes.get(nodes.size() - 1).position(), forward, up);
-        double exitBank = context.entryBankDegrees + rollSign * 360.0D;
-        return new ElementResult(nodes, exitFrame, exitBank);
+        // Nodes close where the rider rolls, gradually sparser where not — see
+        // InversionPath.nodeIndices for why a roll needs them close, and evenly graded.
+        int count = path.hearts.size();
+        double[] arc = new double[count];
+        double[] turn = new double[count];
+        for (int k = 0; k < count; k++) {
+            arc[k] = path.arc.get(k);
+            turn[k] = path.rolls.get(k);
+        }
+        List<Vec3> hearts = new ArrayList<>();
+        List<Vec3> ups = new ArrayList<>();
+        for (int k : InversionPath.nodeIndices(arc, turn, InversionPath.NODE_SPACING)) {
+            hearts.add(path.hearts.get(k));
+            ups.add(path.ups.get(k));
+        }
+        return HeartlineShaper.shape(context, hearts, ups, path.tangent);
+    }
+
+    /** The path load amplitude {@code amp} produces, for the stock train entering at the design
+     *  speed. */
+    private Path integrate(ElementContext context, double amp) {
+        double length = LENGTH_PER_SPEED * entrySpeed;
+        double sign = rollDirection == RollDirection.POSITIVE ? 1.0D : -1.0D;
+        Vec3 worldUp = context.entryFrame.up;
+        Vec3 heart = context.entryFrame.position.add(worldUp.scale(HeartlineShaper.HEART_HEIGHT));
+        Vec3 origin = heart;
+        Vec3 tangent = context.entryFrame.forward;
+        Vec3 level = worldUp;
+        Path path = new Path();
+        List<Double> heights = new ArrayList<>();
+        double lost = 0.0D;
+        int steps = (int) Math.ceil(length / DS);
+        for (int k = 0; k <= steps; k++) {
+            double s = k * DS;
+            double f = Math.min(1.0D, s / length);
+            double roll = 360.0D * InversionPath.smootherstep(f);
+            double r = Math.toRadians(roll) * sign;
+            Vec3 up = level.scale(Math.cos(r)).add(tangent.cross(level).scale(Math.sin(r)));
+            heights.add(heart.subtract(origin).dot(worldUp));
+            path.hearts.add(heart);
+            path.ups.add(up);
+            path.rolls.add(roll);
+            path.arc.add(s);
+            if (k == steps) {
+                break;
+            }
+
+            double speedSquared = entrySpeed * entrySpeed - lost - 2.0D * GRAVITY * trainHeight(heights, k);
+            if (speedSquared < InversionPath.MIN_SPEED * InversionPath.MIN_SPEED) {
+                throw new IllegalArgumentException("too slow for a corkscrew: the train would stall");
+            }
+            double n = 1.0D + amp * Math.cos(Math.toRadians(roll)) * Math.pow(Math.sin(Math.PI * f), 2.0D);
+            // The rider feels n along their up; the track supplies that, less gravity.
+            Vec3 accel = up.scale(n * GRAVITY).subtract(worldUp.scale(GRAVITY));
+            Vec3 across = accel.subtract(tangent.scale(accel.dot(tangent)));
+            Vec3 turned = tangent.add(across.scale(DS / speedSquared)).normalize();
+            // Carry the reference up along with the heading: parallel transport.
+            level = level.subtract(turned.scale(level.dot(turned))).normalize();
+            tangent = turned;
+            heart = heart.add(tangent.scale(DS));
+            lost += InversionPath.frictionLoss(speedSquared, DS);
+        }
+        path.tangent = tangent;
+        return path;
+    }
+
+    /** Average height of the stock train's cars, its front car at step {@code k}, the run before the
+     *  element taken as level — see {@link InversionPath#CAR_OFFSETS}. */
+    private static double trainHeight(List<Double> heights, int k) {
+        double sum = 0.0D;
+        for (double offset : InversionPath.CAR_OFFSETS) {
+            int at = k - (int) Math.round(offset / DS);
+            sum += at <= 0 ? 0.0D : heights.get(at);
+        }
+        return sum / InversionPath.CAR_OFFSETS.length;
     }
 }

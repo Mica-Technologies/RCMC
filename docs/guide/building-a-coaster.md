@@ -154,7 +154,7 @@ pieces and nodes the chain has so far.
 
 ### The palette
 
-Nine pieces, each with one adjustable parameter:
+Twelve pieces, each with one adjustable parameter:
 
 | Piece | Parameter | Range (default) |
 | --- | --- | --- |
@@ -165,7 +165,10 @@ Nine pieces, each with one adjustable parameter:
 | Helix left | Radius | 4–32 (10) |
 | Helix right | Radius | 4–32 (10) |
 | Vertical loop | Top radius | 3–20 (6) |
-| Corkscrew | Length | 8–48 (18) |
+| Corkscrew | Entry speed, blocks/s | 14–40 (18) |
+| Zero-g roll | Entry speed, blocks/s | 14–40 (18) |
+| Immelmann | Entry speed, blocks/s | 22–40 (24) |
+| Dive loop | Entry speed, blocks/s | 14–40 (20) |
 | Airtime hill | Radius | 6–48 (16) |
 
 You choose the direction of travel exactly once, when the chain is anchored. After that every
@@ -174,7 +177,23 @@ point, and it is what guarantees there is never a gap or a kink at a join.
 
 Curves and helices come out **correctly banked** for their radius at the design speed. That
 balance between authored bank and required bank is what the nausea rating measures, so a
-well-banked turn is not cosmetic.
+well-banked turn is not cosmetic. Curves ease in and out, so the bank arrives with the turn rather
+than after it.
+
+### Inversions
+
+The corkscrew, zero-g roll, Immelmann and dive loop are set by the **speed the train enters them
+at**, not by a size. Each shapes itself for that speed:
+
+- the track rolls about the riders' chests, not the rail, so nobody is thrown sideways;
+- every roll happens while the riders are weightless or nearly so;
+- each one leaves level. The corkscrew and zero-g roll carry on the way they came in; the Immelmann
+  and dive loop turn you back the other way, higher and lower respectively.
+
+Dial in the speed the train will really have there. Run [`/rcmc check`](../reference/commands.md#rcmc-check)
+afterwards: too fast and the top turns to airtime, too slow and the check will show where the
+train stalls. The Immelmann needs the most speed, since the train has to get over the top upside
+down, so it starts at 22 blocks/s.
 
 ---
 
