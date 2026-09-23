@@ -164,6 +164,13 @@ public final class RideElements {
                 after = null;
             }
             else {
+                // The stop was in the cut, and clamping it into this piece puts it at the piece's
+                // entry: a train stopping there would hang back out of the platform. Stop it at
+                // the exit end instead, as the piece before the cut already does.
+                StationPlatform piece = (StationPlatform) after;
+                after = new StationPlatform(sectionId, piece.startDistance(), piece.endDistance(),
+                    piece.endDistance(), piece.brakeDeceleration(), piece.dwellTicks(),
+                    piece.dispatchAcceleration(), piece.dispatchSpeed(), tickSeconds, piece.passThroughs());
                 before = null;
             }
         }

@@ -159,6 +159,29 @@ public final class LineService {
      * @param authorityRemaining movement authority from signalling, measured along the current
      *                           facing — {@link TrainDriver#NO_STOP} when unsignalled
      */
+    /**
+     * Picks up the current berth's stop point afresh after the track under it was edited.
+     *
+     * <p>The berth is resolved once per leg and kept, and an edit moves a platform's stop point in
+     * the station registry — so a train mid-leg would otherwise drive to where the stop used to
+     * be, or to a section that no longer exists. The same berth, matched by label, is read back
+     * from the live station rather than chosen again: re-choosing while a train stands at a berth
+     * is what picks the one across an island.</p>
+     */
+    public void refreshBerth() {
+        if (berth == null) {
+            return;
+        }
+        TransitPlatform stale = berth;
+        berth = null;
+        for (TransitPlatform platform : currentStation().platforms()) {
+            if (platform.label().equals(stale.label())) {
+                berth = platform;
+                return;
+            }
+        }
+    }
+
     public double tick(Train train, TrackNetwork network, double authorityRemaining) {
         double velocity = train.velocity();
         if (Math.abs(velocity) > FACING_SPEED) {

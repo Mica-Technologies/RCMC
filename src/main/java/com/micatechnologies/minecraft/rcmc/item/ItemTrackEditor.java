@@ -211,6 +211,14 @@ public class ItemTrackEditor extends Item {
             say(player, TextFormatting.RED, "That section no longer exists.");
             return;
         }
+        // The section may have been edited since — nodes deleted, split — leaving the selected span
+        // beyond its end.
+        int spans = section.isClosed() ? section.nodes().size() : section.nodes().size() - 1;
+        if (selection.spanIndex >= spans) {
+            SELECTIONS.remove(player.getUniqueID());
+            say(player, TextFormatting.GRAY, "That span is gone since the track was edited; select it again.");
+            return;
+        }
 
         double from = section.nodeDistance(selection.spanIndex);
         double to = spanEnd(section, selection.spanIndex);

@@ -107,4 +107,22 @@ class RideElementSetTest {
         assertEquals(trainA.reference().distance(), trainB.reference().distance(), 0.0D);
         assertEquals(trainA.velocity(), trainB.velocity(), 0.0D);
     }
+
+    @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName("a transfer table takes its storage berth with it, and a table whose storage goes is unlinked")
+    void transferTablesAndBerthsGoTogether() {
+        RideElementSet elements = new RideElementSet();
+        TransferTrack table = new TransferTrack(1, 0.0D, 20.0D, 1.0D, 2.0D, TICK, 2, 5.0D);
+        elements.add(table);
+        elements.add(new StorageBerth(2, 5.0D, 25.0D, TICK));
+        elements.remove(table);
+        assertEquals(0, elements.elements().size(), "the berth was left behind, blocking edits to #2");
+
+        elements.add(table);
+        elements.add(new StorageBerth(2, 5.0D, 25.0D, TICK));
+        elements.removeForSection(2);
+        assertEquals(1, elements.elements().size());
+        org.junit.jupiter.api.Assertions.assertFalse(((TransferTrack) elements.elements().get(0)).isLinked(),
+            "the table still links to storage that no longer exists");
+    }
 }

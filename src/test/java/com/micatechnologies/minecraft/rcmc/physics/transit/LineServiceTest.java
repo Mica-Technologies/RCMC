@@ -71,6 +71,27 @@ class LineServiceTest {
     }
 
     @Test
+    @DisplayName("after the track under a stop is edited, a train mid-leg runs to where the stop is now")
+    void refreshedBerthFollowsAnEditedStop() {
+        TrackNetwork flat = flatNetwork(1000.0D);
+        java.util.Map<String, TransitStation> registry = new java.util.HashMap<>();
+        registry.put("Alpha", new TransitStation("Alpha", new TrackRef(1, 400.0D)));
+        TransitLine line = new TransitLine("Test Line", Arrays.asList(
+            registry.get("Alpha"), new TransitStation("Beta", new TrackRef(1, 900.0D))), false);
+        LineService service = new LineService(line, quickController(), 0, 1, 1.0D, registry::get);
+        Train train = new Train(TrainSpec.singleCar(), realistic(), new TrackRef(1, 100.0D), 0.0D);
+        for (int i = 0; i < 20; i++) {
+            tickInService(train, flat, service, TrainDriver.NO_STOP);
+        }
+        // An edit moved Alpha's stop point, and told the service so.
+        registry.put("Alpha", new TransitStation("Alpha", new TrackRef(1, 500.0D)));
+        service.refreshBerth();
+
+        assertTrue(runUntilServed(train, flat, service, 1, 20000) < 20000, "expected Alpha served");
+        assertEquals(500.0D, train.reference().distance(), 1.0D, "the train berthed at the old stop");
+    }
+
+    @Test
     @DisplayName("a loop service wraps from the last station straight back to the first")
     void loopServiceWraps() {
         TrackNetwork ring = new TrackNetwork();

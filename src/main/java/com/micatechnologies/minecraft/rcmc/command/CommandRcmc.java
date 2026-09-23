@@ -715,7 +715,10 @@ public class CommandRcmc extends CommandBase {
             com.micatechnologies.minecraft.rcmc.world.PlatformSide.detect(
                 world, state.network(), station);
         if (detected != null && detected != station.doorSide()) {
-            state.transit().addStation(station.withDoorSide(detected));
+            // The primary platform only — the one this command built beside. An island's other
+            // berth has its own side, and must not be turned to face the wall.
+            state.transit().addStation(station.withPlatformAt(0, station.primary().withDoorSide(detected)));
+            state.markTrackDirty(world);
             RcmcNetwork.sendToAllIn(new com.micatechnologies.minecraft.rcmc.net.PacketTransitSync(
                 state.transit()), world.provider.getDimension());
         }
@@ -1959,10 +1962,10 @@ public class CommandRcmc extends CommandBase {
                 + " with the track tool's Transfer track segment, just before the station.");
         }
         RideElementSet elements = state.elements();
-        if (transfer.isLinked()) {
-            removeBerths(elements, transfer.storageSectionId());
-        }
         if ("off".equalsIgnoreCase(args[2])) {
+            if (transfer.isLinked()) {
+                removeBerths(elements, transfer.storageSectionId());
+            }
             elements.replace(transfer, transfer.linkedTo(
                 com.micatechnologies.minecraft.rcmc.physics.element.TransferTrack.UNLINKED, 0.0D));
             state.markTrackDirty(world);
@@ -1989,6 +1992,10 @@ public class CommandRcmc extends CommandBase {
             throw new CommandException("Section #" + storageId + " runs out " + fmt(best + span
                 - storage.totalLength()) + " blocks short of the far end of the transfer track;"
                 + " it needs to be at least as long, level with it.");
+        }
+        // Only now, with the new storage checked: a mistyped id must not cost the old link its berth.
+        if (transfer.isLinked()) {
+            removeBerths(elements, transfer.storageSectionId());
         }
         elements.replace(transfer, transfer.linkedTo(storageId, best));
         elements.add(new com.micatechnologies.minecraft.rcmc.physics.element.StorageBerth(storageId,
