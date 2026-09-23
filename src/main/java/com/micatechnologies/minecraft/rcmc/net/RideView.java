@@ -61,6 +61,25 @@ public final class RideView {
     public final List<TrainRow> trains;
     public final List<SettingRow> settings;
 
+    /** The ride's transfer table: none, laid but not linked to storage, or linked. */
+    public static final int NO_TRANSFER = -1;
+    public static final int TRANSFER_UNLINKED = 0;
+    public static final int TRANSFER_LINKED = 1;
+
+    public int transfer = NO_TRANSFER;
+    /** {@code RideController.TransferRequest} ordinal. */
+    public int transferRequest;
+    /** The train in storage, or {@code -1}. */
+    public int storedTrain = -1;
+
+    /** This view with its transfer table's state filled in. */
+    public RideView withTransfer(int transfer, int request, int storedTrain) {
+        this.transfer = transfer;
+        this.transferRequest = request;
+        this.storedTrain = storedTrain;
+        return this;
+    }
+
     public RideView(int sectionId, String name, int state, int dispatchMode,
                     boolean emergencyStopped, int carsPerTrain, int maxTrains, int blockCount,
                     String message, List<TrainRow> trains, List<SettingRow> settings) {
@@ -110,6 +129,9 @@ public final class RideView {
             buf.writeByte(row.parameter);
             buf.writeDouble(row.value);
         }
+        buf.writeByte(transfer);
+        buf.writeByte(transferRequest);
+        buf.writeInt(storedTrain);
     }
 
     static RideView read(ByteBuf buf) {
@@ -134,8 +156,11 @@ public final class RideView {
         for (int i = 0; i < settingCount; i++) {
             settings.add(new SettingRow(buf.readInt(), buf.readByte(), buf.readDouble()));
         }
+        int transfer = buf.readByte();
+        int request = buf.readByte();
+        int storedTrain = buf.readInt();
         return new RideView(sectionId, name, state, mode, stopped, cause, cars, maxTrains, blocks, message,
-            trains, settings);
+            trains, settings).withTransfer(transfer, request, storedTrain);
     }
 
     private static void writeString(ByteBuf buf, String s) {

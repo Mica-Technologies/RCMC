@@ -48,6 +48,8 @@ public final class ElementCodec {
     private static final String KEY_MODE = "Mode";
     /** Additive: a station saved before pass-throughs reads as zero, which is what it was. */
     private static final String KEY_PASSES = "PassThroughs";
+    private static final String KEY_STORAGE_SECTION = "StorageSection";
+    private static final String KEY_STORAGE_OFFSET = "StorageOffset";
     private static final String KEY_STOP = "Stop";
     private static final String KEY_DWELL = "Dwell";
     private static final String KEY_DISPATCH_SPEED = "DispatchSpeed";
@@ -116,6 +118,12 @@ public final class ElementCodec {
         if (element instanceof DriveTyres) {
             return "drive_tyres";
         }
+        if (element instanceof com.micatechnologies.minecraft.rcmc.physics.element.TransferTrack) {
+            return "transfer";
+        }
+        if (element instanceof com.micatechnologies.minecraft.rcmc.physics.element.StorageBerth) {
+            return "storage_berth";
+        }
         return null;
     }
 
@@ -163,6 +171,18 @@ public final class ElementCodec {
             tag.setDouble(KEY_SPEED, ((DriveTyres) element).driveSpeed());
             tag.setDouble(KEY_ACCEL, ((DriveTyres) element).maxAcceleration());
         }
+        else if (element instanceof com.micatechnologies.minecraft.rcmc.physics.element.TransferTrack) {
+            com.micatechnologies.minecraft.rcmc.physics.element.TransferTrack transfer =
+                (com.micatechnologies.minecraft.rcmc.physics.element.TransferTrack) element;
+            tag.setString(KEY_TYPE, "transfer");
+            tag.setDouble(KEY_SPEED, transfer.tyreSpeed());
+            tag.setDouble(KEY_ACCEL, transfer.maxAcceleration());
+            tag.setInteger(KEY_STORAGE_SECTION, transfer.storageSectionId());
+            tag.setDouble(KEY_STORAGE_OFFSET, transfer.storageOffset());
+        }
+        else if (element instanceof com.micatechnologies.minecraft.rcmc.physics.element.StorageBerth) {
+            tag.setString(KEY_TYPE, "storage_berth");
+        }
         else {
             // An element type with no persistence mapping is dropped rather than silently written
             // as something else. Returning null makes that visible in the element count on reload
@@ -193,6 +213,13 @@ public final class ElementCodec {
                     tag.getDouble(KEY_ACCEL), tag.getInteger(KEY_DWELL),
                     tag.getDouble(KEY_DISPATCH_ACCEL), tag.getDouble(KEY_DISPATCH_SPEED), tick,
                     Math.max(0, tag.getInteger(KEY_PASSES)));
+            case "transfer":
+                return new com.micatechnologies.minecraft.rcmc.physics.element.TransferTrack(section,
+                    start, end, tag.getDouble(KEY_SPEED), tag.getDouble(KEY_ACCEL), tick,
+                    tag.getInteger(KEY_STORAGE_SECTION), tag.getDouble(KEY_STORAGE_OFFSET));
+            case "storage_berth":
+                return new com.micatechnologies.minecraft.rcmc.physics.element.StorageBerth(section,
+                    start, end, tick);
             case "drive_tyres":
                 return new DriveTyres(section, start, end,
                     tag.getDouble(KEY_SPEED), tag.getDouble(KEY_ACCEL), tick);

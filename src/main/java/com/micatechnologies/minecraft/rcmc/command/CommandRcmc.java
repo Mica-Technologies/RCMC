@@ -61,7 +61,7 @@ public class CommandRcmc extends CommandBase {
 
     @Override
     public String getUsage(ICommandSender sender) {
-        return "/rcmc <demo|metrodemo|train|clear|info|build|paint|style|rate|block|station|line"
+        return "/rcmc <demo|metrodemo|train|clear|info|build|paint|style|rate|block|transfer|station|line"
             + "|switch|platform|rmsection|undo|redo>";
     }
 
@@ -75,7 +75,7 @@ public class CommandRcmc extends CommandBase {
                                           String[] args, BlockPos targetPos) {
         if (args.length == 1) {
             return getListOfStringsMatchingLastWord(args, "demo", "metrodemo", "train", "clear",
-                "info", "build", "paint", "style", "rate", "block", "station", "line", "switch",
+                "info", "build", "paint", "style", "rate", "block", "transfer", "station", "line", "switch",
                 "platform", "rmsection", "undo", "redo");
         }
         if (args.length == 3 && "style".equalsIgnoreCase(args[0])) {
@@ -89,6 +89,9 @@ public class CommandRcmc extends CommandBase {
         }
         if (args.length == 2 && "demo".equalsIgnoreCase(args[0])) {
             return getListOfStringsMatchingLastWord(args, "shuttle");
+        }
+        if (args.length == 3 && "transfer".equalsIgnoreCase(args[0])) {
+            return getListOfStringsMatchingLastWord(args, "off");
         }
         if (args.length == 3 && "block".equalsIgnoreCase(args[0])) {
             return getListOfStringsMatchingLastWord(args, "auto", "off");
@@ -169,6 +172,9 @@ public class CommandRcmc extends CommandBase {
             case "block":
                 block(sender, state, args);
                 break;
+            case "transfer":
+                transfer(sender, world, state, args);
+                break;
             case "style":
                 style(sender, world, state, args);
                 break;
@@ -232,8 +238,10 @@ public class CommandRcmc extends CommandBase {
         elements.add(new StationPlatform(id, demo.stationStart, demo.stationEnd,
             demo.stationStop, 6.0D, 60, 4.0D, 6.0D, tick));
         elements.add(new ChainLift(id, demo.liftStart, demo.liftEnd, 5.0D, 12.0D, tick));
+        // A block brake at the same 6 blocks/s: it rides exactly as a trim brake would, and it is
+        // what lets /rcmc block <id> auto divide the demo for two trains without any building.
         elements.add(new BrakeRun(id, demo.brakeStart, demo.brakeEnd,
-            6.0D, 6.0D, BrakeRun.Mode.TRIM, tick));
+            6.0D, 6.0D, BrakeRun.Mode.BLOCK, tick));
 
         state.markTrackDirty(world);
         broadcastTrack(world, state);
@@ -1870,6 +1878,81 @@ public class CommandRcmc extends CommandBase {
         reply(sender, TextFormatting.GRAY, "  Run at most " + (count - 1)
             + " trains here: " + count + " trains on " + count + " blocks deadlocks.");
     }
+
+    /**
+     * {@code /rcmc transfer <sectionId> <storageSectionId|off>} — links the transfer track on a
+     * coaster to the storage track beside it, or unlinks it.
+     *
+     * <p>The storage track is ordinary track the builder lays alongside, open and level. The point on
+     * it nearest the start of the transfer track becomes the storage berth's start, so the two line up
+     * and a train slid across keeps its place along the table.</p>
+     */
+    private void transfer(ICommandSender sender, World world, RcmcWorldState state, String[] args)
+        throws CommandException {
+        if (args.length < 3) {
+            throw new CommandException("/rcmc transfer <sectionId> <storageSectionId|off>");
+        }
+        int sectionId = parseInt(args[1]);
+        com.micatechnologies.minecraft.rcmc.physics.element.TransferTrack transfer =
+            com.micatechnologies.minecraft.rcmc.world.RideOperations.transferTrackOn(state, sectionId);
+        if (transfer == null) {
+            throw new CommandException("Section #" + sectionId + " has no transfer track. Lay one"
+                + " with the track tool's Transfer track segment, just before the station.");
+        }
+        RideElementSet elements = state.elements();
+        if (transfer.isLinked()) {
+            removeBerths(elements, transfer.storageSectionId());
+        }
+        if ("off".equalsIgnoreCase(args[2])) {
+            elements.replace(transfer, transfer.linkedTo(
+                com.micatechnologies.minecraft.rcmc.physics.element.TransferTrack.UNLINKED, 0.0D));
+            state.markTrackDirty(world);
+            broadcastTrack(world, state);
+            reply(sender, TextFormatting.YELLOW, "Transfer track on #" + sectionId + " unlinked.");
+            return;
+        }
+        int storageId = parseInt(args[2]);
+        TrackSection storage = state.network().section(storageId);
+        if (storage == null || storageId == sectionId) {
+            throw new CommandException("No storage section #" + storageId + " — try /rcmc info");
+        }
+        TrackSection main = state.network().section(sectionId);
+        Vec3 at = main.positionAtDistance(transfer.startDistance());
+        double best = com.micatechnologies.minecraft.rcmc.physics.ride.Transfers.nearestOn(storage, at);
+        double reach = storage.positionAtDistance(best).subtract(at).length();
+        double span = transfer.endDistance() - transfer.startDistance();
+        if (reach > MAX_TRANSFER_REACH) {
+            throw new CommandException("Section #" + storageId + " is " + fmt(reach)
+                + " blocks from the transfer track; lay it alongside, within "
+                + fmt(MAX_TRANSFER_REACH) + ".");
+        }
+        if (best + span > storage.totalLength() + 1.0e-6D) {
+            throw new CommandException("Section #" + storageId + " runs out " + fmt(best + span
+                - storage.totalLength()) + " blocks short of the far end of the transfer track;"
+                + " it needs to be at least as long, level with it.");
+        }
+        elements.replace(transfer, transfer.linkedTo(storageId, best));
+        elements.add(new com.micatechnologies.minecraft.rcmc.physics.element.StorageBerth(storageId,
+            best, best + span, RcmcConstants.SECONDS_PER_TICK));
+        state.markTrackDirty(world);
+        broadcastTrack(world, state);
+        reply(sender, TextFormatting.GREEN, "Transfer track on #" + sectionId + " linked to storage"
+            + " on #" + storageId + ". Store and retrieve trains at the ride's operator panel.");
+    }
+
+    /** Removes every storage berth on {@code storageId}. */
+    private static void removeBerths(RideElementSet elements, int storageId) {
+        for (com.micatechnologies.minecraft.rcmc.physics.element.RideElement element
+            : new ArrayList<>(elements.elements())) {
+            if (element instanceof com.micatechnologies.minecraft.rcmc.physics.element.StorageBerth
+                && element.sectionId() == storageId) {
+                elements.remove(element);
+            }
+        }
+    }
+
+    /** How far a transfer table can slide a train sideways, in blocks. */
+    private static final double MAX_TRANSFER_REACH = 16.0D;
 
     /**
      * {@code /rcmc block <sectionId> auto} — blocks bounded by the ride's own hardware: the end of

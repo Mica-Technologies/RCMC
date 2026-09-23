@@ -20,7 +20,7 @@ styles.
 ```
 
 Builds a complete demo coaster at your feet: station, chain lift, drop, banked turn, airtime hill,
-brake run, back to the station. Reports the section id it allocated, the spans of each element, and
+block brake, back to the station — so `/rcmc block <id> auto` divides it for two trains as built. Reports the section id it allocated, the spans of each element, and
 the exact `/rcmc train` line to run next.
 
 | Argument | Range | Default |
@@ -194,6 +194,18 @@ A number divides it into that many equal blocks instead, wherever they fall. `of
 signalling. Either way it reports the safe train count. Block sections
 are saved with the world and can be undone like any other edit. See
 [multi-train operation](../guide/riding-and-operations.md#multi-train-operation).
+
+### `/rcmc transfer`
+
+```
+/rcmc transfer <sectionId> <storageSectionId|off>
+```
+
+Links the transfer track on a coaster to a storage track: an open section laid alongside it, within
+16 blocks and long enough to hold what the transfer track holds. The point on the storage track
+nearest the start of the transfer track lines the two up. `off` unlinks it. Trains are stored and
+retrieved from the ride's operator panel — see
+[storing trains](../guide/building-a-coaster.md#storing-trains).
 
 ---
 

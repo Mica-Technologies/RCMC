@@ -89,6 +89,10 @@ class RideElementAuthoringTest {
             }
         }
 
+        // Placed by a command rather than a segment, and still a player's to place: a storage berth
+        // is what /rcmc transfer lays on the storage track when it links a transfer table.
+        authorable.add("StorageBerth");
+
         Set<String> unreachable = new TreeSet<>(discovered);
         unreachable.removeAll(authorable);
         assertTrue(unreachable.isEmpty(),

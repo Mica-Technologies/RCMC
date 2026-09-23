@@ -27,7 +27,11 @@ public class PacketRideAction implements IMessage {
         SET_CARS,
         ADD_TRAIN,
         REMOVE_TRAIN,
-        TUNE
+        TUNE,
+        /** Store the next train at the transfer table; pressed again, cancel. */
+        STORE_TRAIN,
+        /** Bring the stored train back; pressed again, cancel. */
+        RETRIEVE_TRAIN
     }
 
     private int sectionId;
