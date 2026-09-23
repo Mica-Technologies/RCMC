@@ -80,6 +80,9 @@ public final class TransitStopController {
 
     private final TrainDriver driver;
     private final double cruiseSpeed;
+
+    /** The most the track allows here and ahead, blocks/s — see {@link #setSpeedCap}. */
+    private double speedCap = Double.POSITIVE_INFINITY;
     private final double berthTolerance;
     private final int doorOpenTicks;
     private int dwellTicks;
@@ -163,7 +166,7 @@ public final class TransitStopController {
                     driver.resetCommand();
                     return advanceDoorPhase();
                 }
-                double signedCruise = (direction >= 0.0D ? 1.0D : -1.0D) * cruiseSpeed;
+                double signedCruise = (direction >= 0.0D ? 1.0D : -1.0D) * Math.min(cruiseSpeed, speedCap);
                 return driver.acceleration(velocity, signedCruise,
                     Math.min(stationRemaining, authorityRemaining));
             case DOORS_OPENING:
@@ -295,6 +298,22 @@ public final class TransitStopController {
      */
     public double serviceBrakeDeceleration() {
         return driver.serviceBrakeDeceleration();
+    }
+
+    public double tickSeconds() {
+        return driver.tickSeconds();
+    }
+
+    /**
+     * Caps the running speed below cruise, blocks/s — the curve limits ({@link CurveSpeed}) the
+     * service supplies each tick, already braked for in advance. Infinite for none.
+     */
+    public void setSpeedCap(double cap) {
+        this.speedCap = cap > 0.0D ? cap : Double.POSITIVE_INFINITY;
+    }
+
+    public double speedCap() {
+        return speedCap;
     }
 
     public double cruiseSpeed() {

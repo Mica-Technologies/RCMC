@@ -174,7 +174,17 @@ public final class TrainDriver {
             jerk.reset(commanded);
             return commanded;
         }
-        return jerk.advance(commanded);
+        double applied = jerk.advance(commanded);
+        // Braking never carries the train through zero into reverse within one tick: the jerk
+        // limiter's lag leaves the last of a stop braking harder than the speed left needs, which
+        // turned a stop into a hundredth-of-a-block roll backwards. Stopping is the most a brake does.
+        if (direction * velocity > 0.0D && direction * applied < 0.0D) {
+            double toStop = Math.abs(velocity) / tickSeconds;
+            if (Math.abs(applied) > toStop) {
+                applied = -direction * toStop;
+            }
+        }
+        return applied;
     }
 
     /**
@@ -193,6 +203,11 @@ public final class TrainDriver {
 
     public TractionProfile traction() {
         return traction;
+    }
+
+    /** The tick this driver is evaluated at, seconds. */
+    public double tickSeconds() {
+        return tickSeconds;
     }
 
     public double serviceBrakeDeceleration() {

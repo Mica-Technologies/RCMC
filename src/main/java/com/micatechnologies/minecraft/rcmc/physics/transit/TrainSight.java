@@ -33,6 +33,9 @@ public final class TrainSight {
      */
     public static final double HORIZON = 320.0D;
 
+    /** Moving faster than this toward a train, blocks/s, a train counts as oncoming. */
+    private static final double ONCOMING_SPEED = 0.1D;
+
     private TrainSight() {
     }
 
@@ -84,6 +87,13 @@ public final class TrainSight {
                 -(otherSpec.offsetOfCar(otherSpec.carCount() - 1) + otherSpec.carLength() * 0.5D)).ref;
             double to = Math.min(TrackWalk.distanceTo(network, train.reference(), facing, front, HORIZON),
                 TrackWalk.distanceTo(network, train.reference(), facing, back, HORIZON));
+            if (!Double.isInfinite(to) && Math.abs(other.velocity()) > ONCOMING_SPEED
+                && headOn(network, train, facing, other, other.velocity())) {
+                // Coming the other way, it is using up the same gap: plan to stop in half of it,
+                // and it, doing the same, stops in the other half. Planned on the whole gap, both
+                // arrived at the other's position still moving.
+                to = (to - ownReach) * 0.5D + ownReach;
+            }
             if (to < nearest) {
                 nearest = to;
                 ahead = entry.getKey();

@@ -202,14 +202,50 @@ public final class LineService {
             : -behind;
         this.stationRemaining = stationRemaining;
 
+        controller.setSpeedCap(curveCap(train, network));
         double acceleration = controller.acceleration(
             velocity, facing, stationRemaining, authorityRemaining);
+        if (controller.phase() != TransitStopController.Phase.APPROACHING) {
+            acceleration = holdingBrake(train, network, velocity);
+        }
 
         if (controller.stopsServed() != servedSeen) {
             servedSeen = controller.stopsServed();
             advanceToNextStop();
         }
         return acceleration;
+    }
+
+    /**
+     * Braking planned for curves is this fraction of the service brake: the jerk limiter makes the
+     * brake that is actually applied lag the demand, so planning on all of it arrives too fast.
+     */
+    private static final double CURVE_BRAKE_FRACTION = 0.6D;
+
+    /** The speed the curves under and ahead of the train allow; see {@link CurveSpeed}. */
+    private double curveCap(Train train, TrackNetwork network) {
+        double brake = controller.serviceBrakeDeceleration() * CURVE_BRAKE_FRACTION;
+        double cruise = controller.cruiseSpeed();
+        // Far enough to slow from cruise to the lowest limit there is, and a little more.
+        double lookAhead = cruise * cruise / (2.0D * brake) + 10.0D;
+        return CurveSpeed.allowed(network, train.reference(), facing, train.spec().totalLength(),
+            brake, lookAhead);
+    }
+
+    /**
+     * The brake a train standing at a platform holds on: enough to take out whatever speed is left
+     * and whatever the grade adds, up to the service brake.
+     *
+     * <p>The door cycle used to command nothing at all — correct on level track for a train already
+     * at rest, but a berthed train still creeping at a hundredth of a block a second crept on for a
+     * minute, and one on a sloping platform would have rolled away with its doors open.</p>
+     */
+    private double holdingBrake(Train train, TrackNetwork network, double velocity) {
+        double brake = controller.serviceBrakeDeceleration();
+        // Most, not all, of the speed each tick: taking it all out overshoots through zero once
+        // rolling resistance adds its own bit, and a berthed train must never move backwards.
+        double wanted = -train.averageGravityAlongTrack(network) - 0.8D * velocity / controller.tickSeconds();
+        return Math.max(-brake, Math.min(brake, wanted));
     }
 
     /** Steps the target station after a completed stop cycle, reversing at a terminus. */
