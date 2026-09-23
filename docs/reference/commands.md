@@ -142,7 +142,7 @@ Steps back and forward through track edits, server-side.
 ### `/rcmc train`
 
 ```
-/rcmc train [sectionId] [cars] [startSpeed] [coaster|metro|metrocompact|metrolong] [distance]
+/rcmc train [sectionId] [cars] [startSpeed] [coaster|shoulder|wooden|metro|metrocompact|metrolong] [distance]
 ```
 
 Spawns a train on a section. A train parked in a station dispatches itself. Every argument is
@@ -164,7 +164,9 @@ than two trains nose to tail on the same track. `/rcmc info` reports section len
 
 | Style | Based on | Body length |
 | --- | --- | --- |
-| `coaster` | — | Coaster car |
+| `coaster` | Modern sit-down car: bucket seats, a lap bar per row | Coaster car |
+| `shoulder` | Looping-coaster car: tall seats, headrests, over-the-shoulder restraints | Coaster car |
+| `wooden` | Classic wooden-coaster car: high sides, a bench and one bar per row | Coaster car |
 | `metrocompact` | NYC A-Division / R142 | 15.65 m |
 | `metro` | MBTA Orange Line, CRRC 65 ft class | ~19.8 m |
 | `metrolong` | LA HR4000 / NYC 75-footers | ~22.9 m |
@@ -194,6 +196,17 @@ A number divides it into that many equal blocks instead, wherever they fall. `of
 signalling. Either way it reports the safe train count. Block sections
 are saved with the world and can be undone like any other edit. See
 [multi-train operation](../guide/riding-and-operations.md#multi-train-operation).
+
+### `/rcmc ride`
+
+```
+/rcmc ride <sectionId> <open|test|close|stop|reset>
+```
+
+The operator panel's state controls, for an admin or a command block. `open` lets riders board;
+`test` runs trains with nobody aboard; `close` lets trains finish their lap and hold them in the
+station; `stop` is the emergency stop; `reset` clears it and leaves the ride closed. See
+[operating a ride](../guide/riding-and-operations.md#operating-a-ride).
 
 ### `/rcmc transfer`
 

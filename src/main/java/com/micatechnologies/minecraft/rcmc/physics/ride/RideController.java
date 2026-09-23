@@ -118,6 +118,19 @@ public final class RideController implements DispatchGate {
 
     private TransferRequest transferRequest = TransferRequest.NONE;
 
+    /** The coaster car new trains on this ride are built from. */
+    private com.micatechnologies.minecraft.rcmc.physics.TrainSpec.CoasterModel carModel =
+        com.micatechnologies.minecraft.rcmc.physics.TrainSpec.CoasterModel.SIT_DOWN;
+
+    public com.micatechnologies.minecraft.rcmc.physics.TrainSpec.CoasterModel carModel() {
+        return carModel;
+    }
+
+    public void setCarModel(com.micatechnologies.minecraft.rcmc.physics.TrainSpec.CoasterModel model) {
+        this.carModel = model == null
+            ? com.micatechnologies.minecraft.rcmc.physics.TrainSpec.CoasterModel.SIT_DOWN : model;
+    }
+
     public TransferRequest transferRequest() {
         return transferRequest;
     }

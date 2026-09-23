@@ -2,7 +2,8 @@
 
 ## Boarding
 
-**A coaster** is boarded by right-clicking a car. You take a seat; the ride does the rest.
+**A coaster** is boarded by right-clicking a car. You take the next free seat, front row first —
+a car seats two abreast in every row — and the ride does the rest.
 
 **A metro** is boarded by *walking in*. While a train is berthed with its doors open, the car stops
 being a solid box and becomes just a floor, and anyone standing inside is seated automatically. So
@@ -93,7 +94,7 @@ It links to the nearest coaster station within 24 blocks, and its controls face 
 | Auto / Manual | **Auto** dispatches a train by itself once its dwell has run. **Manual** holds it until you press **DISPATCH**; one press sends one train |
 | Storage | With a linked [transfer track](building-a-coaster.md#storing-trains): **Store train** sends the next train on the transfer track to storage, **Retrieve** brings the stored one back. Pressed again, each cancels |
 | Hardware | Station dwell and pass-throughs, lift speed, launch speed and force, brake targets and drive-tyre speed, each with − and +. Changes apply at once and can be undone with `/rcmc undo` |
-| Trains | Lists the ride's trains with their speed. **Add train** puts a new one in the station, if it is clear. **x** removes a train. **Cars per new train** sets the length of the next one |
+| Trains | Lists the ride's trains with their speed. **Add train** puts a new one in the station, if it is clear. **x** removes a train. **Cars per new train** sets the length of the next one, and **Car** which car it is built from: sit-down, over-the-shoulder or wooden classic |
 
 A ride runs one train at a time unless it has block sections (`/rcmc block`); with N blocks it can
 run N − 1. Guests are turned away, with the reason, from a ride that is closed, testing or stopped.

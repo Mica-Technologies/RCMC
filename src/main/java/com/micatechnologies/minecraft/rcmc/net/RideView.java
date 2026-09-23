@@ -72,6 +72,14 @@ public final class RideView {
     /** The train in storage, or {@code -1}. */
     public int storedTrain = -1;
 
+    /** {@code TrainSpec.CoasterModel} ordinal of the car new trains are built from. */
+    public int carModel;
+
+    public RideView withCarModel(int carModel) {
+        this.carModel = carModel;
+        return this;
+    }
+
     /** This view with its transfer table's state filled in. */
     public RideView withTransfer(int transfer, int request, int storedTrain) {
         this.transfer = transfer;
@@ -132,6 +140,7 @@ public final class RideView {
         buf.writeByte(transfer);
         buf.writeByte(transferRequest);
         buf.writeInt(storedTrain);
+        buf.writeByte(carModel);
     }
 
     static RideView read(ByteBuf buf) {
@@ -160,7 +169,7 @@ public final class RideView {
         int request = buf.readByte();
         int storedTrain = buf.readInt();
         return new RideView(sectionId, name, state, mode, stopped, cause, cars, maxTrains, blocks, message,
-            trains, settings).withTransfer(transfer, request, storedTrain);
+            trains, settings).withTransfer(transfer, request, storedTrain).withCarModel(buf.readByte());
     }
 
     private static void writeString(ByteBuf buf, String s) {

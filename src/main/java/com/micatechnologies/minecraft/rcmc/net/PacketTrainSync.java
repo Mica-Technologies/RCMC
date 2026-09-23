@@ -37,6 +37,7 @@ public class PacketTrainSync implements IMessage {
     private int trimColour;
     private int seatColour;
     private int carStyle;
+    private int coasterModel;
     private int sectionId;
     private double distance;
     private double velocity;
@@ -56,6 +57,7 @@ public class PacketTrainSync implements IMessage {
         this.trimColour = spec.trimColour();
         this.seatColour = spec.seatColour();
         this.carStyle = spec.carStyle().ordinal();
+        this.coasterModel = spec.coasterModel().ordinal();
         this.sectionId = train.reference().sectionId();
         this.distance = train.reference().distance();
         this.velocity = train.velocity();
@@ -72,6 +74,7 @@ public class PacketTrainSync implements IMessage {
         trimColour = buf.readInt();
         seatColour = buf.readInt();
         carStyle = buf.readInt();
+        coasterModel = buf.readByte();
         sectionId = buf.readInt();
         // Doubles, not floats: distance is what the client's integrator continues from, and float
         // rounding here would inject a position error on every correction rather than removing one.
@@ -90,6 +93,7 @@ public class PacketTrainSync implements IMessage {
         buf.writeInt(trimColour);
         buf.writeInt(seatColour);
         buf.writeInt(carStyle);
+        buf.writeByte(coasterModel);
         buf.writeInt(sectionId);
         buf.writeDouble(distance);
         buf.writeDouble(velocity);
@@ -115,13 +119,17 @@ public class PacketTrainSync implements IMessage {
             Train existing = manager.train(message.trainId);
             TrackRef ref = new TrackRef(message.sectionId, message.distance);
 
-            if (existing == null) {
+            TrainSpec spec = new TrainSpec(message.carCount, message.carLength, message.couplingGap,
+                message.seatsPerCar, message.bodyColour, message.trimColour,
+                message.seatColour, TrainSpec.CarStyle.byOrdinal(message.carStyle),
+                TrainSpec.CoasterModel.byOrdinal(message.coasterModel));
+            if (existing == null || !existing.spec().equals(spec)) {
+                // New to this client — or repainted, or rebuilt from a different car. A train's
+                // spec is immutable, so a changed one means a new train where the old one was;
+                // only updating its position kept every watching player on the old paint.
                 // The server's physics constants, sent on join — prediction with any others
                 // diverges between corrections.
-                manager.add(message.trainId, new Train(
-                    new TrainSpec(message.carCount, message.carLength, message.couplingGap,
-                        message.seatsPerCar, message.bodyColour, message.trimColour,
-                        message.seatColour, TrainSpec.CarStyle.byOrdinal(message.carStyle)),
+                manager.add(message.trainId, new Train(spec,
                     com.micatechnologies.minecraft.rcmc.client.ClientPhysics.current().integrator(),
                     ref, message.velocity));
             }

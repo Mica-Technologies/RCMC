@@ -61,7 +61,7 @@ public class CommandRcmc extends CommandBase {
 
     @Override
     public String getUsage(ICommandSender sender) {
-        return "/rcmc <demo|metrodemo|train|clear|info|build|paint|style|rate|block|transfer|station|line"
+        return "/rcmc <demo|metrodemo|train|clear|info|build|paint|style|rate|block|transfer|ride|station|line"
             + "|switch|platform|rmsection|undo|redo>";
     }
 
@@ -75,7 +75,7 @@ public class CommandRcmc extends CommandBase {
                                           String[] args, BlockPos targetPos) {
         if (args.length == 1) {
             return getListOfStringsMatchingLastWord(args, "demo", "metrodemo", "train", "clear",
-                "info", "build", "paint", "style", "rate", "block", "transfer", "station", "line", "switch",
+                "info", "build", "paint", "style", "rate", "block", "transfer", "ride", "station", "line", "switch",
                 "platform", "rmsection", "undo", "redo");
         }
         if (args.length == 3 && "style".equalsIgnoreCase(args[0])) {
@@ -89,6 +89,9 @@ public class CommandRcmc extends CommandBase {
         }
         if (args.length == 2 && "demo".equalsIgnoreCase(args[0])) {
             return getListOfStringsMatchingLastWord(args, "shuttle");
+        }
+        if (args.length == 3 && "ride".equalsIgnoreCase(args[0])) {
+            return getListOfStringsMatchingLastWord(args, "open", "test", "close", "stop", "reset");
         }
         if (args.length == 3 && "transfer".equalsIgnoreCase(args[0])) {
             return getListOfStringsMatchingLastWord(args, "off");
@@ -128,7 +131,8 @@ public class CommandRcmc extends CommandBase {
             return getListOfStringsMatchingLastWord(args, "bank", "circuit", "status", "cancel");
         }
         if (args.length == 5 && "train".equalsIgnoreCase(args[0])) {
-            return getListOfStringsMatchingLastWord(args, "coaster", "metro", "metrocompact", "metrolong");
+            return getListOfStringsMatchingLastWord(args, "coaster", "shoulder", "wooden", "metro",
+                "metrocompact", "metrolong");
         }
         return new ArrayList<>();
     }
@@ -174,6 +178,9 @@ public class CommandRcmc extends CommandBase {
                 break;
             case "transfer":
                 transfer(sender, world, state, args);
+                break;
+            case "ride":
+                ride(sender, world, state, args);
                 break;
             case "style":
                 style(sender, world, state, args);
@@ -392,12 +399,13 @@ public class CommandRcmc extends CommandBase {
             case "metrolong":
                 spec = TrainSpec.metroTrainLong(carCount);
                 break;
-            case "coaster":
-                spec = new TrainSpec(carCount, 3.0D, 0.5D, 4);
-                break;
             default:
-                throw new CommandException(
-                    "Unknown train style '" + style + "' — coaster, metro, metrocompact or metrolong");
+                TrainSpec.CoasterModel model = TrainSpec.CoasterModel.byWord(style);
+                if (model == null) {
+                    throw new CommandException("Unknown train style '" + style
+                        + "' — coaster, shoulder, wooden, metro, metrocompact or metrolong");
+                }
+                spec = new TrainSpec(carCount, 3.0D, 0.5D, 4).withCoasterModel(model);
         }
         int trainId = com.micatechnologies.minecraft.rcmc.world.TrainSpawner.spawn(
             world, state, sectionId, spec, startDistance, speed);
@@ -1877,6 +1885,57 @@ public class CommandRcmc extends CommandBase {
             + (section.isClosed() ? " (circuit — the last block wraps to the first)" : ""));
         reply(sender, TextFormatting.GRAY, "  Run at most " + (count - 1)
             + " trains here: " + count + " trains on " + count + " blocks deadlocks.");
+    }
+
+    /**
+     * {@code /rcmc ride <sectionId> <open|test|close|stop|reset>} — the operator panel's state
+     * buttons, for an admin or a command block: open the ride, test it, close it (trains finish their
+     * lap and wait in the station), emergency-stop it, or reset the stop.
+     */
+    private void ride(ICommandSender sender, World world, RcmcWorldState state, String[] args)
+        throws CommandException {
+        if (args.length < 3) {
+            throw new CommandException("/rcmc ride <sectionId> <open|test|close|stop|reset>");
+        }
+        int sectionId = parseInt(args[1]);
+        if (state.network().section(sectionId) == null) {
+            throw new CommandException("No section #" + sectionId + " — try /rcmc info");
+        }
+        com.micatechnologies.minecraft.rcmc.physics.ride.RideController ride =
+            state.rides().getOrCreate(sectionId);
+        String what;
+        switch (args[2].toLowerCase(java.util.Locale.ROOT)) {
+            case "open":
+                if (ride.isEmergencyStopped()) {
+                    throw new CommandException("Reset the emergency stop first: /rcmc ride " + sectionId + " reset");
+                }
+                ride.setState(com.micatechnologies.minecraft.rcmc.physics.ride.RideController.State.OPEN);
+                what = "open";
+                break;
+            case "test":
+                if (ride.isEmergencyStopped()) {
+                    throw new CommandException("Reset the emergency stop first: /rcmc ride " + sectionId + " reset");
+                }
+                ride.setState(com.micatechnologies.minecraft.rcmc.physics.ride.RideController.State.TESTING);
+                what = "testing: trains run, nobody boards";
+                break;
+            case "close":
+                ride.setState(com.micatechnologies.minecraft.rcmc.physics.ride.RideController.State.CLOSED);
+                what = "closed: trains finish their lap and wait in the station";
+                break;
+            case "stop":
+                ride.emergencyStop();
+                what = "EMERGENCY STOPPED";
+                break;
+            case "reset":
+                ride.resetEmergency();
+                what = "reset, and closed";
+                break;
+            default:
+                throw new CommandException("/rcmc ride <sectionId> <open|test|close|stop|reset>");
+        }
+        state.markTrainsDirty(world);
+        reply(sender, TextFormatting.GREEN, "Coaster #" + sectionId + " " + what + ".");
     }
 
     /**

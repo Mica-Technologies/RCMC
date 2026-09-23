@@ -262,10 +262,13 @@ public class RenderCoasterCar extends Render<EntityCoasterCar> {
             GlStateManager.disableBlend();
             return;
         }
-        CarModel.emit(buffer, length, seatRows, couplingGap, drawCoupling,
+        // Before its train state arrives a car is drawn as a default one rather than not at all,
+        // so cars do not pop in.
+        TrainSpec shape = spec != null ? spec : new TrainSpec(1, length, couplingGap, seatRows * 2);
+        CarModel.build(shape, entity.carIndex() == 0, drawCoupling,
             colourOf(spec, TrainSpec.Part.BODY, 3),
             colourOf(spec, TrainSpec.Part.TRIM, 4),
-            colourOf(spec, TrainSpec.Part.SEATS, 1));
+            colourOf(spec, TrainSpec.Part.SEATS, 1)).emit(buffer);
         tessellator.draw();
     }
 

@@ -31,7 +31,9 @@ public class PacketRideAction implements IMessage {
         /** Store the next train at the transfer table; pressed again, cancel. */
         STORE_TRAIN,
         /** Bring the stored train back; pressed again, cancel. */
-        RETRIEVE_TRAIN
+        RETRIEVE_TRAIN,
+        /** The next car type for new trains. */
+        CYCLE_CAR_MODEL
     }
 
     private int sectionId;
