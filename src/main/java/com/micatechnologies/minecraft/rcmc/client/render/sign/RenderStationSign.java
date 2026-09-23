@@ -73,7 +73,7 @@ public class RenderStationSign extends TileEntitySpecialRenderer<TileStationSign
         int row = 1;
         String platform = platformHere(state, sign);
         if (platform != null) {
-            lines[row] = "Platform " + platform;
+            lines[row] = platform;
             colours[row] = MUTED_COLOUR;
             row++;
         }
@@ -96,9 +96,14 @@ public class RenderStationSign extends TileEntitySpecialRenderer<TileStationSign
         }
     }
 
+    /** How much further than the nearest berth another may be and still count as "here" — an island's other side. */
+    private static final double SAME_PLATFORM_SLACK = 2.0D;
+
     /**
-     * The label of the berth this sign stands at, when its station has more than one and the berth
-     * has a label: the one whose stop point is nearest the sign. {@code null} otherwise.
+     * What to call the platform this sign stands on, when its station has more than one: the
+     * nearest berth's label — or, on an island between two tracks, both, since a sign standing
+     * between them serves each equally ("Platforms 1 & 2"). {@code null} when there is nothing to
+     * say.
      */
     private static String platformHere(RcmcWorldState state, TileStationSign sign) {
         TransitStation station = state.transit().station(sign.stationName());
@@ -106,23 +111,30 @@ public class RenderStationSign extends TileEntitySpecialRenderer<TileStationSign
             return null;
         }
         BlockPos at = sign.getPos();
-        String best = null;
-        double bestSq = Double.MAX_VALUE;
+        java.util.List<String> labels = new java.util.ArrayList<>();
+        java.util.List<Double> distances = new java.util.ArrayList<>();
+        double nearest = Double.MAX_VALUE;
         for (TransitPlatform platform : station.platforms()) {
             if (platform.label().isEmpty()
                 || state.network().section(platform.stopPoint().sectionId()) == null) {
                 continue;
             }
             Vec3 p = state.network().frameAt(platform.stopPoint()).position;
-            double dx = p.x - (at.getX() + 0.5D);
-            double dy = p.y - at.getY();
-            double dz = p.z - (at.getZ() + 0.5D);
-            double sq = dx * dx + dy * dy + dz * dz;
-            if (sq < bestSq) {
-                bestSq = sq;
-                best = platform.label();
+            double d = p.distanceTo(new Vec3(at.getX() + 0.5D, at.getY(), at.getZ() + 0.5D));
+            labels.add(platform.label());
+            distances.add(d);
+            nearest = Math.min(nearest, d);
+        }
+        java.util.List<String> here = new java.util.ArrayList<>();
+        for (int k = 0; k < labels.size(); k++) {
+            if (distances.get(k) <= nearest + SAME_PLATFORM_SLACK) {
+                here.add(labels.get(k));
             }
         }
-        return best;
+        if (here.isEmpty()) {
+            return null;
+        }
+        java.util.Collections.sort(here);
+        return here.size() == 1 ? "Platform " + here.get(0) : "Platforms " + String.join(" & ", here);
     }
 }
