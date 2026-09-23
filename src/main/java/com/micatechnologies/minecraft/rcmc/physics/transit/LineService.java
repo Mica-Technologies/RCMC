@@ -224,6 +224,17 @@ public final class LineService {
         return controller.isHolding(train.velocity());
     }
 
+    /** Decides when a train that has finished boarding may leave; see {@link TransitSystem}. */
+    public interface DepartureGate {
+        boolean mayDepart(TransitLine line, int stopIndex, int serviceDirection);
+    }
+
+    /** Wires {@code gate} to this service's controller, asking about whichever stop it is at. */
+    public void setDepartureGate(DepartureGate gate) {
+        controller.setDepartureGate(gate == null ? null
+            : () -> gate.mayDepart(line, stopIndex, serviceDirection));
+    }
+
     public TransitLine line() {
         return line;
     }

@@ -38,6 +38,16 @@ public final class TransitSystem {
     private final Map<String, TransitLine> lines = new LinkedHashMap<>();
     private final Map<String, LineSignals> signalsByLine = new LinkedHashMap<>();
     private final Map<Integer, LineService> services = new LinkedHashMap<>();
+    private final Map<String, LineOperations> operationsByLine = new LinkedHashMap<>();
+
+    /**
+     * When a train last left each platform in each direction, by {@link #departureKey}, in ticks of
+     * {@link #tick}. Runtime only: after a reload the first departure from each platform is free.
+     */
+    private final Map<String, Long> lastDepartures = new java.util.HashMap<>();
+
+    /** Ticks this system has run — {@link #beginTick} calls, the clock headways are measured on. */
+    private long tick;
 
     /** Network reference for the tick in flight — set by {@link #beginTick}, read by the control. */
     private TrackNetwork tickNetwork;
@@ -77,11 +87,12 @@ public final class TransitSystem {
         lines.put(key(line.name()), line);
     }
 
-    /** Removes a line, its signals, and takes every train serving it out of service. */
+    /** Removes a line, its signals and settings, and takes every train serving it out of service. */
     public TransitLine removeLine(String name) {
         TransitLine removed = lines.remove(key(name));
         if (removed != null) {
             signalsByLine.remove(key(name));
+            operationsByLine.remove(key(name));
             services.values().removeIf(service -> service.line() == removed);
         }
         return removed;
@@ -150,6 +161,8 @@ public final class TransitSystem {
         // "the authored content, wholesale", and a copy that silently dropped a field would be a
         // trap for the next caller — the save path already round-trips them.
         signalsByLine.putAll(incoming.signals());
+        operationsByLine.clear();
+        operationsByLine.putAll(incoming.operationsByLine);
     }
 
     /** Wire-format snapshots of every running service, for {@code PacketServiceSync}. */
@@ -302,6 +315,8 @@ public final class TransitSystem {
         LineService service = new LineService(line, controller, bestIndex,
             serviceDirectionFrom(line, network, train.reference(), bestFacing, bestIndex), bestFacing,
             this::station);
+        controller.setDwellTicks(operationsFor(line.name()).dwellTicks());
+        service.setDepartureGate(this::mayDepart);
         services.put(trainId, service);
         // A train sitting at rest before service has usually already latched VALLEYED (zero
         // force, zero speed, nothing claiming it) — and TrainManager skips faulted trains before
@@ -468,6 +483,67 @@ public final class TransitSystem {
         lines.clear();
         signalsByLine.clear();
         services.clear();
+        operationsByLine.clear();
+        lastDepartures.clear();
+    }
+
+    // --- Operations: dwell and headway. ---------------------------------------------------------
+
+    /** How {@code lineName} is run; {@link LineOperations#DEFAULT} until someone sets it. */
+    public LineOperations operationsFor(String lineName) {
+        LineOperations operations = operationsByLine.get(key(lineName));
+        return operations == null ? LineOperations.DEFAULT : operations;
+    }
+
+    /** Every line with settings of its own, by line name as given. */
+    public Map<String, LineOperations> operations() {
+        return Collections.unmodifiableMap(operationsByLine);
+    }
+
+    /**
+     * Sets how {@code lineName} is run, and retimes the trains already running it — each from its
+     * next stop, so a train standing at a platform keeps the dwell it arrived with.
+     */
+    public void setOperations(String lineName, LineOperations operations) {
+        if (operations == null || operations.equals(LineOperations.DEFAULT)) {
+            operationsByLine.remove(key(lineName));
+        }
+        else {
+            operationsByLine.put(key(lineName), operations);
+        }
+        LineOperations applied = operationsFor(lineName);
+        for (LineService service : services.values()) {
+            if (service.line().name().equalsIgnoreCase(lineName)) {
+                service.controller().setDwellTicks(applied.dwellTicks());
+            }
+        }
+    }
+
+    /**
+     * The headway gate every service is given: may a train that has finished boarding at
+     * {@code stopIndex}, running in {@code serviceDirection}, leave now?
+     *
+     * <p>Yes unless another train left that platform in that direction less than the line's
+     * headway ago. A yes is the departure, so it is recorded here. Holding a train that has caught
+     * up with the one ahead is what stops a line bunching: left alone, a late train picks up more
+     * passengers and runs later still, while the one behind it runs early, until the two travel
+     * nose to tail.</p>
+     */
+    boolean mayDepart(TransitLine line, int stopIndex, int serviceDirection) {
+        LineOperations operations = operationsFor(line.name());
+        String key = departureKey(line.name(), stopIndex, serviceDirection);
+        if (operations.regulatesHeadway()) {
+            Long last = lastDepartures.get(key);
+            if (last != null && tick - last < operations.headwayTicks()) {
+                return false;
+            }
+        }
+        lastDepartures.put(key, tick);
+        return true;
+    }
+
+    private static String departureKey(String lineName, int stopIndex, int serviceDirection) {
+        return key(lineName) + '#' + stopIndex + (serviceDirection >= 0 ? '+' : '-');
     }
 
     public boolean hasServices() {
@@ -492,6 +568,7 @@ public final class TransitSystem {
     /** Once per tick, before {@link #composedWith}'s result is used — see the class javadoc. */
     public void beginTick(TrainManager trains, TrackNetwork network) {
         this.tickNetwork = network;
+        tick++;
         // A service whose train was removed must not linger and grab a recycled train id later.
         for (Iterator<Integer> it = services.keySet().iterator(); it.hasNext(); ) {
             if (trains.train(it.next()) == null) {

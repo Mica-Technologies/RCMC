@@ -82,8 +82,15 @@ public final class TransitStopController {
     private final double cruiseSpeed;
     private final double berthTolerance;
     private final int doorOpenTicks;
-    private final int dwellTicks;
+    private int dwellTicks;
     private final int doorCloseTicks;
+
+    /**
+     * Asked when boarding time is up; the doors stay open until it answers yes. {@code null} for
+     * no regulation. It is the departure decision, so it is asked only while a train is ready to go
+     * — an implementation may treat a yes as the train having left.
+     */
+    private java.util.function.BooleanSupplier departureGate;
 
     private Phase phase = Phase.APPROACHING;
     private int phaseTicksRemaining;
@@ -180,6 +187,10 @@ public final class TransitStopController {
                     phaseTicksRemaining = dwellTicks;
                     break;
                 case BOARDING:
+                    if (departureGate != null && !departureGate.getAsBoolean()) {
+                        // Held for headway: doors still open, still boarding, asked again next tick.
+                        return 0.0D;
+                    }
                     phase = Phase.DOORS_CLOSING;
                     phaseTicksRemaining = doorCloseTicks;
                     break;
@@ -210,6 +221,23 @@ public final class TransitStopController {
             return true;
         }
         return Math.abs(velocity) <= HOLDING_SPEED;
+    }
+
+    /** Changes how long the doors stay open, from the next stop on — a stop in progress keeps its time. */
+    public void setDwellTicks(int dwellTicks) {
+        if (dwellTicks < 0) {
+            throw new IllegalArgumentException("dwell must be >= 0, got " + dwellTicks);
+        }
+        this.dwellTicks = dwellTicks;
+    }
+
+    public int dwellTicks() {
+        return dwellTicks;
+    }
+
+    /** See the field. {@code null} removes regulation. */
+    public void setDepartureGate(java.util.function.BooleanSupplier gate) {
+        this.departureGate = gate;
     }
 
     /** True while passengers can pass through the doorway — the {@link Phase#BOARDING} phase. */

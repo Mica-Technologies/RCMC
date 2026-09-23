@@ -85,7 +85,11 @@ public class CommandRcmc extends CommandBase {
         }
         if (args.length == 2 && "line".equalsIgnoreCase(args[0])) {
             return getListOfStringsMatchingLastWord(args, "create", "list", "remove", "start",
-                "stop", "signals");
+                "stop", "signals", "set", "trains");
+        }
+        if (args.length == 4 && "line".equalsIgnoreCase(args[0])
+            && "set".equalsIgnoreCase(args[1])) {
+            return getListOfStringsMatchingLastWord(args, "dwell", "headway");
         }
         if (args.length == 4 && "line".equalsIgnoreCase(args[0])
             && "create".equalsIgnoreCase(args[1])) {
@@ -1145,7 +1149,8 @@ public class CommandRcmc extends CommandBase {
             throw new CommandException(
                 "/rcmc line create <name> <loop|shuttle|turnback> <stationA> <stationB> [...] | list"
                     + " | remove <name> | start <name> <trainId> [cruiseSpeed] | stop <trainId>"
-                    + " | signals <name> <count|off>");
+                    + " | signals <name> <count|off> | set <name> <dwell|headway> <seconds|off>"
+                    + " | trains [name]");
         }
         com.micatechnologies.minecraft.rcmc.physics.transit.TransitSystem transit = state.transit();
         switch (args[1].toLowerCase(java.util.Locale.ROOT)) {
@@ -1196,10 +1201,14 @@ public class CommandRcmc extends CommandBase {
                     }
                     com.micatechnologies.minecraft.rcmc.physics.transit.LineSignals sig =
                         transit.signalsFor(l.name());
+                    com.micatechnologies.minecraft.rcmc.physics.transit.LineOperations ops =
+                        transit.operationsFor(l.name());
                     reply(sender, TextFormatting.AQUA, l.name() + " ("
                         + l.kind().label()
                         + "): " + stops
                         + (sig == null ? "" : "  [" + sig.blocks().size() + " signal blocks]"));
+                    reply(sender, TextFormatting.GRAY, "  dwell " + seconds(ops.dwellTicks())
+                        + ", headway " + (ops.regulatesHeadway() ? seconds(ops.headwayTicks()) : "off"));
                 }
                 return;
             }
@@ -1259,9 +1268,115 @@ public class CommandRcmc extends CommandBase {
                 signals(sender, world, state, transit, args);
                 return;
             }
+            case "set": {
+                lineSet(sender, world, transit, state, args);
+                return;
+            }
+            case "trains": {
+                lineTrains(sender, state, transit, args);
+                return;
+            }
             default:
                 throw new CommandException("Unknown line subcommand " + args[1]);
         }
+    }
+
+    /**
+     * {@code /rcmc line set <name> dwell <seconds>} and {@code … headway <seconds|off>} — how long
+     * trains stand at each platform, and the least time between two trains leaving a platform in
+     * the same direction. Saved with the line, part of undo, and applied to trains already running
+     * from their next stop.
+     */
+    private void lineSet(ICommandSender sender, World world,
+                         com.micatechnologies.minecraft.rcmc.physics.transit.TransitSystem transit,
+                         RcmcWorldState state, String[] args) throws CommandException {
+        if (args.length < 5) {
+            throw new CommandException("/rcmc line set <name> dwell <seconds> | headway <seconds|off>");
+        }
+        com.micatechnologies.minecraft.rcmc.physics.transit.TransitLine line = transit.line(args[2]);
+        if (line == null) {
+            throw new CommandException("No line named " + args[2]);
+        }
+        com.micatechnologies.minecraft.rcmc.physics.transit.LineOperations ops =
+            transit.operationsFor(line.name());
+        double maxSeconds = com.micatechnologies.minecraft.rcmc.physics.transit.LineOperations.MAX_TICKS
+            * RcmcConstants.SECONDS_PER_TICK;
+        String value = args[4];
+        switch (args[3].toLowerCase(java.util.Locale.ROOT)) {
+            case "dwell":
+                ops = ops.withDwellTicks(ticks(parseDouble(value, 0.0D, maxSeconds)));
+                break;
+            case "headway":
+                ops = ops.withHeadwayTicks("off".equalsIgnoreCase(value)
+                    ? 0 : ticks(parseDouble(value, 0.0D, maxSeconds)));
+                break;
+            default:
+                throw new CommandException("Setting must be dwell or headway, got " + args[3]);
+        }
+        transit.setOperations(line.name(), ops);
+        state.markTrackDirty(world);
+        reply(sender, TextFormatting.GREEN, line.name() + ": dwell " + seconds(ops.dwellTicks())
+            + ", headway " + (ops.regulatesHeadway() ? seconds(ops.headwayTicks()) : "off")
+            + ". Trains already running pick it up at their next stop.");
+    }
+
+    /** {@code /rcmc line trains [name]} — every train in service, or every one on a line. */
+    private void lineTrains(ICommandSender sender, RcmcWorldState state,
+                            com.micatechnologies.minecraft.rcmc.physics.transit.TransitSystem transit,
+                            String[] args) throws CommandException {
+        String only = args.length > 2 ? args[2] : null;
+        if (only != null && transit.line(only) == null) {
+            throw new CommandException("No line named " + only);
+        }
+        int shown = 0;
+        for (java.util.Map.Entry<Integer, com.micatechnologies.minecraft.rcmc.physics.transit.LineService> entry
+            : transit.services().entrySet()) {
+            com.micatechnologies.minecraft.rcmc.physics.transit.LineService service = entry.getValue();
+            com.micatechnologies.minecraft.rcmc.physics.transit.TransitLine line = service.line();
+            if (only != null && !line.name().equalsIgnoreCase(only)) {
+                continue;
+            }
+            Train train = state.trains().train(entry.getKey());
+            String next = line.station(service.currentStopIndex()).name();
+            com.micatechnologies.minecraft.rcmc.physics.transit.TransitStopController controller =
+                service.controller();
+            String doing;
+            switch (controller.phase()) {
+                case APPROACHING:
+                    doing = "to " + next + ", " + fmt(Math.max(0.0D, service.distanceToNextStop()))
+                        + " blocks";
+                    break;
+                case BOARDING:
+                    doing = controller.phaseTicksRemaining() == 0
+                        ? "at " + next + ", held for headway"
+                        : "at " + next + ", boarding, " + seconds(controller.phaseTicksRemaining())
+                            + " left";
+                    break;
+                case DOORS_OPENING:
+                    doing = "at " + next + ", doors opening";
+                    break;
+                default:
+                    doing = "at " + next + ", doors closing";
+                    break;
+            }
+            reply(sender, TextFormatting.AQUA, "#" + entry.getKey() + " " + line.name() + " "
+                + (service.serviceDirection() > 0 ? line.outboundLabel() : line.inboundLabel())
+                + ": " + doing + (train == null ? "" : ", " + fmt(Math.abs(train.velocity()))
+                    + " blocks/s"));
+            shown++;
+        }
+        if (shown == 0) {
+            reply(sender, TextFormatting.YELLOW, only == null
+                ? "No trains in service." : "No trains in service on " + only + ".");
+        }
+    }
+
+    private static int ticks(double seconds) {
+        return (int) Math.round(seconds / RcmcConstants.SECONDS_PER_TICK);
+    }
+
+    private static String seconds(int ticks) {
+        return fmt(ticks * RcmcConstants.SECONDS_PER_TICK) + " s";
     }
 
     /**
