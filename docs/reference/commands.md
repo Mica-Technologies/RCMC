@@ -115,7 +115,13 @@ once a park has more than one thing in it.
 
 ### `/rcmc clear`
 
-Wipes **all** track in the world. Blunt, and rarely what you want.
+Wipes **everything** RCMC has built in the world: all track, ride hardware, trains, ride
+settings, block sections, and every metro station, line and signal. Blunt, and rarely what you
+want. `/rcmc undo` brings back the track, ride hardware, block sections and transit, but not the
+trains or the operator-panel ride settings.
+
+Section numbers are never reused, so the first section built afterwards does not take over an
+operator panel or board that pointed at an old one.
 
 ### `/rcmc undo` &nbsp;·&nbsp; `/rcmc redo`
 

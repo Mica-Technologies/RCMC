@@ -47,6 +47,8 @@ public final class TrackCodec {
     private static final String KEY_SECTIONS = "Sections";
     private static final String KEY_JOINS = "Joins";
     private static final String KEY_SWITCHES = "Switches";
+    /** Additive, no version bump: a save without it reads as "one past the highest section". */
+    private static final String KEY_NEXT_SECTION_ID = "NextSectionId";
 
     private static final String KEY_THROAT_SECTION = "ThroatSection";
     private static final String KEY_THROAT_END = "ThroatEnd";
@@ -76,6 +78,7 @@ public final class TrackCodec {
     public static NBTTagCompound writeNetwork(TrackNetwork network) {
         NBTTagCompound root = new NBTTagCompound();
         root.setInteger(KEY_VERSION, DATA_VERSION);
+        root.setInteger(KEY_NEXT_SECTION_ID, network.nextSectionId());
 
         NBTTagList sectionList = new NBTTagList();
         for (TrackSection section : network.sections()) {
@@ -194,6 +197,7 @@ public final class TrackCodec {
             }
         }
 
+        network.reserveSectionIdsFrom(root.getInteger(KEY_NEXT_SECTION_ID));
         return network;
     }
 

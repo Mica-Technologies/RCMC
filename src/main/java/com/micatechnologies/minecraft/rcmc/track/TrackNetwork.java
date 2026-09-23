@@ -527,12 +527,28 @@ public final class TrackNetwork {
         return section.frameAtDistance(ref.distance());
     }
 
+    /**
+     * Removes every section, join and switch. The id counter is deliberately NOT reset: blocks in
+     * the world (operator panels, boards) name track by section id, and a cleared park's ids
+     * handed out again would silently reattach them to whatever is built next.
+     */
     public void clear() {
         sections.clear();
         joins.clear();
         switches.clear();
         branchToThroat.clear();
-        nextSectionId = 1;
+    }
+
+    /** The id {@link #allocateSectionId} will try next. Saved, so ids are never reused. */
+    public int nextSectionId() {
+        return nextSectionId;
+    }
+
+    /** Never hands out an id below {@code next} — restores a saved counter. Only ever raises it. */
+    public void reserveSectionIdsFrom(int next) {
+        if (next > nextSectionId) {
+            nextSectionId = next;
+        }
     }
 
     @Override

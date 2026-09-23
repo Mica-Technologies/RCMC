@@ -1420,7 +1420,10 @@ public class CommandRcmc extends CommandBase {
     private void clear(ICommandSender sender, World world, RcmcWorldState state) {
         int trains = state.trains().count();
         int sections = state.network().sectionCount();
+        int stations = state.transit().stations().size();
+        int lines = state.transit().lines().size();
         state.elements().clear();
+        state.transit().clear();
         state.rides().clear();
         state.blocks().clear();
 
@@ -1436,9 +1439,16 @@ public class CommandRcmc extends CommandBase {
         // at a section that no longer exists, which is what used to crash the client tick.
         RcmcNetwork.sendToAllIn(PacketTrainRemove.all(), world.provider.getDimension());
         broadcastTrack(world, state);
+        int dimension = world.provider.getDimension();
+        RcmcNetwork.sendToAllIn(new com.micatechnologies.minecraft.rcmc.net.PacketTransitSync(
+            state.transit()), dimension);
+        // Service snapshots are only sent while services run, so the empty list must be sent
+        // here or clients keep showing the cleared trains' doors and destinations.
+        RcmcNetwork.sendToAllIn(new com.micatechnologies.minecraft.rcmc.net.PacketServiceSync(
+            new ArrayList<>()), dimension);
 
-        reply(sender, TextFormatting.YELLOW,
-            "Cleared " + sections + " section(s) and " + trains + " train(s).");
+        reply(sender, TextFormatting.YELLOW, "Cleared " + sections + " section(s), " + trains
+            + " train(s), " + stations + " station(s) and " + lines + " line(s).");
     }
 
     private void info(ICommandSender sender, RcmcWorldState state) {

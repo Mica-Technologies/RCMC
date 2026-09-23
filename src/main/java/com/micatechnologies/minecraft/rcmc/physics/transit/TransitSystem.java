@@ -462,6 +462,14 @@ public final class TransitSystem {
         return adopted;
     }
 
+    /** Removes every station, line, signal set and running service. */
+    public void clear() {
+        stations.clear();
+        lines.clear();
+        signalsByLine.clear();
+        services.clear();
+    }
+
     public boolean hasServices() {
         return !services.isEmpty();
     }

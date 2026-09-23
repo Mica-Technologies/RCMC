@@ -354,6 +354,8 @@ public final class RcmcWorldState {
             restoredTransit.adoptServices(this.transit, trains, restoredNetwork,
                 com.micatechnologies.minecraft.rcmc.RcmcConstants.SECONDS_PER_TICK);
 
+            // An undo restores the track, not the id counter: ids handed out since stay retired.
+            restoredNetwork.reserveSectionIdsFrom(this.network.nextSectionId());
             this.network = restoredNetwork;
             this.elements = restoredElements;
             this.transit = restoredTransit;
