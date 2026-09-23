@@ -59,6 +59,7 @@ nodes it should cover:
 | **Chain lift** | A chain lift: constant pull up to a target speed, and the train cannot outrun the chain while engaged |
 | **Launch track** | An LSM-style launch: pushes at ~8 blocks/s² toward 22 blocks/s, then switches the motors off |
 | **Brake run** | A trim brake, bleeding speed to a target |
+| **Block brake** | A brake that trims every train to a crawl and ends a block section: with `/rcmc block <id> auto` a train waits at its end while the block ahead is occupied |
 | **Drive tyres** | Station friction wheels holding a 2 blocks/s creep — for positioning a train on the platform |
 | **Station** | A station platform: stop, dwell, dispatch |
 
@@ -208,7 +209,7 @@ Trains are painted by command, since a moving train is not something you point a
 ```
 /rcmc train [sectionId] [cars] [startSpeed]     spawn a train (defaults: first section, 5 cars, at rest)
 /rcmc rate <sectionId>                          excitement / intensity / nausea
-/rcmc block <sectionId> <count|off>             divide into block sections for multi-train running
+/rcmc block <sectionId> <auto|count|off>        divide into block sections for multi-train running
 /rcmc info                                      list sections and trains
 ```
 

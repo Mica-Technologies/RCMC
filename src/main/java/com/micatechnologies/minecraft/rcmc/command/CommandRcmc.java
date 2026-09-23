@@ -87,6 +87,9 @@ public class CommandRcmc extends CommandBase {
             return getListOfStringsMatchingLastWord(args, "create", "list", "remove", "start",
                 "stop", "signals", "set", "trains");
         }
+        if (args.length == 3 && "block".equalsIgnoreCase(args[0])) {
+            return getListOfStringsMatchingLastWord(args, "auto", "off");
+        }
         if (args.length == 4 && "line".equalsIgnoreCase(args[0])
             && "set".equalsIgnoreCase(args[1])) {
             return getListOfStringsMatchingLastWord(args, "dwell", "headway");
@@ -1786,7 +1789,7 @@ public class CommandRcmc extends CommandBase {
     private void block(ICommandSender sender, RcmcWorldState state, String[] args)
         throws CommandException {
         if (args.length < 3) {
-            throw new CommandException("/rcmc block <sectionId> <count|off>");
+            throw new CommandException("/rcmc block <sectionId> <auto|count|off>");
         }
         int sectionId = parseInt(args[1]);
         TrackSection section = state.network().section(sectionId);
@@ -1801,6 +1804,11 @@ public class CommandRcmc extends CommandBase {
             state.markTrackDirty(sender.getEntityWorld());
             reply(sender, TextFormatting.YELLOW, "Block signalling removed from section #"
                 + sectionId + " — trains on it are no longer separated.");
+            return;
+        }
+
+        if ("auto".equalsIgnoreCase(args[2])) {
+            blockAuto(sender, state, section);
             return;
         }
 
@@ -1824,6 +1832,44 @@ public class CommandRcmc extends CommandBase {
             + (section.isClosed() ? " (circuit — the last block wraps to the first)" : ""));
         reply(sender, TextFormatting.GRAY, "  Run at most " + (count - 1)
             + " trains here: " + count + " trains on " + count + " blocks deadlocks.");
+    }
+
+    /**
+     * {@code /rcmc block <sectionId> auto} — blocks bounded by the ride's own hardware: the end of
+     * every block brake, the end of the station, the top of the lift. See {@code BlockLayout}.
+     */
+    private void blockAuto(ICommandSender sender, RcmcWorldState state, TrackSection section)
+        throws CommandException {
+        if (!section.isClosed()) {
+            throw new CommandException("Automatic blocks need a closed circuit; section #"
+                + section.id() + " is open. Use /rcmc block " + section.id() + " <count>.");
+        }
+        java.util.List<Double> boundaries =
+            com.micatechnologies.minecraft.rcmc.physics.block.BlockLayout.boundaries(
+                section.id(), state.elements().elements());
+        java.util.List<com.micatechnologies.minecraft.rcmc.physics.block.BlockSection> blocks =
+            com.micatechnologies.minecraft.rcmc.physics.block.BlockLayout.forCircuit(
+                section.id(), section.totalLength(), boundaries);
+        if (blocks.isEmpty()) {
+            throw new CommandException("Section #" + section.id() + " has " + boundaries.size()
+                + " place(s) a train can be held — a station, a lift or a block brake — and needs"
+                + " at least two. Lay block brakes with the track tool's Block brake segment.");
+        }
+        BlockSystem system = new BlockSystem(true, true, BLOCK_BRAKE_DECELERATION,
+            RcmcConstants.SECONDS_PER_TICK);
+        for (com.micatechnologies.minecraft.rcmc.physics.block.BlockSection block : blocks) {
+            system.addBlock(block);
+        }
+        state.blocks().put(section.id(), system);
+        state.markTrackDirty(sender.getEntityWorld());
+        StringBuilder at = new StringBuilder();
+        for (double boundary : boundaries) {
+            at.append(at.length() == 0 ? "" : ", ").append(fmt(boundary));
+        }
+        reply(sender, TextFormatting.GREEN, "Section #" + section.id() + " divided into "
+            + blocks.size() + " blocks at its hardware, ending at " + at + ".");
+        reply(sender, TextFormatting.GRAY, "  Run at most " + (blocks.size() - 1)
+            + " trains here: " + blocks.size() + " trains on " + blocks.size() + " blocks deadlocks.");
     }
 
     /**

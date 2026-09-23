@@ -54,7 +54,8 @@ public final class BlockSignaledElementSet implements TrainManager.ExternalAccel
     @Override
     public double forTrain(int trainId, Train train) {
         double blockAcceleration = blocks.forTrain(trainId, train);
-        if (blockAcceleration != 0.0D) {
+        if (blockAcceleration != 0.0D
+            || (blocks instanceof BoundaryHold && ((BoundaryHold) blocks).isHeldAtBoundary(trainId, train))) {
             return blockAcceleration;
         }
         return elements.forTrain(trainId, train);

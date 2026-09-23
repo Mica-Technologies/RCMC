@@ -30,6 +30,14 @@ public final class BlockSection {
     private final double endDistance;
 
     /**
+     * Whether this block runs from {@link #startDistance} through a closed circuit's seam to
+     * {@link #endDistance}. A block whose boundaries are placed hardware — a block brake, the
+     * station, the lift — almost always has one such block, since the seam falls wherever the
+     * builder happened to start laying track, not at a brake.
+     */
+    private final boolean wraps;
+
+    /**
      * @param id            a stable, human-meaningful identifier ("brake-block-2"), not required
      *                      to be unique but expected to be by convention — this class does not
      *                      police uniqueness, {@link BlockSystem} treats blocks purely by list
@@ -51,12 +59,47 @@ public final class BlockSection {
         this.sectionId = sectionId;
         this.startDistance = startDistance;
         this.endDistance = endDistance;
+        this.wraps = false;
+    }
+
+    private BlockSection(String id, int sectionId, double startDistance, double endDistance,
+                         boolean wraps) {
+        if (id == null || id.isEmpty()) {
+            throw new IllegalArgumentException("id must not be null or empty");
+        }
+        this.id = id;
+        this.sectionId = sectionId;
+        this.startDistance = startDistance;
+        this.endDistance = endDistance;
+        this.wraps = wraps;
+    }
+
+    /**
+     * A block on a closed circuit that runs from {@code startDistance} on through the seam and
+     * ends at {@code endDistance}, which is nearer the start of the section than the block's own
+     * start is.
+     */
+    public static BlockSection wrapping(String id, int sectionId, double startDistance,
+                                        double endDistance) {
+        if (endDistance > startDistance) {
+            throw new IllegalArgumentException("a wrapping block ends before it starts: "
+                + startDistance + " -> " + endDistance);
+        }
+        return new BlockSection(id, sectionId, startDistance, endDistance, true);
+    }
+
+    public boolean wraps() {
+        return wraps;
     }
 
     /** Whether {@code ref} falls within this block's span (inclusive at both ends). */
     public boolean contains(TrackRef ref) {
-        return ref != null && ref.sectionId() == sectionId
-            && ref.distance() >= startDistance && ref.distance() <= endDistance;
+        if (ref == null || ref.sectionId() != sectionId) {
+            return false;
+        }
+        return wraps
+            ? ref.distance() >= startDistance || ref.distance() <= endDistance
+            : ref.distance() >= startDistance && ref.distance() <= endDistance;
     }
 
     public String id() {
@@ -75,13 +118,14 @@ public final class BlockSection {
         return endDistance;
     }
 
+    /** Length along the track; for a {@link #wraps wrapping} block, excluding the section's length. */
     public double length() {
-        return endDistance - startDistance;
+        return wraps ? endDistance : endDistance - startDistance;
     }
 
     @Override
     public String toString() {
         return "BlockSection{" + id + ", section=" + sectionId
-            + ", [" + startDistance + ", " + endDistance + "]}";
+            + ", [" + startDistance + ", " + endDistance + "]" + (wraps ? " wrapping" : "") + "}";
     }
 }

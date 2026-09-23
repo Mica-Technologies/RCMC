@@ -179,11 +179,13 @@ name the one to rate.
 ### `/rcmc block`
 
 ```
-/rcmc block <sectionId> <count|off>
+/rcmc block <sectionId> <auto|count|off>
 ```
 
-Divides a coaster circuit into `count` equal block sections, each holding at most one train, or
-removes block signalling with `off`. Reports the safe train count for the division. Block sections
+`auto` divides a closed coaster circuit into block sections ending at its hardware — the end of
+each block brake, the end of the station and the top of the lift — and needs at least two of them.
+A number divides it into that many equal blocks instead, wherever they fall. `off` removes block
+signalling. Either way it reports the safe train count. Block sections
 are saved with the world and can be undone like any other edit. See
 [multi-train operation](../guide/riding-and-operations.md#multi-train-operation).
 

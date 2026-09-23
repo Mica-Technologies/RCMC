@@ -109,7 +109,8 @@ public final class SegmentElements {
             return TrackBuildSession.SegmentType.LAUNCH;
         }
         if (element instanceof BrakeRun) {
-            return TrackBuildSession.SegmentType.BRAKE;
+            return ((BrakeRun) element).mode() == BrakeRun.Mode.BLOCK
+                ? TrackBuildSession.SegmentType.BLOCK_BRAKE : TrackBuildSession.SegmentType.BRAKE;
         }
         if (element instanceof DriveTyres) {
             return TrackBuildSession.SegmentType.TYRES;
@@ -142,6 +143,12 @@ public final class SegmentElements {
                 return new LaunchTrack(sectionId, from, to, LAUNCH_TARGET_SPEED, LAUNCH_ACCELERATION);
             case BRAKE:
                 return new BrakeRun(sectionId, from, to, 6.0D, 6.0D, BrakeRun.Mode.TRIM, tick);
+            case BLOCK_BRAKE:
+                // Trims to a crawl on every pass, so a train is always slow enough to be stopped at
+                // its end; the stop itself is the block system's, when the block ahead is occupied.
+                // /rcmc block <id> auto puts a block boundary at the end of each one.
+                return new BrakeRun(sectionId, from, to, BLOCK_BRAKE_PASS_SPEED, 6.0D,
+                    BrakeRun.Mode.BLOCK, tick);
             case TYRES:
                 // Walking pace. Drive tyres position a train within a station; anything faster
                 // reads as a launch, which is the element next to this one in the palette.
@@ -155,6 +162,9 @@ public final class SegmentElements {
                 return null;
         }
     }
+
+    /** Speed a block brake lets a train through at when the block ahead is clear, blocks/s. */
+    static final double BLOCK_BRAKE_PASS_SPEED = 4.0D;
 
     /** Launch speed the motors aim for, blocks/s — reached only if the tagged run is long enough. */
     private static final double LAUNCH_TARGET_SPEED = 22.0D;

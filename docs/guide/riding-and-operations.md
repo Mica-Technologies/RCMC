@@ -153,12 +153,24 @@ cannot produce a plausible-looking rating.
 ### Coasters: fixed block sections
 
 ```
+/rcmc block <sectionId> auto
 /rcmc block <sectionId> <count|off>
 ```
 
 Divides a circuit into block sections, each holding at most one train. A train may not enter a
-block until the next is clear; if it cannot, it stops at the block brake. Block sections are saved
-with the world and can be undone like any other edit.
+block while any part of another train is still in it; it waits at the end of the block it is in,
+held there — on a lift or a slope as firmly as on the flat — until the block ahead is clear. Block
+sections are saved with the world and can be undone like any other edit.
+
+**`auto` is the one to use.** It ends a block wherever the ride has hardware that can hold a
+train: the end of each **block brake**, the end of the station, and the top of the lift. Lay block
+brakes with the track tool's *Block brake* segment — at the end of the course before the station,
+and before the lift — and a two-train ride needs nothing more. A block brake trims every train to
+a crawl as it passes, so it is always slow enough to be stopped at the end of the brake if the
+block ahead is occupied, and lets it through when it is not.
+
+A number instead of `auto` cuts the circuit into that many equal blocks, whatever is there, which
+can hold a train mid-drop on a brake that does not exist. It is kept for testing.
 
 Without block sections, nothing keeps two trains apart. If two trains on one coaster run into each
 other, the ride **emergency-stops** and everyone in the dimension is told. It stays stopped while
@@ -167,7 +179,8 @@ sections) before resetting it.
 
 Know the limits before you rely on it:
 
-- **Occupancy tracks the lead car only.** Blocks must be comfortably longer than the trains on them.
+- **A block must be longer than the trains using it.** A train held at a block's end needs the
+  whole of itself inside that block, or its tail keeps the block behind it occupied.
 - **N trains on N wall-to-wall blocks deadlock permanently.** That is a property of exclusive
   fixed-block signalling, not a defect — the command reports the safe train count when it divides a
   section.

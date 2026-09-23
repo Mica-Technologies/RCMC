@@ -28,6 +28,8 @@ public final class BlockCodec {
     private static final String KEY_ID = "Id";
     private static final String KEY_START = "Start";
     private static final String KEY_END = "End";
+    /** Additive: blocks saved before wrapping blocks existed have no flag and do not wrap. */
+    private static final String KEY_WRAPS = "Wraps";
 
     private BlockCodec() {
     }
@@ -49,6 +51,7 @@ public final class BlockCodec {
                     b.setInteger(KEY_SECTION, block.sectionId());
                     b.setDouble(KEY_START, block.startDistance());
                     b.setDouble(KEY_END, block.endDistance());
+                    b.setBoolean(KEY_WRAPS, block.wraps());
                     blocks.appendTag(b);
                 }
                 tag.setTag(KEY_BLOCKS, blocks);
@@ -72,8 +75,18 @@ public final class BlockCodec {
             NBTTagList blocks = tag.getTagList(KEY_BLOCKS, 10);
             for (int j = 0; j < blocks.tagCount(); j++) {
                 NBTTagCompound b = blocks.getCompoundTagAt(j);
-                system.addBlock(new BlockSection(b.getString(KEY_ID), b.getInteger(KEY_SECTION),
-                    b.getDouble(KEY_START), b.getDouble(KEY_END)));
+                String id = b.getString(KEY_ID);
+                double start = b.getDouble(KEY_START);
+                double end = b.getDouble(KEY_END);
+                if (id.isEmpty()) {
+                    continue;
+                }
+                if (b.getBoolean(KEY_WRAPS) && end <= start) {
+                    system.addBlock(BlockSection.wrapping(id, b.getInteger(KEY_SECTION), start, end));
+                }
+                else if (end >= start) {
+                    system.addBlock(new BlockSection(id, b.getInteger(KEY_SECTION), start, end));
+                }
             }
             systems.put(tag.getInteger(KEY_SECTION), system);
         }
