@@ -66,6 +66,29 @@ class CutAroundTest {
         assertSame(otherSection, RideElements.cutAround(otherSection, 1, 30.0D, 50.0D, TICK).get(0));
     }
 
+    @Test
+    @DisplayName("a station on turned-round track still stops trains the same distance short of its exit")
+    void turnedRoundStationKeepsItsStopBeforeTheExit() {
+        // Trains ran 0 -> 50 and stopped at 47, three blocks short of the exit at 50. Turned round,
+        // the platform is at 100..150 of the new track and trains leave at 150.
+        StationPlatform station = new StationPlatform(1, 0.0D, 50.0D, 47.0D, 6.0D, 60, 4.0D, 6.0D, TICK);
+        RideElement turned = RideElements.relocated(station, 1, 150.0D, 100.0D, true, d -> d, TICK);
+
+        assertSpan(turned, 100.0D, 150.0D);
+        assertEquals(147.0D, ((StationPlatform) turned).stopDistance(), 1e-9);
+    }
+
+    @Test
+    @DisplayName("hardware moved to another section keeps its settings")
+    void relocatedHardwareKeepsItsSettings() {
+        ChainLift lift = new ChainLift(1, 10.0D, 40.0D, 5.0D, 12.0D, TICK);
+        RideElement moved = RideElements.relocated(lift, 7, 0.0D, 30.0D, false, d -> d, TICK);
+
+        assertEquals(7, moved.sectionId());
+        assertSpan(moved, 0.0D, 30.0D);
+        assertEquals(5.0D, ((ChainLift) moved).chainSpeed(), 1e-9);
+    }
+
     private static void assertSpan(RideElement element, double start, double end) {
         assertEquals(start, element.startDistance(), 1e-9, "start");
         assertEquals(end, element.endDistance(), 1e-9, "end");

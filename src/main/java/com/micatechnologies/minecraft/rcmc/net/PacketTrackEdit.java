@@ -36,7 +36,15 @@ public final class PacketTrackEdit {
         CYCLE_PAINT_PART,
         CYCLE_COLOUR,
         /** Delete the whole section; {@code value} 1 confirms. */
-        DELETE_SECTION
+        DELETE_SECTION,
+        /** Split the section at this node into two, still joined. */
+        SPLIT,
+        /** Merge this end node's end with the nearest end in reach, or close the circuit. */
+        JOIN,
+        /** Turn the section round. */
+        REVERSE,
+        /** Give the section the next track style. */
+        CYCLE_STYLE
     }
 
     /** Server to client: open or refresh the editor on a node. */

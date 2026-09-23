@@ -7,6 +7,9 @@ import com.micatechnologies.minecraft.rcmc.net.PacketTrackEdit;
 import com.micatechnologies.minecraft.rcmc.net.RcmcNetwork;
 import com.micatechnologies.minecraft.rcmc.net.TrackEditView;
 import com.micatechnologies.minecraft.rcmc.track.SectionRemap;
+import com.micatechnologies.minecraft.rcmc.track.SectionSurgery;
+import com.micatechnologies.minecraft.rcmc.track.TrackNetwork;
+import com.micatechnologies.minecraft.rcmc.track.TrackStyleIds;
 import com.micatechnologies.minecraft.rcmc.track.TrackNode;
 import com.micatechnologies.minecraft.rcmc.track.TrackPalette;
 import com.micatechnologies.minecraft.rcmc.track.TrackSection;
@@ -127,11 +130,141 @@ public final class TrackEditOperations {
                 ItemTrackEditor.deleteSection(player, player.world, sectionId);
                 // Nothing left to show.
                 return;
+            case SPLIT: {
+                if (!canSplit(section, node)) {
+                    message = "Split at an inner node: an end node is already the end of the section.";
+                    break;
+                }
+                // Peeked, not allocated: a refused split must not use an id up. Adding the new
+                // section is what claims it.
+                int newId = state.network().nextSectionId();
+                while (state.network().hasSection(newId)) {
+                    newId++;
+                }
+                SectionSurgeries.Outcome outcome = SectionSurgeries.apply(player.world, state,
+                    SectionSurgery.split(section, node, newId), section.isClosed()
+                        ? "Circuit opened at node " + (node + 1) + "; its ends are joined."
+                        : "Split into #" + sectionId + " and #" + newId + ", joined at node " + (node + 1) + ".");
+                message = outcome.message;
+                if (outcome.applied && section.isClosed()) {
+                    node = 0;
+                }
+                break;
+            }
+            case JOIN: {
+                JoinTarget target = joinTarget(state.network(), section, node);
+                if (target == null) {
+                    message = "No end in reach to join. Bring another section's end within "
+                        + (int) SectionSurgery.MERGE_REACH + " blocks of this one.";
+                    break;
+                }
+                if (target.other == null) {
+                    SectionSurgeries.Outcome outcome = SectionSurgeries.apply(player.world, state,
+                        SectionSurgery.close(section), "Closed into a circuit.");
+                    message = outcome.message;
+                    if (outcome.applied) {
+                        node = 0;
+                    }
+                    break;
+                }
+                String ours = TrackStyleIds.label(section.styleId());
+                String theirs = TrackStyleIds.label(target.other.styleId());
+                if (!ours.equals(theirs)) {
+                    message = "#" + sectionId + " is " + ours + " track and #" + target.other.id() + " is "
+                        + theirs + ". A section has one style; restyle one to match first.";
+                    break;
+                }
+                SectionSurgeries.Outcome outcome = SectionSurgeries.apply(player.world, state,
+                    SectionSurgery.merge(section, target.end, target.other, target.otherEnd),
+                    "#" + target.other.id() + " merged into #" + sectionId + ".");
+                message = outcome.message;
+                if (outcome.applied) {
+                    // The node where they met: after this section's nodes, or after the other's.
+                    node = target.end == TrackNetwork.End.END
+                        ? nodes - 1 : target.other.nodes().size() - 1;
+                }
+                break;
+            }
+            case REVERSE: {
+                SectionSurgeries.Outcome outcome = SectionSurgeries.apply(player.world, state,
+                    SectionSurgery.reverse(section), "Section #" + sectionId + " now runs the other way.");
+                message = outcome.message;
+                if (outcome.applied) {
+                    node = nodes - 1 - node;
+                }
+                break;
+            }
+            case CYCLE_STYLE: {
+                String next = TrackStyleIds.next(section.styleId());
+                // replaceSection keeps joins and switches; a fresh instance also invalidates the
+                // client mesh cache, which keys on section identity.
+                state.network().replaceSection(section.withStyle(next));
+                state.markTrackDirty(player.world);
+                RcmcNetwork.sendToAllIn(new com.micatechnologies.minecraft.rcmc.net.PacketTrackSync(state.network()),
+                    player.world.provider.getDimension());
+                message = "Style: " + TrackStyleIds.label(next) + ".";
+                break;
+            }
             case REFRESH:
             default:
                 break;
         }
         send(player, sectionId, node, message);
+    }
+
+    /** Where joining at a node would go: another section's end, or ({@code other} null) this one's own. */
+    static final class JoinTarget {
+        final TrackNetwork.End end;
+        final TrackSection other;
+        final TrackNetwork.End otherEnd;
+
+        JoinTarget(TrackNetwork.End end, TrackSection other, TrackNetwork.End otherEnd) {
+            this.end = end;
+            this.other = other;
+            this.otherEnd = otherEnd;
+        }
+
+        String label() {
+            return other == null ? "Close circuit" : "Join to #" + other.id();
+        }
+    }
+
+    /**
+     * The nearest end in reach of end node {@code node} of open {@code section}: its own other end,
+     * which closes it, or another open section's. {@code null} for an inner node, a circuit, or
+     * nothing close enough.
+     */
+    static JoinTarget joinTarget(TrackNetwork network, TrackSection section, int node) {
+        int nodes = section.nodes().size();
+        if (section.isClosed() || (node != 0 && node != nodes - 1)) {
+            return null;
+        }
+        TrackNetwork.End end = node == 0 ? TrackNetwork.End.START : TrackNetwork.End.END;
+        TrackNetwork.End own = end == TrackNetwork.End.START ? TrackNetwork.End.END : TrackNetwork.End.START;
+        JoinTarget best = null;
+        double bestGap = Double.MAX_VALUE;
+        if (nodes >= 4 && SectionSurgery.inReach(section, end, section, own)) {
+            best = new JoinTarget(end, null, own);
+            bestGap = section.endpointAt(end).distanceTo(section.endpointAt(own));
+        }
+        for (TrackSection other : network.sections()) {
+            if (other.id() == section.id() || other.isClosed()) {
+                continue;
+            }
+            for (TrackNetwork.End otherEnd : TrackNetwork.End.values()) {
+                double gap = section.endpointAt(end).distanceTo(other.endpointAt(otherEnd));
+                if (gap <= SectionSurgery.MERGE_REACH && gap < bestGap) {
+                    best = new JoinTarget(end, other, otherEnd);
+                    bestGap = gap;
+                }
+            }
+        }
+        return best;
+    }
+
+    static boolean canSplit(TrackSection section, int node) {
+        int nodes = section.nodes().size();
+        return section.isClosed() ? nodes >= 3 : node > 0 && node < nodes - 1;
     }
 
     /**
@@ -165,9 +298,12 @@ public final class TrackEditOperations {
         int spans = section.isClosed() ? nodes : nodes - 1;
         int spanType = node < spans ? ItemTrackEditor.spanTypeOf(state, section, node).ordinal() : -1;
         TrackPalette.Part part = ItemTrackEditor.paintPartOf(player);
+        JoinTarget target = joinTarget(state.network(), section, node);
         RcmcNetwork.sendTo(new PacketTrackEdit.View(new TrackEditView(sectionId, node, nodes,
             section.isClosed(), section.totalLength(), n.position().x, n.position().y, n.position().z,
-            n.bankDegrees(), spanType, part.ordinal(), section.palette().of(part).label(), message)), player);
+            n.bankDegrees(), spanType, part.ordinal(), section.palette().of(part).label(), message,
+            canSplit(section, node), target == null ? "" : target.label(),
+            TrackStyleIds.label(section.styleId()))), player);
     }
 
     private static boolean holdingEditor(EntityPlayerMP player) {

@@ -70,6 +70,23 @@ public final class TrackStyleIds {
     }
 
     /**
+     * The style after {@code current} in the editor's cycle: coaster, then each transit look, then
+     * back to coaster. A wire-height suffix is not carried over; the next style starts at its own
+     * default height.
+     */
+    public static String next(String current) {
+        String base = current == null ? null : baseOf(current);
+        List<String> cycle = Arrays.asList(null, TRANSIT, TRANSIT_CATENARY, TRANSIT_PORTAL, TRANSIT_TUNNEL);
+        int index = cycle.indexOf(base);
+        return cycle.get((index + 1) % cycle.size());
+    }
+
+    /** How {@code /rcmc style} names {@code styleId}. */
+    public static String label(String styleId) {
+        return styleId == null ? "coaster" : styleId;
+    }
+
+    /**
      * Normalises a command argument to a storable style id: {@code "coaster"} (and blank) to
      * {@code null}, known ids to themselves, anything else to an exception.
      *

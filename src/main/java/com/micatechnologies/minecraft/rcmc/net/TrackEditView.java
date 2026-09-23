@@ -25,10 +25,17 @@ public final class TrackEditView {
     public final String paintColour;
     /** The server's answer to the last press; empty for none. */
     public final String message;
+    /** Whether the section can be split at this node. */
+    public final boolean canSplit;
+    /** What joining at this node would do — "Close circuit", "Join to #7" — or empty for nothing in reach. */
+    public final String joinLabel;
+    /** The section's style, as {@code /rcmc style} names it. */
+    public final String style;
 
     public TrackEditView(int sectionId, int nodeIndex, int nodeCount, boolean closed, double length,
                          double x, double y, double z, double bank, int spanType, int paintPart,
-                         String paintColour, String message) {
+                         String paintColour, String message, boolean canSplit, String joinLabel,
+                         String style) {
         this.sectionId = sectionId;
         this.nodeIndex = nodeIndex;
         this.nodeCount = nodeCount;
@@ -42,6 +49,9 @@ public final class TrackEditView {
         this.paintPart = paintPart;
         this.paintColour = paintColour == null ? "" : paintColour;
         this.message = message == null ? "" : message;
+        this.canSplit = canSplit;
+        this.joinLabel = joinLabel == null ? "" : joinLabel;
+        this.style = style == null ? "" : style;
     }
 
     void write(ByteBuf buf) {
@@ -58,12 +68,16 @@ public final class TrackEditView {
         buf.writeByte(paintPart);
         writeString(buf, paintColour);
         writeString(buf, message);
+        buf.writeBoolean(canSplit);
+        writeString(buf, joinLabel);
+        writeString(buf, style);
     }
 
     static TrackEditView read(ByteBuf buf) {
         return new TrackEditView(buf.readInt(), buf.readShort(), buf.readShort(), buf.readBoolean(),
             buf.readDouble(), buf.readDouble(), buf.readDouble(), buf.readDouble(), buf.readDouble(),
-            buf.readByte(), buf.readByte(), readString(buf), readString(buf));
+            buf.readByte(), buf.readByte(), readString(buf), readString(buf), buf.readBoolean(),
+            readString(buf), readString(buf));
     }
 
     private static void writeString(ByteBuf buf, String s) {

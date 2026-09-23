@@ -71,6 +71,58 @@ public final class RideElements {
         return element;
     }
 
+    /**
+     * {@code element} laid on {@code [newStart, newEnd]} of section {@code newSectionId}, keeping its
+     * settings — for track that has moved to another section, or been turned round.
+     *
+     * <p>Hardware acts along the direction of travel, so a lift on turned-round track still pulls
+     * trains the way they now run. A station keeps its stop point the same distance short of the
+     * platform's exit end: turned round, the exit is the other end, and a stop kept where it was
+     * would leave the train hanging out of the platform it has just run into.
+     * {@code stopMap} places the stop when the track was not turned round.</p>
+     *
+     * <p>{@code null} for a linked transfer track and for storage berths, which are laid to match
+     * each other and cannot be moved one at a time.</p>
+     */
+    public static RideElement relocated(RideElement element, int newSectionId, double newStart,
+                                        double newEnd, boolean reversed, DoubleUnaryOperator stopMap,
+                                        double tickSeconds) {
+        double from = Math.min(newStart, newEnd);
+        double to = Math.max(newStart, newEnd);
+        if (element instanceof ChainLift) {
+            ChainLift e = (ChainLift) element;
+            return new ChainLift(newSectionId, from, to, e.chainSpeed(), e.maxAcceleration(), tickSeconds);
+        }
+        if (element instanceof LaunchTrack) {
+            LaunchTrack e = (LaunchTrack) element;
+            return new LaunchTrack(newSectionId, from, to, e.targetSpeed(), e.constantAcceleration());
+        }
+        if (element instanceof BrakeRun) {
+            BrakeRun e = (BrakeRun) element;
+            return new BrakeRun(newSectionId, from, to, e.targetSpeed(), e.deceleration(), e.mode(), tickSeconds);
+        }
+        if (element instanceof DriveTyres) {
+            DriveTyres e = (DriveTyres) element;
+            return new DriveTyres(newSectionId, from, to, e.driveSpeed(), e.maxAcceleration(), tickSeconds);
+        }
+        if (element instanceof TransferTrack && !((TransferTrack) element).isLinked()) {
+            // Unlinked, a transfer table is only its tyres; there is no storage to keep it in line with.
+            TransferTrack e = (TransferTrack) element;
+            return new TransferTrack(newSectionId, from, to, e.tyreSpeed(), e.maxAcceleration(), tickSeconds,
+                TransferTrack.UNLINKED, 0.0D);
+        }
+        if (element instanceof StationPlatform) {
+            StationPlatform e = (StationPlatform) element;
+            double stop = reversed
+                ? to - (e.endDistance() - e.stopDistance())
+                : stopMap.applyAsDouble(e.stopDistance());
+            stop = Math.max(from, Math.min(to, stop));
+            return new StationPlatform(newSectionId, from, to, stop, e.brakeDeceleration(), e.dwellTicks(),
+                e.dispatchAcceleration(), e.dispatchSpeed(), tickSeconds, e.passThroughs());
+        }
+        return null;
+    }
+
     /** Shorter than this, blocks, and what is left of an element either side of a cut is dropped. */
     static final double MIN_PIECE = 1.0D;
 
@@ -82,9 +134,8 @@ public final class RideElements {
      * not take the whole lift away. {@code element} alone when it does not overlap the cut.</p>
      *
      * <p>A station keeps one piece, the one its stop point is on, or the longer when the stop was
-     * in the cut: a platform in two halves would be two stations. Transfer tracks and storage
-     * berths go whole, because the table and its berth are laid to match and cannot be trimmed
-     * apart.</p>
+     * in the cut: a platform in two halves would be two stations. A linked transfer track and its
+     * storage berth go whole, because the two are laid to match and cannot be trimmed apart.</p>
      */
     public static List<RideElement> cutAround(RideElement element, int sectionId, double from,
                                               double to, double tickSeconds) {
@@ -93,7 +144,8 @@ public final class RideElements {
         if (!overlaps) {
             return Collections.singletonList(element);
         }
-        if (element instanceof TransferTrack || element instanceof StorageBerth) {
+        if ((element instanceof TransferTrack && ((TransferTrack) element).isLinked())
+            || element instanceof StorageBerth) {
             return Collections.emptyList();
         }
         RideElement before = element.startDistance() < from - MIN_PIECE
