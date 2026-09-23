@@ -63,9 +63,14 @@ public final class DemoCoaster {
 
         double baseY = origin.y;
         double topY = baseY + liftHeight;
-        // The first drop bottoms out below the station so the train has surplus energy to carry it
-        // through the rest of the circuit — the same reason real layouts dig the first valley in.
-        double valleyY = baseY - liftHeight * 0.12D;
+        // Heights after the lift are given as fractions of the lift above a first valley dug
+        // VALLEY_DIG of the lift below the station — the surplus energy that carries a train round
+        // the rest of the circuit. But the layout is built at the player's feet, where below the
+        // station means inside the ground: every dip ran through the dirt and the terrain hid it,
+        // which read from above as track with pieces missing. So nothing goes below the station:
+        // each height keeps its place relative to the dig where that is above ground, and is held
+        // at station level where it is not. The hills keep their heights, and so the train keeps
+        // the energy that gets it over them.
 
         double w = 60.0D * scale;   // half-width, across the layout
         double l = 55.0D * scale;   // half-length, along it
@@ -92,22 +97,22 @@ public final class DemoCoaster {
 
         // --- First drop: over the crest and down, curving away ---
         add(nodes, origin.x + l * 1.05D, topY - liftHeight * 0.22D, origin.z - w * 0.55D, -12);
-        add(nodes, origin.x + l * 0.98D, valleyY + liftHeight * 0.28D, origin.z - w * 0.18D, -22);
-        add(nodes, origin.x + l * 0.78D, valleyY, origin.z + w * 0.12D, -10);
+        add(nodes, origin.x + l * 0.98D, above(baseY, liftHeight, 0.28D), origin.z - w * 0.18D, -22);
+        add(nodes, origin.x + l * 0.78D, baseY, origin.z + w * 0.12D, -10);
 
         // --- Airtime hill: a brisk crest, then straight down the far side ---
-        add(nodes, origin.x + l * 0.4D, valleyY + liftHeight * 0.42D, origin.z + w * 0.35D, 0);
-        add(nodes, origin.x + l * 0.05D, valleyY + liftHeight * 0.5D, origin.z + w * 0.5D, 8);
-        add(nodes, origin.x - l * 0.3D, valleyY + liftHeight * 0.15D, origin.z + w * 0.62D, 18);
+        add(nodes, origin.x + l * 0.4D, above(baseY, liftHeight, 0.42D), origin.z + w * 0.35D, 0);
+        add(nodes, origin.x + l * 0.05D, above(baseY, liftHeight, 0.5D), origin.z + w * 0.5D, 8);
+        add(nodes, origin.x - l * 0.3D, above(baseY, liftHeight, 0.15D), origin.z + w * 0.62D, 18);
 
         // --- Banked turnaround: hard left, back toward the station ---
-        add(nodes, origin.x - l * 0.75D, valleyY + liftHeight * 0.1D, origin.z + w * 0.72D, 42);
-        add(nodes, origin.x - l * 1.08D, valleyY + liftHeight * 0.3D, origin.z + w * 0.45D, 48);
-        add(nodes, origin.x - l * 1.12D, valleyY + liftHeight * 0.45D, origin.z + w * 0.05D, 40);
+        add(nodes, origin.x - l * 0.75D, above(baseY, liftHeight, 0.1D), origin.z + w * 0.72D, 42);
+        add(nodes, origin.x - l * 1.08D, above(baseY, liftHeight, 0.3D), origin.z + w * 0.45D, 48);
+        add(nodes, origin.x - l * 1.12D, above(baseY, liftHeight, 0.45D), origin.z + w * 0.05D, 40);
 
         // --- Second, smaller hill on the return leg ---
-        add(nodes, origin.x - l * 0.9D, valleyY + liftHeight * 0.62D, origin.z - w * 0.3D, 14);
-        add(nodes, origin.x - l * 0.6D, valleyY + liftHeight * 0.45D, origin.z - w * 0.58D, 0);
+        add(nodes, origin.x - l * 0.9D, above(baseY, liftHeight, 0.62D), origin.z - w * 0.3D, 14);
+        add(nodes, origin.x - l * 0.6D, above(baseY, liftHeight, 0.45D), origin.z - w * 0.58D, 0);
 
         // --- Brake run: level out at station height, aimed back into the platform ---
         int brakeFirst = nodes.size();
@@ -136,6 +141,14 @@ public final class DemoCoaster {
     /** Sensible defaults: a mid-sized layout with a 34-block lift. */
     public static Result build(int sectionId, Vec3 origin) {
         return build(sectionId, origin, 1.0D, 34.0D);
+    }
+
+    /** How far below the station the first valley would be dug, as a fraction of the lift. */
+    private static final double VALLEY_DIG = 0.12D;
+
+    /** A height {@code fraction} of the lift above the dug valley, never below the station. */
+    private static double above(double baseY, double liftHeight, double fraction) {
+        return baseY + Math.max(0.0D, fraction - VALLEY_DIG) * liftHeight;
     }
 
     private static void add(List<TrackNode> nodes, double x, double y, double z, double bankDegrees) {
