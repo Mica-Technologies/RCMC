@@ -65,6 +65,15 @@ public final class MetroInteriorSign {
      * @param bodyLength the visible body length, so the signs sit at the ends of the saloon
      */
     public static void draw(World world, int trainId, double bodyLength, float partialTicks) {
+        draw(world, trainId, bodyLength, false, false, partialTicks);
+    }
+
+    /**
+     * As above, for a car with a driving cab at its front and/or rear end: the sign at a cab end
+     * hangs on the saloon side of the cab partition, where the passengers are.
+     */
+    public static void draw(World world, int trainId, double bodyLength, boolean cabFront, boolean cabRear,
+                            float partialTicks) {
         ServiceSnapshot snapshot = snapshotFor(world, trainId);
         if (snapshot == null) {
             return;
@@ -101,7 +110,8 @@ public final class MetroInteriorSign {
         int[] colours = {COLOUR_STOP, COLOUR_LABEL};
 
         double at = Math.max(1.2D, bodyLength * 0.5D - END_INSET);
-        for (double z : new double[] {at, -at}) {
+        double cab = com.micatechnologies.minecraft.rcmc.physics.CarSeating.CAB_DEPTH;
+        for (double z : new double[] {cabFront ? at - cab : at, cabRear ? -(at - cab) : -at}) {
             GlStateManager.pushMatrix();
             GlStateManager.translate(0.0D, 0.0D, z);
             SignPanels.drawPanel(halfWidth, PANEL_BOTTOM, PANEL_TOP, PANEL_HALF_THICKNESS,

@@ -54,9 +54,10 @@ public class PacketServiceSync implements IMessage {
             for (int j = 0; j < seconds.length; j++) {
                 seconds[j] = buf.readFloat();
             }
+            int facing = buf.readByte();
             snapshots.add(new ServiceSnapshot(trainId, lineName, direction, nextStop, atPlatform,
                 doorsOpen, doorFraction, distanceToNextStop, DoorSide.byOrdinal(doorSide),
-                platformLabel, seconds));
+                platformLabel, seconds, facing));
         }
     }
 
@@ -86,6 +87,9 @@ public class PacketServiceSync implements IMessage {
             for (double s : seconds) {
                 buf.writeFloat((float) s);
             }
+            // Which end leads — sent because a train standing at a terminus is about to reverse,
+            // and nothing a client can see yet says so.
+            buf.writeByte(snapshot.facing());
         }
     }
 

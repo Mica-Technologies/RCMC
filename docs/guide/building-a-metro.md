@@ -282,11 +282,23 @@ that is not in service:
   `Green  OUT/South`. Text too long for the panel scrolls.
 - **Outside**, each side of the car carries an amber destination sign showing the terminus in
   capitals, `SOUTH`, so you can read where a train is going from the platform. A loop line has no
-  terminus, so it shows the line's name instead.
+  terminus, so it shows the line's name instead. The same sign sits above the windscreen at each
+  end of the train, where you read it as the train runs in.
 
-Arrivals are given in **stops away**, not minutes. That is exact and deterministic — it replays the
-service pattern, including loop wrap and shuttle terminus bounce — where a minutes estimate would
-need a wall clock and a speed guess.
+Arrivals are shown in **minutes** once the line has timed the trip: each train learns how long each
+leg between stations takes, and the board counts down from that. Until a leg has been timed, the
+board shows how many **stops away** the train is instead. A train pulling in shows `APPR`, and
+one at the platform shows `BRD`.
+
+### Cabs and lamps
+
+Each end of a train is a driving cab: a driver's desk and seat behind the windscreen, closed off
+from the saloon by a partition with a cab door. Passengers don't sit or stand in the cab.
+
+The end a train is leading with shows **white headlamps**, and the other end shows **red tail
+lamps**. At a terminus the lamps swap as soon as the train is due to reverse, while it is still at
+the platform, so the lamps tell you which way it will leave. A train out of service shows lamps for
+the way it is moving, and keeps them when it stops.
 
 ### Announcements
 

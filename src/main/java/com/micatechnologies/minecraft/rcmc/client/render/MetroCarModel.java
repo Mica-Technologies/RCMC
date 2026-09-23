@@ -146,6 +146,44 @@ final class MetroCarModel {
     private static final float END_DOOR_WINDOW_BOTTOM = FLOOR_TOP + 1.30F;
     private static final float END_DOOR_WINDOW_TOP = FLOOR_TOP + 2.20F;
 
+    /** Driving cab depth, shared with {@code CarSeating} so no passenger is seated inside it. */
+    private static final float CAB_DEPTH = (float) CarSeating.CAB_DEPTH;
+    private static final float PARTITION_HALF_THICKNESS = 0.05F;
+    private static final float CAB_DOOR_HALF = 0.42F;
+    private static final float CAB_DOOR_TOP = FLOOR_TOP + 2.35F;
+    private static final float CAB_DOOR_WINDOW_BOTTOM = FLOOR_TOP + 1.35F;
+    private static final float CAB_DOOR_WINDOW_TOP = FLOOR_TOP + 2.10F;
+
+    /** The driver's desk runs across the cab under the windscreen. */
+    private static final float DESK_DEPTH = 0.70F;
+    private static final float DESK_TOP = FLOOR_TOP + 0.98F;
+    private static final float[] DESK_COLOR = {0.19F, 0.20F, 0.22F};
+    private static final float[] SCREEN_COLOR = {0.08F, 0.14F, 0.20F};
+    private static final float[] DRIVER_SEAT_COLOR = {0.22F, 0.24F, 0.30F};
+    private static final float[] CAB_WINDOW_COLOR = {0.22F, 0.27F, 0.31F};
+
+    /**
+     * Head and tail lamps, low on each cab front either side of the coupler: a housing that is
+     * always there, and a lens lit white at the leading end and red at the trailing one.
+     */
+    private static final float LAMP_CENTRE_X = 1.35F;
+    private static final float LAMP_HALF_WIDTH = 0.22F;
+    private static final float LAMP_BOTTOM = FLOOR_TOP + 0.30F;
+    private static final float LAMP_TOP = FLOOR_TOP + 0.62F;
+    private static final float[] LAMP_HOUSING_COLOR = {0.10F, 0.10F, 0.11F};
+    private static final float[] HEADLAMP_COLOR = {1.00F, 0.97F, 0.84F};
+    private static final float[] TAIL_LAMP_COLOR = {1.00F, 0.10F, 0.06F};
+
+    /** What a cab end's lamps show. */
+    enum Lamp {
+        /** Not a cab end, or the lamps are off. */
+        OFF,
+        /** The leading end: white headlamps. */
+        HEAD,
+        /** The trailing end: red tail lamps. */
+        TAIL
+    }
+
     private static final float POLE_HALF = 0.07F;
     private static final float GRAB_RAIL_U = ROOF_BASE - 0.35F;
 
@@ -229,6 +267,9 @@ final class MetroCarModel {
         float shade = lightsOn ? 1.0F : 0.55F;
         // Anything that only cares WHETHER doors are moving takes the wider of the two.
         float doorFraction = Math.max(rightFraction, leftFraction);
+        // The saloon stops at a driving cab's partition; seats, fittings and lights stay behind it.
+        float saloonFront = outerFront ? half - CAB_DEPTH : half;
+        float saloonRear = outerRear ? -half + CAB_DEPTH : -half;
 
         // Underframe skirt between the trucks, and the floor slab the whole interior stands on.
         box(buffer, -SKIRT_HALF_WIDTH, SKIRT_BOTTOM, -half + 0.3F,
@@ -251,9 +292,15 @@ final class MetroCarModel {
             BODY_HALF_WIDTH, ROOF_TOP, half, ROOF_COLOR);
 
         emitFloor(buffer, half, shade);
-        emitBenches(buffer, half, seatColour, shade);
-        emitFittings(buffer, half, shade);
-        emitCeiling(buffer, half, lightsOn);
+        emitBenches(buffer, half, saloonRear, saloonFront, seatColour, shade);
+        emitFittings(buffer, half, saloonRear, saloonFront, shade);
+        emitCeiling(buffer, half, saloonRear, saloonFront, lightsOn);
+        if (outerFront) {
+            emitCab(buffer, half, 1, trimColour, shade);
+        }
+        if (outerRear) {
+            emitCab(buffer, half, -1, trimColour, shade);
+        }
 
         float truckAt = bogieSpacing * 0.5F;
         emitTruck(buffer, truckAt);
@@ -365,7 +412,8 @@ final class MetroCarModel {
      * intervals. This is most of what makes a saloon read as a metro rather than as a corridor;
      * an empty box with benches reads as neither.</p>
      */
-    private static void emitFittings(BufferBuilder buffer, float half, float shade) {
+    private static void emitFittings(BufferBuilder buffer, float half, float saloonRear,
+                                     float saloonFront, float shade) {
         float inner = BODY_HALF_WIDTH - WALL_THICKNESS;
         float at = inner - FITTING_INSET;
         float[] yellow = shaded(GRAB_YELLOW, shade);
@@ -386,11 +434,12 @@ final class MetroCarModel {
 
             // Longitudinal ceiling grab rail down the length of the saloon, stopping short of the
             // ends so it does not run through the ceiling destination signs hanging there.
-            box(buffer, x - POLE_HALF * 0.8F, GRAB_RAIL_U - POLE_HALF * 0.8F, -half + RAIL_END_GAP,
-                x + POLE_HALF * 0.8F, GRAB_RAIL_U + POLE_HALF * 0.8F, half - RAIL_END_GAP, yellow);
+            box(buffer, x - POLE_HALF * 0.8F, GRAB_RAIL_U - POLE_HALF * 0.8F, saloonRear + RAIL_END_GAP,
+                x + POLE_HALF * 0.8F, GRAB_RAIL_U + POLE_HALF * 0.8F, saloonFront - RAIL_END_GAP, yellow);
 
             // Hanging strap handles, skipping the doorways so none dangles in a doorway.
-            for (float z = -half + RAIL_END_GAP + 0.3F; z < half - RAIL_END_GAP; z += STRAP_SPACING) {
+            for (float z = saloonRear + RAIL_END_GAP + 0.3F; z < saloonFront - RAIL_END_GAP;
+                 z += STRAP_SPACING) {
                 if (inDoorway(z, doorCentres(half), doorHalf)) {
                     continue;
                 }
@@ -409,7 +458,8 @@ final class MetroCarModel {
      * effect of the saloon lighting — the car is drawn with GL lighting off, so nothing here
      * responds to world light on its own and the switch has to be explicit.</p>
      */
-    private static void emitCeiling(BufferBuilder buffer, float half, boolean lightsOn) {
+    private static void emitCeiling(BufferBuilder buffer, float half, float saloonRear,
+                                    float saloonFront, boolean lightsOn) {
         float inner = BODY_HALF_WIDTH - WALL_THICKNESS;
         // Centre vent panel, slightly proud of the ceiling.
         box(buffer, -0.80F, ROOF_BASE - 0.07F, -half + 0.35F,
@@ -418,8 +468,105 @@ final class MetroCarModel {
         float[] lamp = lightsOn ? LIGHT_ON_COLOR : LIGHT_OFF_COLOR;
         for (int side = -1; side <= 1; side += 2) {
             float x = side * (inner - 0.62F);
-            box(buffer, x - 0.26F, ROOF_BASE - 0.10F, -half + 0.6F,
-                x + 0.26F, ROOF_BASE - 0.02F, half - 0.6F, lamp);
+            box(buffer, x - 0.26F, ROOF_BASE - 0.10F, saloonRear + 0.6F,
+                x + 0.26F, ROOF_BASE - 0.02F, saloonFront - 0.6F, lamp);
+        }
+    }
+
+    /**
+     * A driving cab at one outer end: the partition that closes it off from the saloon, with the
+     * cab door in it, and the driver's desk and seat behind the windscreen. {@code s} is {@code +1}
+     * for the front ({@code +z}) end and {@code -1} for the rear.
+     *
+     * <p>The driver sits on their left, looking out of the cab, as on the reference stock — which
+     * is {@code -x} at the front end and {@code +x} at the rear, since the rear cab looks the other
+     * way down the same axes.</p>
+     */
+    private static void emitCab(BufferBuilder buffer, float half, int s, float[] trimColour,
+                                float shade) {
+        float inner = BODY_HALF_WIDTH - WALL_THICKNESS;
+        float wall = half - WALL_THICKNESS;
+        float[] shell = shaded(SHELL_COLOR, shade);
+
+        // Partition, full height, with a cab door in the middle; it faces both the saloon and the cab.
+        float p = half - CAB_DEPTH;
+        float pa = s * (p - PARTITION_HALF_THICKNESS);
+        float pb = s * (p + PARTITION_HALF_THICKNESS);
+        box(buffer, -inner, FLOOR_TOP, pa, -CAB_DOOR_HALF, ROOF_BASE, pb, shell);
+        box(buffer, CAB_DOOR_HALF, FLOOR_TOP, pa, inner, ROOF_BASE, pb, shell);
+        box(buffer, -CAB_DOOR_HALF, CAB_DOOR_TOP, pa, CAB_DOOR_HALF, ROOF_BASE, pb, shell);
+        float da = s * (p - PARTITION_HALF_THICKNESS * 0.6F);
+        float db = s * (p + PARTITION_HALF_THICKNESS * 0.6F);
+        box(buffer, -CAB_DOOR_HALF, FLOOR_TOP, da, CAB_DOOR_HALF, CAB_DOOR_TOP, db, shaded(DESK_COLOR, 1.6F * shade));
+        float fa = s * (p - PARTITION_HALF_THICKNESS - 0.02F);
+        float fb = s * (p + PARTITION_HALF_THICKNESS + 0.02F);
+        box(buffer, -CAB_DOOR_HALF - 0.06F, FLOOR_TOP, fa, -CAB_DOOR_HALF, CAB_DOOR_TOP, fb, trimColour);
+        box(buffer, CAB_DOOR_HALF, FLOOR_TOP, fa, CAB_DOOR_HALF + 0.06F, CAB_DOOR_TOP, fb, trimColour);
+        box(buffer, -CAB_DOOR_HALF - 0.06F, CAB_DOOR_TOP, fa, CAB_DOOR_HALF + 0.06F, CAB_DOOR_TOP + 0.06F, fb,
+            trimColour);
+        box(buffer, -CAB_DOOR_HALF + 0.08F, CAB_DOOR_WINDOW_BOTTOM, fa, CAB_DOOR_HALF - 0.08F,
+            CAB_DOOR_WINDOW_TOP, fb, CAB_WINDOW_COLOR);
+
+        // Desk right across the cab under the windscreen, with an instrument hood along its front.
+        float deskBack = s * (wall - DESK_DEPTH);
+        box(buffer, -inner, FLOOR_TOP, deskBack, inner, DESK_TOP, s * wall, DESK_COLOR);
+        box(buffer, -inner, DESK_TOP, s * (wall - 0.30F), inner, DESK_TOP + 0.14F, s * wall, DESK_COLOR);
+
+        // The driver's side: screens on the hood, a few indicators, and the traction/brake handle.
+        float driverX = -s * 0.80F;
+        box(buffer, driverX - 0.45F, DESK_TOP + 0.14F, s * (wall - 0.32F),
+            driverX + 0.45F, DESK_TOP + 0.46F, s * (wall - 0.24F), SCREEN_COLOR);
+        float[][] indicators = {{0.25F, 0.85F, 0.30F}, {0.98F, 0.72F, 0.15F}, {0.90F, 0.18F, 0.15F}};
+        for (int i = 0; i < indicators.length; i++) {
+            float x = driverX + (i - 1) * 0.22F;
+            box(buffer, x - 0.06F, DESK_TOP, s * (wall - 0.52F), x + 0.06F, DESK_TOP + 0.03F,
+                s * (wall - 0.40F), indicators[i]);
+        }
+        float handleX = driverX + s * 0.55F;
+        box(buffer, handleX - 0.04F, DESK_TOP, s * (wall - 0.58F), handleX + 0.04F, DESK_TOP + 0.26F,
+            s * (wall - 0.50F), UNDERFRAME_COLOR);
+        box(buffer, handleX - 0.08F, DESK_TOP + 0.26F, s * (wall - 0.62F), handleX + 0.08F, DESK_TOP + 0.34F,
+            s * (wall - 0.46F), UNDERFRAME_COLOR);
+
+        // Driver's seat: pedestal, cushion and back, facing the windscreen.
+        float seatZ = wall - DESK_DEPTH - 0.55F;
+        box(buffer, driverX - 0.08F, FLOOR_TOP, s * (seatZ - 0.08F), driverX + 0.08F, FLOOR_TOP + 0.50F,
+            s * (seatZ + 0.08F), UNDERFRAME_COLOR);
+        box(buffer, driverX - 0.30F, FLOOR_TOP + 0.50F, s * (seatZ - 0.28F), driverX + 0.30F,
+            FLOOR_TOP + 0.64F, s * (seatZ + 0.28F), DRIVER_SEAT_COLOR);
+        box(buffer, driverX - 0.30F, FLOOR_TOP + 0.64F, s * (seatZ - 0.36F), driverX + 0.30F,
+            FLOOR_TOP + 1.40F, s * (seatZ - 0.26F), DRIVER_SEAT_COLOR);
+
+        // Lamp housings, outside on the cab front; the lenses are drawn lit, in their own pass.
+        float face = s * half;
+        float proud = s * (half + 0.04F);
+        for (int side = -1; side <= 1; side += 2) {
+            float cx = side * LAMP_CENTRE_X;
+            box(buffer, cx - LAMP_HALF_WIDTH - 0.04F, LAMP_BOTTOM - 0.04F, face,
+                cx + LAMP_HALF_WIDTH + 0.04F, LAMP_TOP + 0.04F, proud, LAMP_HOUSING_COLOR);
+        }
+    }
+
+    /**
+     * The lit lamp lenses on a car's cab ends. Drawn by the caller in a pass of its own, at full
+     * brightness: a lamp is a light source, and must not be darkened by the night it is lighting.
+     */
+    static void emitLamps(BufferBuilder buffer, float bogieSpacing, Lamp front, Lamp rear) {
+        float half = bogieSpacing / TRUCK_CENTRE_RATIO * 0.5F;
+        emitLampPair(buffer, half, 1, front);
+        emitLampPair(buffer, half, -1, rear);
+    }
+
+    private static void emitLampPair(BufferBuilder buffer, float half, int s, Lamp lamp) {
+        if (lamp == Lamp.OFF) {
+            return;
+        }
+        float[] colour = lamp == Lamp.HEAD ? HEADLAMP_COLOR : TAIL_LAMP_COLOR;
+        float a = s * (half + 0.04F);
+        float b = s * (half + 0.07F);
+        for (int side = -1; side <= 1; side += 2) {
+            float cx = side * LAMP_CENTRE_X;
+            box(buffer, cx - LAMP_HALF_WIDTH, LAMP_BOTTOM, a, cx + LAMP_HALF_WIDTH, LAMP_TOP, b, colour);
         }
     }
 
@@ -600,8 +747,8 @@ final class MetroCarModel {
     }
 
     /** Longitudinal benches down both walls, clear of the door bays. */
-    private static void emitBenches(BufferBuilder buffer, float half, float[] seatColour,
-                                    float shade) {
+    private static void emitBenches(BufferBuilder buffer, float half, float saloonRear,
+                                    float saloonFront, float[] seatColour, float shade) {
         float[] shell = shaded(SHELL_COLOR, shade);
         float inner = BODY_HALF_WIDTH - WALL_THICKNESS;
         // Three bench runs per side: between the ends and the door bays.
@@ -612,6 +759,9 @@ final class MetroCarModel {
             {half * 0.5F + doorHalf, half - 0.4F},
         };
         for (float[] run : runs) {
+            // A run reaching into a cab stops at its partition.
+            run[0] = Math.max(run[0], saloonRear + 0.3F);
+            run[1] = Math.min(run[1], saloonFront - 0.3F);
             if (run[1] - run[0] < 0.5F) {
                 continue;
             }

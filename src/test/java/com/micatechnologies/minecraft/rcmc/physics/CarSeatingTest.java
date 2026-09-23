@@ -57,6 +57,28 @@ class CarSeatingTest {
     }
 
     @Test
+    @DisplayName("no passenger sits or stands in a driving cab")
+    void passengersStayOutOfTheCab() {
+        for (TrainSpec spec : new TrainSpec[] {TrainSpec.metroTrain(3), TrainSpec.metroTrainCompact(3),
+            TrainSpec.metroTrainLong(3)}) {
+            double half = CarSeating.bodyLength(spec) * 0.5D;
+            double partition = half - CarSeating.CAB_DEPTH;
+            for (int seat = 0; seat < CarSeating.capacity(spec); seat++) {
+                double front = CarSeating.alongOffset(spec, seat, true, false);
+                double rear = CarSeating.alongOffset(spec, seat, false, true);
+                assertTrue(front < partition, "seat " + seat + " at " + front + " is in the front cab");
+                assertTrue(rear > -partition, "seat " + seat + " at " + rear + " is in the rear cab");
+            }
+            double[] walk = CarSeating.walkableAlong(spec, true, true);
+            assertTrue(walk[1] < partition && walk[0] > -partition, "a rider can walk into a cab");
+            // A middle car has no cab, and its passengers use the whole saloon as before.
+            double[] middle = CarSeating.walkableAlong(spec, false, false);
+            assertEquals(CarSeating.walkableHalfLength(spec), middle[1], 1e-9);
+            assertEquals(CarSeating.alongOffset(spec, 0), CarSeating.alongOffset(spec, 0, false, false), 1e-9);
+        }
+    }
+
+    @Test
     @DisplayName("an unknown spec is treated as a single seat rather than as no seats")
     void nullSpecIsRideable() {
         assertEquals(1, CarSeating.capacity(null),
