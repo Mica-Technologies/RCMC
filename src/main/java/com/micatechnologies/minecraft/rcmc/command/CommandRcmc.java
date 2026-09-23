@@ -87,6 +87,10 @@ public class CommandRcmc extends CommandBase {
             return getListOfStringsMatchingLastWord(args, "create", "list", "remove", "start",
                 "stop", "signals");
         }
+        if (args.length == 4 && "line".equalsIgnoreCase(args[0])
+            && "create".equalsIgnoreCase(args[1])) {
+            return getListOfStringsMatchingLastWord(args, "loop", "shuttle", "turnback");
+        }
         if (args.length == 5 && "platform".equalsIgnoreCase(args[0])) {
             return getListOfStringsMatchingLastWord(args, "left", "right", "both");
         }
@@ -1139,7 +1143,7 @@ public class CommandRcmc extends CommandBase {
         throws CommandException {
         if (args.length < 2) {
             throw new CommandException(
-                "/rcmc line create <name> <loop|shuttle> <stationA> <stationB> [...] | list"
+                "/rcmc line create <name> <loop|shuttle|turnback> <stationA> <stationB> [...] | list"
                     + " | remove <name> | start <name> <trainId> [cruiseSpeed] | stop <trainId>"
                     + " | signals <name> <count|off>");
         }
@@ -1148,15 +1152,13 @@ public class CommandRcmc extends CommandBase {
             case "create": {
                 if (args.length < 6) {
                     throw new CommandException(
-                        "/rcmc line create <name> <loop|shuttle> <stationA> <stationB> [...]");
+                        "/rcmc line create <name> <loop|shuttle|turnback> <stationA> <stationB> [...]");
                 }
-                boolean loop;
-                if ("loop".equalsIgnoreCase(args[3])) {
-                    loop = true;
-                } else if ("shuttle".equalsIgnoreCase(args[3])) {
-                    loop = false;
-                } else {
-                    throw new CommandException("Line kind must be loop or shuttle, got " + args[3]);
+                com.micatechnologies.minecraft.rcmc.physics.transit.TransitLine.Kind kind =
+                    com.micatechnologies.minecraft.rcmc.physics.transit.TransitLine.Kind.byLabel(args[3]);
+                if (kind == null) {
+                    throw new CommandException(
+                        "Line kind must be loop, shuttle or turnback, got " + args[3]);
                 }
                 java.util.List<com.micatechnologies.minecraft.rcmc.physics.transit.TransitStation>
                     stops = new ArrayList<>();
@@ -1169,12 +1171,12 @@ public class CommandRcmc extends CommandBase {
                     }
                     stops.add(s);
                 }
-                transit.addLine(new com.micatechnologies.minecraft.rcmc.physics.transit
-                    .TransitLine(args[2], stops, loop));
+                transit.addLine(com.micatechnologies.minecraft.rcmc.physics.transit
+                    .TransitLine.of(args[2], stops, kind));
                 state.markTrackDirty(world);
                 RcmcNetwork.sendToAllIn(new com.micatechnologies.minecraft.rcmc.net.PacketTransitSync(transit), world.provider.getDimension());
                 reply(sender, TextFormatting.GREEN, "Line " + args[2] + " created — "
-                    + stops.size() + " stops, " + (loop ? "loop" : "shuttle") + ".");
+                    + stops.size() + " stops, " + kind.label() + ".");
                 return;
             }
             case "list": {
@@ -1195,7 +1197,7 @@ public class CommandRcmc extends CommandBase {
                     com.micatechnologies.minecraft.rcmc.physics.transit.LineSignals sig =
                         transit.signalsFor(l.name());
                     reply(sender, TextFormatting.AQUA, l.name() + " ("
-                        + (l.isLoop() ? "loop" : l.turnsBackOnLoop() ? "out and back, turning loops" : "shuttle")
+                        + l.kind().label()
                         + "): " + stops
                         + (sig == null ? "" : "  [" + sig.blocks().size() + " signal blocks]"));
                 }

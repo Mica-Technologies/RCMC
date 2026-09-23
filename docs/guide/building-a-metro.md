@@ -60,7 +60,7 @@ Item: **`rcmc:transit_tool`**.
 | ++g++ | Cycle mode: **station → platform → line → switch → track style** |
 | Right-click track | Do this mode's thing at the point aimed at |
 | ++c++ | Commit what is being assembled (create the line, throw the switch) |
-| ++v++ | In line mode, toggle loop / shuttle |
+| ++v++ | In line mode, cycle the line kind: loop / shuttle / turnback |
 | Sneak + right-click track | The mode's destructive counterpart — e.g. remove the nearest stop |
 | Sneak + right-click air | Abandon what is being assembled |
 
@@ -101,12 +101,17 @@ line is a **loop** or a **shuttle**, then ++c++ to create it.
 | Kind | Behaviour at the end |
 | --- | --- |
 | **Loop** | Wraps round to the first stop and keeps going |
-| **Shuttle** | Reverses at the terminus and runs the pattern backwards |
+| **Shuttle** | Stops at a dead-end terminus, changes ends, and runs the pattern backwards on the same track |
+| **Turnback** | Out and back on two tracks: at each terminus the train carries on round a turning loop and returns on the other track, so inbound and outbound run at the same time |
+
+A turnback line needs the track to match: two running tracks joined by a loop at each end, and a
+platform per direction at each station (an island, or a pair of side platforms). The underground
+demo's Circle line is one.
 
 By command:
 
 ```
-/rcmc line create <name> <loop|shuttle> <stationA> <stationB> [...]
+/rcmc line create <name> <loop|shuttle|turnback> <stationA> <stationB> [...]
 /rcmc line list
 /rcmc line remove <name>
 ```

@@ -65,7 +65,7 @@ Edits act on **spans** — the stretch between two placed nodes — not on a poi
 | ++g++ | Cycle mode: station → platform → line → switch → track style |
 | Right-click track | Do this mode's thing here |
 | ++c++ | Commit what is being assembled |
-| ++v++ | In line mode, toggle loop / shuttle |
+| ++v++ | In line mode, cycle the line kind: loop / shuttle / turnback |
 | Sneak + right-click track | The mode's destructive counterpart |
 | Sneak + right-click air | Abandon what is being assembled |
 

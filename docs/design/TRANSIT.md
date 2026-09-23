@@ -27,7 +27,7 @@ physics/transit/          Pure Java. Zero Minecraft types, like the rest of phys
   TransitStopController   The station service cycle
   TransitStation          A named place: one or more platforms
   TransitPlatform         One track's berth: stop point, door side, label
-  TransitLine             An ordered list of stations, loop or shuttle
+  TransitLine             An ordered list of stations: loop, shuttle or turnback
   LineService             Per-train route following
   LineSignals             Movement authority
   ArrivalEstimator        "N stops away", by replaying the service pattern

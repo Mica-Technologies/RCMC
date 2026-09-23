@@ -41,7 +41,7 @@ import net.minecraftforge.fml.relauncher.SideOnly;
  *   <li><b>G</b> — cycle mode: station → platform → line → switch → track style.</li>
  *   <li><b>Right-click track</b> — do this mode's thing at the point aimed at.</li>
  *   <li><b>C</b> — commit what is being assembled (create the line, throw in the switch).</li>
- *   <li><b>V</b> — in line mode, toggle loop/shuttle.</li>
+ *   <li><b>V</b> — in line mode, cycle loop / shuttle / turnback.</li>
  *   <li><b>Sneak + right-click track</b> — the mode's destructive counterpart (remove a stop).</li>
  *   <li><b>Sneak + right-click air</b> — abandon what is being assembled.</li>
  * </ul>
@@ -361,7 +361,7 @@ public class ItemTransitTool extends Item {
         }
         say(player, TextFormatting.AQUA, "Stop " + session.lineStops().size() + ": " + station.name());
         say(player, TextFormatting.DARK_GRAY, "  " + session.pendingSummary()
-            + "   C to create, V for loop/shuttle.");
+            + "   C to create, V for loop/shuttle/turnback.");
     }
 
     /** C in line mode: turns the picked stops into a real line. */
@@ -385,11 +385,11 @@ public class ItemTransitTool extends Item {
             stops.add(station);
         }
         String name = chosenName(player, "Line", transit.lines().size() + 1);
-        transit.addLine(new TransitLine(name, stops, session.isLoop()));
+        transit.addLine(TransitLine.of(name, stops, session.kind()));
         session.clearPending();
         syncTransit(world, state);
         say(player, TextFormatting.GREEN, "Line " + name + " created — " + stops.size()
-            + " stops, " + (session.isLoop() ? "loop" : "shuttle") + ".");
+            + " stops, " + session.kind().label() + ".");
         say(player, TextFormatting.DARK_GRAY, "  Run it: /rcmc train <section> 3 0 metro,"
             + " then /rcmc line start " + name + " <trainId>");
     }
@@ -519,14 +519,14 @@ public class ItemTransitTool extends Item {
         }
     }
 
-    /** V: loop or shuttle, for the line being assembled. */
+    /** V: loop, shuttle or turnback, for the line being assembled. */
     public static void toggleLineKind(EntityPlayer player) {
         TransitBuildSession session = TransitBuildSession.of(player.getUniqueID());
         if (session.mode() != TransitBuildSession.Mode.LINE) {
             say(player, TextFormatting.GRAY, "Loop/shuttle only applies in line mode.");
             return;
         }
-        say(player, TextFormatting.AQUA, "Line kind: " + (session.toggleLoop() ? "loop" : "shuttle"));
+        say(player, TextFormatting.AQUA, "Line kind: " + session.cycleKind().label());
     }
 
     // --- Shared. -------------------------------------------------------------------------------
@@ -576,7 +576,7 @@ public class ItemTransitTool extends Item {
         tooltip.add(TextFormatting.GRAY + "G: mode — station, platform, line, switch, track style");
         tooltip.add(TextFormatting.GRAY + "Right-click track: apply the current mode");
         tooltip.add(TextFormatting.GRAY + "C: create the line / switch being assembled");
-        tooltip.add(TextFormatting.GRAY + "V: loop or shuttle (line mode)");
+        tooltip.add(TextFormatting.GRAY + "V: loop / shuttle / turnback (line mode)");
         tooltip.add(TextFormatting.GRAY + "Sneak + right-click track: remove a stop");
         tooltip.add(TextFormatting.GRAY + "Sneak + right-click air: start over");
         tooltip.add(TextFormatting.DARK_GRAY + "Anvil-rename this tool to name what you place");

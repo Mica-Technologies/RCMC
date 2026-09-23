@@ -252,7 +252,7 @@ change when a service reverses. Announcements convert it to the rider's own left
 ### `/rcmc line`
 
 ```
-/rcmc line create <name> <loop|shuttle> <stationA> <stationB> [...]
+/rcmc line create <name> <loop|shuttle|turnback> <stationA> <stationB> [...]
 /rcmc line list
 /rcmc line remove <name>
 /rcmc line start <name> <trainId> [cruiseSpeed]     put a train into service on the line

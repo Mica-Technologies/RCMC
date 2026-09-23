@@ -44,7 +44,7 @@ public class PacketBuildAdjust implements IMessage {
         CYCLE_TRANSIT_MODE,
         /** Transit tool: create the line or switch currently being assembled. */
         COMMIT_TRANSIT,
-        /** Transit tool: loop or shuttle, for the line being assembled. */
+        /** Transit tool: loop, shuttle or turnback, for the line being assembled. */
         TOGGLE_LINE_KIND
     }
 

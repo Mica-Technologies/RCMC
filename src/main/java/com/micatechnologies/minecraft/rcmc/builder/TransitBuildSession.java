@@ -73,8 +73,9 @@ public final class TransitBuildSession {
     /** Station names picked for the line being assembled, in click order. */
     private final List<String> lineStops = new ArrayList<>();
 
-    /** Whether the line under assembly closes back on itself. */
-    private boolean loop;
+    /** What the line under assembly does at the end of its route. */
+    private com.micatechnologies.minecraft.rcmc.physics.transit.TransitLine.Kind kind =
+        com.micatechnologies.minecraft.rcmc.physics.transit.TransitLine.Kind.SHUTTLE;
 
     /** The throat of the switch under assembly, or {@code null}. */
     private TrackNetwork.SectionEnd switchThroat;
@@ -108,13 +109,14 @@ public final class TransitBuildSession {
         return mode;
     }
 
-    public boolean isLoop() {
-        return loop;
+    public com.micatechnologies.minecraft.rcmc.physics.transit.TransitLine.Kind kind() {
+        return kind;
     }
 
-    public boolean toggleLoop() {
-        loop = !loop;
-        return loop;
+    /** Loop, shuttle, turnback, and round again. */
+    public com.micatechnologies.minecraft.rcmc.physics.transit.TransitLine.Kind cycleKind() {
+        kind = kind.next();
+        return kind;
     }
 
     // --- Line assembly. ----------------------------------------------------------------------
@@ -197,7 +199,7 @@ public final class TransitBuildSession {
             case LINE:
                 return lineStops.isEmpty()
                     ? "no stops picked yet"
-                    : String.join(" → ", lineStops) + (loop ? "  (loop)" : "  (shuttle)");
+                    : String.join(" → ", lineStops) + "  (" + kind.label() + ")";
             case SWITCH:
                 if (switchThroat == null) {
                     return "no throat picked yet";
