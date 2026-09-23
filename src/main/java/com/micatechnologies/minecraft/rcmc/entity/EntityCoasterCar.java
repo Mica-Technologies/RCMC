@@ -414,7 +414,7 @@ public class EntityCoasterCar extends Entity {
             // Coaster stock, and anything that is not a player, keeps its assigned seat.
             int index = getPassengers().indexOf(passenger);
             acrossOffset = CarSeating.acrossOffset(spec, index);
-            alongOffset = CarSeating.alongOffset(spec, index);
+            alongOffset = CarSeating.alongOffset(spec, index, hasCabFront(spec), hasCabRear(spec));
         }
         Vec3d seat = new Vec3d(
             frame.position.x + frame.up.x * getMountedYOffset()
@@ -546,8 +546,10 @@ public class EntityCoasterCar extends Entity {
                 offset[1] += across * WALK_SPEED;
             }
         }
-        double halfLength = CarSeating.walkableHalfLength(spec);
-        offset[0] = Math.max(-halfLength, Math.min(halfLength, offset[0]));
+        // Kept behind the cab partition where this car has a driving cab: passengers do not
+        // stand at the driver's desk.
+        double[] walkable = CarSeating.walkableAlong(spec, hasCabFront(spec), hasCabRear(spec));
+        offset[0] = Math.max(walkable[0], Math.min(walkable[1], offset[0]));
 
         // The side wall is a clamp, not a collision — a standing rider's position is written
         // directly, so vanilla never gets a say and this bound IS the wall. Which means the only
@@ -630,6 +632,17 @@ public class EntityCoasterCar extends Entity {
     private int seatCapacity() {
         Train train = trainOrNull();
         return CarSeating.capacity(train == null ? null : train.spec());
+    }
+
+    /** Whether this car's front end faces out of its train, and so is a driving cab. */
+    private boolean hasCabFront(TrainSpec spec) {
+        return spec != null && spec.carStyle() == TrainSpec.CarStyle.METRO && carIndex() == 0;
+    }
+
+    /** Whether this car's rear end faces out of its train. */
+    private boolean hasCabRear(TrainSpec spec) {
+        return spec != null && spec.carStyle() == TrainSpec.CarStyle.METRO
+            && carIndex() == spec.carCount() - 1;
     }
 
     private Train trainOrNull() {

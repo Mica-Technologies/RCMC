@@ -129,8 +129,12 @@ public class RenderCoasterCar extends Render<EntityCoasterCar> {
         TrainSpec spec = specOf(entity);
         if (spec != null && spec.carStyle() == TrainSpec.CarStyle.METRO) {
             double bodyLength = spec.carLength() / 0.72D;
-            MetroInteriorSign.draw(entity.world, entity.trainId(), bodyLength, partialTicks);
+            boolean cabFront = entity.carIndex() == 0;
+            boolean cabRear = entity.carIndex() == spec.carCount() - 1;
+            MetroInteriorSign.draw(entity.world, entity.trainId(), bodyLength, cabFront, cabRear, partialTicks);
             MetroExteriorSign.draw(entity.world, entity.trainId(), bodyLength, partialTicks);
+            MetroExteriorSign.drawEnds(entity.world, entity.trainId(), bodyLength, cabFront, cabRear,
+                partialTicks);
         }
 
         GlStateManager.popMatrix();
@@ -247,6 +251,22 @@ public class RenderCoasterCar extends Render<EntityCoasterCar> {
                 colourOf(spec, TrainSpec.Part.TRIM, 4),
                 colourOf(spec, TrainSpec.Part.SEATS, 1));
             tessellator.draw();
+
+            // Head and tail lamps, full-bright whatever the light around the car: a lamp is a
+            // light, and at night is the one part of the train that must not go dark.
+            MetroCarModel.Lamp[] lamps = MetroCabs.lamps(entity.world, entity.trainId(), train,
+                outerFront, outerRear);
+            if (lamps[0] != MetroCarModel.Lamp.OFF || lamps[1] != MetroCarModel.Lamp.OFF) {
+                float lastX = net.minecraft.client.renderer.OpenGlHelper.lastBrightnessX;
+                float lastY = net.minecraft.client.renderer.OpenGlHelper.lastBrightnessY;
+                net.minecraft.client.renderer.OpenGlHelper.setLightmapTextureCoords(
+                    net.minecraft.client.renderer.OpenGlHelper.lightmapTexUnit, 240.0F, 240.0F);
+                buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_COLOR);
+                MetroCarModel.emitLamps(buffer, length, lamps[0], lamps[1]);
+                tessellator.draw();
+                net.minecraft.client.renderer.OpenGlHelper.setLightmapTextureCoords(
+                    net.minecraft.client.renderer.OpenGlHelper.lightmapTexUnit, lastX, lastY);
+            }
 
             // Glass last, blended. Translucent geometry drawn before the opaque body would blend
             // against whatever happened to precede it rather than against the car.

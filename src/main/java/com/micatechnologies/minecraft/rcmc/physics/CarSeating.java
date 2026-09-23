@@ -61,6 +61,15 @@ public final class CarSeating {
     /** Clear space kept at each end of the saloon, so no seat lands in the cab area. */
     private static final double END_MARGIN = 2.0D;
 
+    /**
+     * Depth of a driving cab, from the outer end wall to the partition behind the driver.
+     *
+     * <p>Only an end facing out of the consist has one. The model builds the cab to this depth, and
+     * seats and standing riders are kept on the saloon side of it — the three have to agree, or a
+     * passenger ends up sitting at the driver's desk.</p>
+     */
+    public static final double CAB_DEPTH = 2.2D;
+
     /** Trucks sit at this fraction of body length, per {@code MetroCarModel}'s convention. */
     private static final double TRUCK_CENTRE_RATIO = 0.72D;
 
@@ -118,19 +127,38 @@ public final class CarSeating {
      * always lands a rider on a cushion and degrades gracefully at any seat count.</p>
      */
     public static double alongOffset(TrainSpec spec, int index) {
+        return alongOffset(spec, index, false, false);
+    }
+
+    /**
+     * As {@link #alongOffset(TrainSpec, int)}, for a car with a driving cab at its front
+     * ({@code +} end) and/or its rear: the seats spread over the saloon that is left.
+     */
+    public static double alongOffset(TrainSpec spec, int index, boolean cabFront, boolean cabRear) {
         if (spec == null || index < 0) {
             return 0.0D;
         }
         if (spec.carStyle() != TrainSpec.CarStyle.METRO) {
             return CoasterCarLayout.along(spec, index);
         }
+        double from = saloonRear(spec, cabRear) + END_MARGIN * 0.5D;
+        double to = saloonFront(spec, cabFront) - END_MARGIN * 0.5D;
         int rows = Math.max(1, capacity(spec) / 2);
-        if (rows == 1) {
-            return 0.0D;
+        if (rows == 1 || to <= from) {
+            return (from + to) * 0.5D;
         }
         int row = Math.min(index / 2, rows - 1);
-        double usable = Math.max(0.0D, bodyLength(spec) - END_MARGIN);
-        return -usable * 0.5D + usable * row / (rows - 1);
+        return from + (to - from) * row / (rows - 1);
+    }
+
+    /** Where the saloon ends toward the car's front: its end wall, or the cab partition. */
+    public static double saloonFront(TrainSpec spec, boolean cabFront) {
+        return bodyLength(spec) * 0.5D - (cabFront ? CAB_DEPTH : 0.0D);
+    }
+
+    /** Where the saloon ends toward the car's rear. */
+    public static double saloonRear(TrainSpec spec, boolean cabRear) {
+        return -bodyLength(spec) * 0.5D + (cabRear ? CAB_DEPTH : 0.0D);
     }
 
     /**
@@ -155,6 +183,19 @@ public final class CarSeating {
             return 0.0D;
         }
         return Math.max(0.0D, bodyLength(spec) * 0.5D - END_WALL_CLEARANCE);
+    }
+
+    /**
+     * How far along a car a standing rider may walk, as {@code {rear, front}} offsets from its
+     * centre: the saloon, clear of its end walls, and behind the partition of any driving cab.
+     */
+    public static double[] walkableAlong(TrainSpec spec, boolean cabFront, boolean cabRear) {
+        if (spec == null || spec.carStyle() != TrainSpec.CarStyle.METRO) {
+            return new double[] {0.0D, 0.0D};
+        }
+        double rear = saloonRear(spec, cabRear) + END_WALL_CLEARANCE;
+        double front = saloonFront(spec, cabFront) - END_WALL_CLEARANCE;
+        return front < rear ? new double[] {0.0D, 0.0D} : new double[] {rear, front};
     }
 
     /**

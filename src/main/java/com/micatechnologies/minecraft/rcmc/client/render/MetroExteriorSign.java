@@ -93,6 +93,58 @@ public final class MetroExteriorSign {
         }
     }
 
+    /** Half-width of the destination panel over a cab windscreen — narrower than the body. */
+    private static final double END_PANEL_HALF_WIDTH = 1.15D;
+    private static final double END_PROUD = 0.03D;
+
+    /**
+     * Draws the destination panel above the windscreen at each cab end of a car: where a waiting
+     * passenger reads it as the train runs in. Both ends show it — the one arriving now is the one
+     * leaving next, once the train reverses.
+     *
+     * @param front whether the car's {@code +z} end is a cab end
+     * @param rear  whether its {@code -z} end is
+     */
+    public static void drawEnds(World world, int trainId, double bodyLength, boolean front, boolean rear,
+                                float partialTicks) {
+        if (!front && !rear) {
+            return;
+        }
+        RcmcWorldState state = RcmcWorldState.of(world);
+        ServiceSnapshot snapshot = snapshotFor(state, trainId);
+        if (snapshot == null) {
+            return;
+        }
+        TransitLine line = state.transit().line(snapshot.lineName());
+        FontRenderer font =
+            com.micatechnologies.minecraft.rcmc.client.render.sign.RcmcFonts.dotMatrix();
+        if (line == null || font == null) {
+            return;
+        }
+        String destination = TransitSignText.exteriorDestination(line, snapshot.serviceDirection());
+        int maxPixels = (int) (END_PANEL_HALF_WIDTH * 2.0D / TEXT_SCALE) - 8;
+        String[] lines = {MetroInteriorSign.marquee(font, destination, maxPixels, world.getTotalWorldTime())};
+        int[] colours = {AMBER};
+        double half = bodyLength * 0.5D;
+        for (int s = 1; s >= -1; s -= 2) {
+            if ((s > 0 && !front) || (s < 0 && !rear)) {
+                continue;
+            }
+            GlStateManager.pushMatrix();
+            GlStateManager.translate(0.0D, 0.0D, s * (half + END_PROUD));
+            // The panel natively faces +z; the rear end's is turned to face -z, outward there.
+            if (s < 0) {
+                GlStateManager.rotate(180.0F, 0.0F, 1.0F, 0.0F);
+            }
+            SignPanels.drawPanel(END_PANEL_HALF_WIDTH, BAND_BOTTOM, BAND_TOP, PANEL_HALF_THICKNESS,
+                0.04F, 0.04F, 0.05F);
+            GlStateManager.scale(-1.0F, 1.0F, 1.0F);
+            SignPanels.drawLines(font, lines, colours, BAND_TOP - 0.05D, TEXT_SCALE,
+                PANEL_HALF_THICKNESS + 0.005D);
+            GlStateManager.popMatrix();
+        }
+    }
+
     private static ServiceSnapshot snapshotFor(RcmcWorldState state, int trainId) {
         if (state == null) {
             return null;

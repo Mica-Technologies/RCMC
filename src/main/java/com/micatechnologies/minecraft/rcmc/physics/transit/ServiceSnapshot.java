@@ -53,6 +53,14 @@ public final class ServiceSnapshot {
      */
     private final double[] secondsToStations;
 
+    /**
+     * Which way the train runs, or is about to, along its current section: {@code +1} toward
+     * higher distances, {@code -1} lower. See {@code LineService.facing}: at a terminus it has
+     * already flipped while the train stands, which is what lets a cab light its headlights at the
+     * end it is about to leave by.
+     */
+    private final int facing;
+
     public ServiceSnapshot(int trainId, String lineName, int serviceDirection, int nextStopIndex,
                            boolean atPlatform, boolean doorsOpen, double doorFraction,
                            double distanceToNextStop) {
@@ -78,6 +86,14 @@ public final class ServiceSnapshot {
                            boolean atPlatform, boolean doorsOpen, double doorFraction,
                            double distanceToNextStop, DoorSide doorSide, String platformLabel,
                            double[] secondsToStations) {
+        this(trainId, lineName, serviceDirection, nextStopIndex, atPlatform, doorsOpen, doorFraction,
+            distanceToNextStop, doorSide, platformLabel, secondsToStations, 1);
+    }
+
+    public ServiceSnapshot(int trainId, String lineName, int serviceDirection, int nextStopIndex,
+                           boolean atPlatform, boolean doorsOpen, double doorFraction,
+                           double distanceToNextStop, DoorSide doorSide, String platformLabel,
+                           double[] secondsToStations, int facing) {
         if (lineName == null || lineName.isEmpty()) {
             throw new IllegalArgumentException("lineName is required");
         }
@@ -99,12 +115,18 @@ public final class ServiceSnapshot {
         this.platformLabel = platformLabel == null ? "" : platformLabel;
         this.secondsToStations = secondsToStations == null
             ? new double[0] : secondsToStations.clone();
+        this.facing = facing >= 0 ? 1 : -1;
     }
 
     /** This snapshot with arrival estimates attached. */
     public ServiceSnapshot withSecondsToStations(double[] seconds) {
         return new ServiceSnapshot(trainId, lineName, serviceDirection, nextStopIndex, atPlatform,
-            doorsOpen, doorFraction, distanceToNextStop, doorSide, platformLabel, seconds);
+            doorsOpen, doorFraction, distanceToNextStop, doorSide, platformLabel, seconds, facing);
+    }
+
+    /** Which way the train runs or is about to, along its current section; {@code +1} or {@code -1}. */
+    public int facing() {
+        return facing;
     }
 
     /** Seconds until this train reaches station {@code stationIndex}, or negative if unknown. */
@@ -142,7 +164,8 @@ public final class ServiceSnapshot {
             service.currentStopIndex(),
             service.controller().phase() != TransitStopController.Phase.APPROACHING,
             service.controller().doorsOpen(), service.controller().doorFraction(),
-            service.distanceToNextStop(), doorSide, platformLabel);
+            service.distanceToNextStop(), doorSide, platformLabel, new double[0],
+            service.facing() >= 0.0D ? 1 : -1);
     }
 
     /** The train running this service — how an in-car sign finds its own. */
