@@ -276,7 +276,7 @@ public class RenderCoasterCar extends Render<EntityCoasterCar> {
                 GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ZERO);
             GlStateManager.depthMask(false);
             buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_COLOR);
-            MetroCarModel.emitGlazing(buffer, length, doorFraction, outerFront, outerRear);
+            MetroCarModel.emitGlazing(buffer, length, rightFraction, leftFraction, outerFront, outerRear);
             tessellator.draw();
             GlStateManager.depthMask(true);
             GlStateManager.disableBlend();

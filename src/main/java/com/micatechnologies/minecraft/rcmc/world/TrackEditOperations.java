@@ -37,7 +37,7 @@ public final class TrackEditOperations {
 
     /** Opens the editor on node {@code nodeIndex} of section {@code sectionId}. */
     public static void open(EntityPlayerMP player, int sectionId, int nodeIndex) {
-        send(player, sectionId, nodeIndex, "");
+        send(player, sectionId, nodeIndex, "", true);
     }
 
     public static void handle(EntityPlayerMP player, int sectionId, int nodeIndex,
@@ -287,6 +287,12 @@ public final class TrackEditOperations {
     }
 
     private static void send(EntityPlayerMP player, int sectionId, int nodeIndex, String message) {
+        send(player, sectionId, nodeIndex, message, false);
+    }
+
+    /** {@code open}: whether this view may open the screen, or only refresh one already open. */
+    private static void send(EntityPlayerMP player, int sectionId, int nodeIndex, String message,
+                             boolean open) {
         RcmcWorldState state = RcmcWorldState.of(player.world);
         TrackSection section = state == null ? null : state.network().section(sectionId);
         if (section == null) {
@@ -303,7 +309,7 @@ public final class TrackEditOperations {
             section.isClosed(), section.totalLength(), n.position().x, n.position().y, n.position().z,
             n.bankDegrees(), spanType, part.ordinal(), section.palette().of(part).label(), message,
             canSplit(section, node), target == null ? "" : target.label(),
-            TrackStyleIds.label(section.styleId()))), player);
+            TrackStyleIds.label(section.styleId())), open), player);
     }
 
     private static boolean holdingEditor(EntityPlayerMP player) {

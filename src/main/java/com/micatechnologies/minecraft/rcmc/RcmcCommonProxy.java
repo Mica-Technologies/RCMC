@@ -39,12 +39,12 @@ public class RcmcCommonProxy implements RcmcProxy {
     }
 
     @Override
-    public void showRideController(com.micatechnologies.minecraft.rcmc.net.RideView view) {
+    public void showRideController(com.micatechnologies.minecraft.rcmc.net.RideView view, boolean open) {
         // Server side there is no screen to show.
     }
 
     @Override
-    public void showTrackEditor(com.micatechnologies.minecraft.rcmc.net.TrackEditView view) {
+    public void showTrackEditor(com.micatechnologies.minecraft.rcmc.net.TrackEditView view, boolean open) {
         // Server side there is no screen to show.
     }
 }
