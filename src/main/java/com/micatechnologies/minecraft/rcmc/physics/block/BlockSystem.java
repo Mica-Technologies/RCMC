@@ -451,7 +451,9 @@ public final class BlockSystem implements TrainManager.ExternalAcceleration, Bou
                 Train b = byId.get(j).getValue();
                 TrackRef refA = a.reference();
                 TrackRef refB = b.reference();
-                if (refA.sectionId() != refB.sectionId()) {
+                // Only this system's own track: every train in the world is passed in, and a pair
+                // crashed on some other coaster was being reported as this one's collision.
+                if (refA.sectionId() != refB.sectionId() || !covers(refA.sectionId())) {
                     continue;
                 }
                 double lowA = refA.distance() - a.spec().totalLength();
@@ -476,6 +478,16 @@ public final class BlockSystem implements TrainManager.ExternalAcceleration, Bou
                 }
             }
         }
+    }
+
+    /** Whether any block of this system lies on {@code sectionId}. */
+    private boolean covers(int sectionId) {
+        for (BlockSection block : blocks) {
+            if (block.sectionId() == sectionId) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static double rangeOverlap(double lowA, double highA, double lowB, double highB) {

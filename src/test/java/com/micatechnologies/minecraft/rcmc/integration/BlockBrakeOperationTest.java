@@ -174,6 +174,29 @@ class BlockBrakeOperationTest {
     }
 
     @Test
+    @DisplayName("a crash on another coaster is not reported as this one's collision")
+    void collisionsAreLocal() {
+        Ride ride = new Ride();
+        ride.network.addSection(new com.micatechnologies.minecraft.rcmc.track.TrackSection(2,
+            java.util.Arrays.asList(
+                new com.micatechnologies.minecraft.rcmc.track.TrackNode(new Vec3(0, 64, 500)),
+                new com.micatechnologies.minecraft.rcmc.track.TrackNode(new Vec3(100, 64, 500))),
+            false, null));
+        BlockSystem system = new BlockSystem(true, true, 4.0D, TICK);
+        BlockLayout.forCircuit(1, ride.demo.section.totalLength(),
+            BlockLayout.boundaries(1, ride.elements.elements())).forEach(system::addBlock);
+        TrainManager trains = new TrainManager();
+        TrainSpec spec = new TrainSpec(5, 3.0D, 0.5D, 4);
+        // Two trains on top of each other — on section 2, which this system knows nothing about.
+        trains.add(1, new Train(spec, new PhysicsIntegrator(9.81D, 0.01D, 0.0015D, 60.0D),
+            new TrackRef(2, 50.0D), 0.0D));
+        trains.add(2, new Train(spec, new PhysicsIntegrator(9.81D, 0.01D, 0.0015D, 60.0D),
+            new TrackRef(2, 45.0D), 0.0D));
+        system.updateOccupancy(trains, ride.network);
+        assertFalse(system.hasCollision());
+    }
+
+    @Test
     @DisplayName("two trains run ten minutes on hardware blocks without meeting, and both keep lapping")
     void twoTrainsRunSafely() {
         Ride ride = new Ride();
