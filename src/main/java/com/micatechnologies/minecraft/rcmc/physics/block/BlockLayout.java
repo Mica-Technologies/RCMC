@@ -60,17 +60,21 @@ public final class BlockLayout {
         if (count < 2) {
             return blocks;
         }
+        double last = boundaries.get(count - 1);
+        double first = boundaries.get(0);
+        boolean seam = last >= length - 1.0e-9D;
+        if (seam) {
+            // The last boundary is the seam itself, so the block from the seam to the first boundary
+            // needs no wrap. It goes FIRST: the block system takes each block's successor to be the
+            // next in the list, wrapping from the last back to the first, and the block that ends at
+            // the seam is followed by the one that starts there.
+            blocks.add(new BlockSection("b" + count, sectionId, 0.0D, first));
+        }
         for (int i = 0; i + 1 < count; i++) {
             blocks.add(new BlockSection("b" + (i + 1), sectionId, boundaries.get(i),
                 boundaries.get(i + 1)));
         }
-        double last = boundaries.get(count - 1);
-        double first = boundaries.get(0);
-        if (last >= length - 1.0e-9D) {
-            // The last boundary is the seam itself: the closing block needs no wrap.
-            blocks.add(new BlockSection("b" + count, sectionId, 0.0D, first));
-        }
-        else {
+        if (!seam) {
             blocks.add(BlockSection.wrapping("b" + count, sectionId, last, first));
         }
         return blocks;
