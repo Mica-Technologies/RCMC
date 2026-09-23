@@ -1,11 +1,12 @@
 # Command reference
 
 Everything is a subcommand of **`/rcmc`**, which requires **permission level 2** (operator). Tab
-completion covers subcommands, track styles, line and switch subcommands, platform sides and train
-styles.
+completion covers subcommands and most of their arguments: demo kinds, track styles, train styles,
+`build`, `block`, `ride` and `transfer` options, and the `station`, `line`, `switch` and `platform`
+subcommands and sides.
 
 ```
-/rcmc <demo|metrodemo|train|clear|info|build|paint|style|rate|block|station|line|switch|platform|rmsection|undo|redo>
+/rcmc <demo|metrodemo|train|clear|info|build|paint|style|rate|block|transfer|ride|station|line|switch|platform|rmsection|undo|redo>
 ```
 
 ---
@@ -345,35 +346,37 @@ hand — the door detection reads a hand-built platform exactly like this one.
 
     ```
     /rcmc demo
-    /rcmc train 0 5 0
-    /rcmc rate 0
+    /rcmc train 1 5 0
+    /rcmc rate 1
     ```
 
 === "Metro from nothing"
 
     ```
     /rcmc metrodemo
-    /rcmc train 0 3 0 metro
-    /rcmc line start Metro 0
+    /rcmc train 1 3 0 metro
+    /rcmc line start Metro 1
     ```
 
 === "Two trains on one coaster"
 
     ```
-    /rcmc block 0 3
-    /rcmc train 0 5 0
-    /rcmc train 0 5 0
+    /rcmc block 1 auto
+    /rcmc train 1 5 0
     ```
+
+    Then add the second train with **Add train** on the ride's operator panel, which waits until the
+    station is clear. Two `/rcmc train` commands would put both trains in the station at once.
 
 === "Metro line, hand-built"
 
     ```
-    /rcmc style 0 transit-catenary
+    /rcmc style 1 transit-catenary
     /rcmc station North
     /rcmc station Central
     /rcmc station South
     /rcmc line create Green shuttle North Central South
     /rcmc platform Central 24 4 both
-    /rcmc train 0 3 0 metro
-    /rcmc line start Green 0
+    /rcmc train 1 3 0 metro
+    /rcmc line start Green 1
     ```

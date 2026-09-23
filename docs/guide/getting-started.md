@@ -37,25 +37,25 @@ operator permission (`/rcmc` is permission level 2) and some open space.
 
     ```
     /rcmc demo
-    /rcmc train 0 5 0
+    /rcmc train 1 5 0
     ```
 
     `/rcmc demo` lays a full circuit — station, chain lift, drop, banked turn, airtime hill,
-    brake run — and tells you the section id it used (`0` if this is your first). `/rcmc train`
+    block brake — and tells you the section id it used (`1` if this is your first). `/rcmc train`
     parks a five-car train in the station; it dispatches itself. Right-click a car to board.
 
     Then ask the game what you built:
 
     ```
-    /rcmc rate 0
+    /rcmc rate 1
     ```
 
 === "A metro"
 
     ```
     /rcmc metrodemo
-    /rcmc train 0 3 0 metro
-    /rcmc line start Metro 0
+    /rcmc train 1 3 0 metro
+    /rcmc line start Metro 1
     ```
 
     `/rcmc metrodemo` lays a flat three-station alignment, styles it with overhead catenary and
