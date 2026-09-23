@@ -98,6 +98,7 @@ gives them its own meaning:
 | `rcmc:station_sign` | Post-mounted line map: the line's stops in order with a "you are here" marker. Right-click cycles lines at an interchange |
 | `rcmc:arrival_board` | Ceiling-hung amber-on-black board, double-sided. Per-direction "N stops away", "Boarding" while berthed, with the platform in brackets for a train due here. A **multiblock**: needs 5 blocks across, centred on where you place it, and 2 down |
 | `rcmc:station_speaker` | Wall- or ceiling-mounted PA announcing approaching trains. Mounts on the face you click |
+| `rcmc:operator_panel` | A coaster's control desk. Links to the nearest coaster station within 24 blocks when placed (or when first used, if none was near). Right-click to operate the ride: open / test / close, emergency stop, automatic or manual dispatch, the ride's hardware settings, and its trains. See [Operating a ride](../guide/riding-and-operations.md#operating-a-ride) |
 
 The three signage blocks **auto-link to the nearest station** on placement — including via
 `/setblock` — and store only that station's name, resolving against the live registry every frame.

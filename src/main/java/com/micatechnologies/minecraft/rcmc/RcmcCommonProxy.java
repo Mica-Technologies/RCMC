@@ -37,4 +37,9 @@ public class RcmcCommonProxy implements RcmcProxy {
     public void warmUpTts() {
         // No client, nothing to speak with.
     }
+
+    @Override
+    public void showRideController(com.micatechnologies.minecraft.rcmc.net.RideView view) {
+        // Server side there is no screen to show.
+    }
 }

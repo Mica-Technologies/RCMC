@@ -44,4 +44,7 @@ public interface RcmcProxy {
      * first thing anyone wants said.</p>
      */
     void warmUpTts();
+
+    /** Opens the ride operator panel on {@code view}, or refreshes it if already open. Client only. */
+    void showRideController(com.micatechnologies.minecraft.rcmc.net.RideView view);
 }

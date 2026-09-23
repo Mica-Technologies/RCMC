@@ -39,6 +39,12 @@ public final class RideController implements DispatchGate {
     private DispatchMode dispatchMode = DispatchMode.AUTOMATIC;
     private boolean emergencyStopped;
     private boolean dispatchRequested;
+    private int carsPerTrain = DEFAULT_CARS;
+
+    /** Cars in a train the operator adds, unless they choose otherwise. The demo's five. */
+    public static final int DEFAULT_CARS = 5;
+    public static final int MIN_CARS = 1;
+    public static final int MAX_CARS = 12;
 
     public RideController(int sectionId) {
         this.sectionId = sectionId;
@@ -131,6 +137,24 @@ public final class RideController implements DispatchGate {
             return true;
         }
         return false;
+    }
+
+    /** Cars in each train the operator adds from now on. Trains already running keep theirs. */
+    public int carsPerTrain() {
+        return carsPerTrain;
+    }
+
+    public void setCarsPerTrain(int cars) {
+        this.carsPerTrain = Math.max(MIN_CARS, Math.min(MAX_CARS, cars));
+    }
+
+    /**
+     * How many trains a ride can run at once. With block signalling, one fewer than its blocks —
+     * N trains on N blocks deadlock, each waiting for the next to move. Without any, one: nothing
+     * would keep a second train off the first.
+     */
+    public static int maxTrains(int blockCount) {
+        return blockCount >= 2 ? blockCount - 1 : 1;
     }
 
     @Override

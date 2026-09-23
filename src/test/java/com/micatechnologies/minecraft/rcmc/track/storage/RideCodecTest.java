@@ -26,8 +26,10 @@ class RideCodecTest {
         RideController ride = rides.getOrCreate(4);
         ride.setState(RideController.State.CLOSED);
         ride.setDispatchMode(RideController.DispatchMode.MANUAL);
+        ride.setCarsPerTrain(8);
 
         RideController back = roundTrip(rides).get(4);
+        assertEquals(8, back.carsPerTrain());
         assertEquals(RideController.State.CLOSED, back.state());
         assertEquals(RideController.DispatchMode.MANUAL, back.dispatchMode());
         assertFalse(back.isEmergencyStopped());

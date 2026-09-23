@@ -25,6 +25,7 @@ public final class RcmcBlocks {
     public static com.micatechnologies.minecraft.rcmc.block.sign.BlockArrivalBoardPart
         arrivalBoardPart;
     public static com.micatechnologies.minecraft.rcmc.block.sign.BlockStationSpeaker stationSpeaker;
+    public static BlockOperatorPanel operatorPanel;
 
     private RcmcBlocks() {
         throw new AssertionError("No instances.");
@@ -42,6 +43,7 @@ public final class RcmcBlocks {
             new com.micatechnologies.minecraft.rcmc.block.sign.BlockArrivalBoardPart());
         stationSpeaker = RcmcRegistry.addBlock(
             new com.micatechnologies.minecraft.rcmc.block.sign.BlockStationSpeaker());
+        operatorPanel = RcmcRegistry.addBlock(new BlockOperatorPanel());
 
         // An ItemBlock carries the block's registry name, not its own — they share a namespace and
         // Forge matches them by name when binding models.
@@ -60,6 +62,8 @@ public final class RcmcBlocks {
         RcmcRegistry.addItem(new ItemBlock(stationSpeaker).setRegistryName(
             RcmcConstants.MOD_NAMESPACE,
             com.micatechnologies.minecraft.rcmc.block.sign.BlockStationSpeaker.NAME));
+        RcmcRegistry.addItem(new ItemBlock(operatorPanel)
+            .setRegistryName(RcmcConstants.MOD_NAMESPACE, BlockOperatorPanel.NAME));
 
         // Tile entities travel with their blocks. Registry-namespaced ids, per convention.
         net.minecraftforge.fml.common.registry.GameRegistry.registerTileEntity(
@@ -75,5 +79,8 @@ public final class RcmcBlocks {
         net.minecraftforge.fml.common.registry.GameRegistry.registerTileEntity(
             com.micatechnologies.minecraft.rcmc.block.sign.TileStationSpeaker.class,
             new net.minecraft.util.ResourceLocation(RcmcConstants.MOD_NAMESPACE, "station_speaker"));
+        net.minecraftforge.fml.common.registry.GameRegistry.registerTileEntity(
+            TileOperatorPanel.class,
+            new net.minecraft.util.ResourceLocation(RcmcConstants.MOD_NAMESPACE, BlockOperatorPanel.NAME));
     }
 }

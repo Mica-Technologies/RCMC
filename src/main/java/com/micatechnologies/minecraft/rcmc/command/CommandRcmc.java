@@ -343,26 +343,8 @@ public class CommandRcmc extends CommandBase {
                 throw new CommandException(
                     "Unknown train style '" + style + "' — coaster, metro, metrocompact or metrolong");
         }
-        PhysicsIntegrator integrator = new PhysicsIntegrator(
-            RcmcConfig.gravity, RcmcConfig.rollingResistance, RcmcConfig.airDrag, RcmcConfig.maxSpeed);
-        Train train = new Train(spec, integrator, new TrackRef(sectionId, startDistance), speed);
-
-        int trainId = state.trains().allocateTrainId();
-        state.trains().add(trainId, train);
-        // Persist the new train now rather than relying on the tick hook's mark: a train spawned
-        // and then saved in the same tick would otherwise be absent from that save.
-        state.markTrainsDirty(world);
-
-        for (int i = 0; i < carCount; i++) {
-            EntityCoasterCar car = new EntityCoasterCar(world, trainId, i);
-            TrackFrame frame = train.frameOfCar(state.network(), i);
-            car.setPosition(frame.position.x, frame.position.y, frame.position.z);
-            world.spawnEntity(car);
-        }
-
-        // Push the new train immediately rather than waiting for the periodic correction — until
-        // a client has the train, its car entities have nothing to derive a position from.
-        RcmcNetwork.sendToAllIn(new PacketTrainSync(trainId, train), world.provider.getDimension());
+        int trainId = com.micatechnologies.minecraft.rcmc.world.TrainSpawner.spawn(
+            world, state, sectionId, spec, startDistance, speed);
 
         reply(sender, TextFormatting.GREEN, "Spawned train #" + trainId + " — " + carCount
             + " cars on section " + sectionId + " @ " + fmt(startDistance) + " at " + speed

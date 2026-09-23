@@ -434,6 +434,7 @@ public final class RcmcWorldState {
             com.micatechnologies.minecraft.rcmc.builder.TrackBuildSession.clear(id);
             com.micatechnologies.minecraft.rcmc.builder.PieceBuildSession.clear(id);
             com.micatechnologies.minecraft.rcmc.builder.TransitBuildSession.clear(id);
+            RideOperations.forget(id);
         }
 
         /** New arrivals need the track before any train state can mean anything. */
