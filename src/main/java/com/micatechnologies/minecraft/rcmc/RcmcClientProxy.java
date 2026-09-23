@@ -32,6 +32,9 @@ public class RcmcClientProxy extends RcmcCommonProxy {
             com.micatechnologies.minecraft.rcmc.block.sign.TileStationSign.class,
             new com.micatechnologies.minecraft.rcmc.client.render.sign.RenderStationSign());
         net.minecraftforge.fml.client.registry.ClientRegistry.bindTileEntitySpecialRenderer(
+            com.micatechnologies.minecraft.rcmc.block.TileRideSign.class,
+            new com.micatechnologies.minecraft.rcmc.client.render.sign.RenderRideSign());
+        net.minecraftforge.fml.client.registry.ClientRegistry.bindTileEntitySpecialRenderer(
             com.micatechnologies.minecraft.rcmc.block.sign.TileArrivalBoard.class,
             new com.micatechnologies.minecraft.rcmc.client.render.sign.RenderArrivalBoard());
         // Without this the client never advances its trains between server corrections, and the
@@ -99,6 +102,10 @@ public class RcmcClientProxy extends RcmcCommonProxy {
             com.micatechnologies.minecraft.rcmc.block.RcmcBlocks.stationSpeaker));
         bindModel(net.minecraft.item.Item.getItemFromBlock(
             com.micatechnologies.minecraft.rcmc.block.RcmcBlocks.operatorPanel));
+        bindModel(net.minecraft.item.Item.getItemFromBlock(
+            com.micatechnologies.minecraft.rcmc.block.RcmcBlocks.airGate));
+        bindModel(net.minecraft.item.Item.getItemFromBlock(
+            com.micatechnologies.minecraft.rcmc.block.RcmcBlocks.rideSign));
     }
 
     private static void bindModel(net.minecraft.item.Item item) {

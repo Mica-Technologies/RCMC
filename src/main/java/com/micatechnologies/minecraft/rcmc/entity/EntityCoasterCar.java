@@ -223,7 +223,9 @@ public class EntityCoasterCar extends Entity {
             return;
         }
         Train train = trainOrNull();
-        boolean moving = train != null && Math.abs(train.velocity()) > 1.0D;
+        RcmcWorldState world = RcmcWorldState.of(this.world);
+        boolean moving = train != null && (Math.abs(train.velocity()) > 1.0D
+            || (world != null && !com.micatechnologies.minecraft.rcmc.world.CoasterStations.mayLeave(world, trainId())));
         for (java.util.Map.Entry<java.util.UUID, double[]> entry : stepOffs.entrySet()) {
             EntityPlayer player = this.world.getPlayerEntityByUUID(entry.getKey());
             // Moving: the restraint puts them back in their seat. Far off: they were teleported, and
@@ -235,18 +237,47 @@ public class EntityCoasterCar extends Entity {
             double along = entry.getValue()[0];
             double across = com.micatechnologies.minecraft.rcmc.physics.CoasterCarLayout
                 .stepOffAcross(entry.getValue()[1]);
-            double x = frame.position.x + frame.forward.x * along + frame.right.x * across;
-            double z = frame.position.z + frame.forward.z * along + frame.right.z * across;
-            // Track level first, then up a little for a platform built at car-floor height. Where
-            // every spot is blocked, vanilla's choice stands.
-            for (double lift : new double[] {0.0D, 0.5D, 1.0D}) {
-                double y = frame.position.y + lift;
-                AxisAlignedBB box = player.getEntityBoundingBox()
-                    .offset(x - player.posX, y - player.posY, z - player.posZ);
-                if (this.world.getCollisionBoxes(player, box).isEmpty()) {
-                    player.setPositionAndUpdate(x, y, z);
+            double outward = Math.signum(across);
+            // Beside their seat, then a little further out: a platform's edge falls wherever the
+            // block grid puts it, which can leave a gap by the car — solid ground, on a station
+            // built at ground level, between the train and its gates. Standing on the platform
+            // first; then on anything; then the first free spot; if nothing is free, vanilla's
+            // choice stands.
+            double[] platform = null;
+            double[] best = null;
+            for (double reach : new double[] {0.0D, 0.5D, 1.0D, 1.5D, 2.0D, 2.5D}) {
+                double a = across + outward * reach;
+                double x = frame.position.x + frame.forward.x * along + frame.right.x * a;
+                double z = frame.position.z + frame.forward.z * along + frame.right.z * a;
+                for (double lift : new double[] {0.0D, 0.5D, 1.0D}) {
+                    double y = frame.position.y + lift;
+                    AxisAlignedBB box = player.getEntityBoundingBox()
+                        .offset(x - player.posX, y - player.posY, z - player.posZ);
+                    if (!this.world.getCollisionBoxes(player, box).isEmpty()) {
+                        continue;
+                    }
+                    boolean standing = !this.world.getCollisionBoxes(player, box.offset(0.0D, -0.2D, 0.0D)).isEmpty();
+                    net.minecraft.block.Block below = this.world.getBlockState(
+                        new net.minecraft.util.math.BlockPos(x, y - 0.5D, z)).getBlock();
+                    if (standing && (below instanceof com.micatechnologies.minecraft.rcmc.block.BlockPlatform
+                        || below instanceof com.micatechnologies.minecraft.rcmc.block.BlockPlatformEdge)) {
+                        platform = new double[] {x, y, z};
+                        break;
+                    }
+                    if (standing && (best == null || best.length == 4)) {
+                        best = new double[] {x, y, z};
+                    }
+                    if (best == null) {
+                        best = new double[] {x, y, z, 0.0D};
+                    }
+                }
+                if (platform != null) {
                     break;
                 }
+            }
+            double[] spot = platform != null ? platform : best;
+            if (spot != null) {
+                player.setPositionAndUpdate(spot[0], spot[1], spot[2]);
             }
         }
         stepOffs.clear();
@@ -313,7 +344,9 @@ public class EntityCoasterCar extends Entity {
         Train train = trainOrNull();
         boolean moving = train != null && Math.abs(train.velocity()) > 1.0D;
         if (train == null || train.spec().carStyle() != TrainSpec.CarStyle.METRO) {
-            holdCoasterRiders(moving);
+            RcmcWorldState state = RcmcWorldState.of(this.world);
+            holdCoasterRiders(moving || (state != null
+                && !com.micatechnologies.minecraft.rcmc.world.CoasterStations.mayLeave(state, trainId())));
             return;
         }
         boolean doorsOpen = com.micatechnologies.minecraft.rcmc.world.MetroDoors
@@ -353,7 +386,8 @@ public class EntityCoasterCar extends Entity {
     private final java.util.Map<java.util.UUID, Long> leftThisCar = new java.util.HashMap<>();
 
     /**
-     * Coaster restraints: a rider who lets go while the car is moving is put straight back.
+     * Coaster restraints: a rider who lets go where they may not leave — moving, or stopped anywhere
+     * but the station — is put straight back. See {@code CoasterStations.mayLeave}.
      *
      * <p>Coaster cars are boarded by right-clicking, never by walking in. They used to share the
      * metro walk-in check, and for coaster stock that check accepted anyone near the car — so a
@@ -361,7 +395,7 @@ public class EntityCoasterCar extends Entity {
      * them, past the ride's open/closed gate. Only a rider who was in THIS car a moment ago is
      * re-seated now, and only while it moves; at rest they step off as normal.</p>
      */
-    private void holdCoasterRiders(boolean moving) {
+    private void holdCoasterRiders(boolean hold) {
         if (leftThisCar.isEmpty()) {
             return;
         }
@@ -374,7 +408,7 @@ public class EntityCoasterCar extends Entity {
                 it.remove();
                 continue;
             }
-            if (!moving) {
+            if (!hold) {
                 continue;
             }
             EntityPlayer player = this.world.getPlayerEntityByUUID(left.getKey());
@@ -738,6 +772,13 @@ public class EntityCoasterCar extends Entity {
                     : ride.state() == com.micatechnologies.minecraft.rcmc.physics.ride.RideController.State.TESTING
                         ? "This ride is being tested — no riders yet."
                         : "This ride is closed.");
+                return false;
+            }
+            // In the station, stopped: not climbing into a train on the lift. Track with no
+            // station is a sandbox run and boards anywhere — see CoasterStations.
+            if (!com.micatechnologies.minecraft.rcmc.world.CoasterStations.mayBoard(state, trainId())) {
+                say(player, net.minecraft.util.text.TextFormatting.YELLOW,
+                    "Board in the station, while the train is stopped there.");
                 return false;
             }
         }

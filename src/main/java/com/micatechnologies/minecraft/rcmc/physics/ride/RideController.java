@@ -40,6 +40,12 @@ public final class RideController implements DispatchGate {
     private boolean emergencyStopped;
     private boolean dispatchRequested;
     private int carsPerTrain = DEFAULT_CARS;
+    private String name = "";
+    /** Ticks the station's air gates still hold dispatch for — see {@link #holdForGates}. Not saved:
+     *  the gates renew it every tick they are open. */
+    private int gateHold;
+    /** Ticks of the loading period a newly opened ride still gives the train in its station. */
+    private int reopenLoading;
 
     /** Cars in a train the operator adds, unless they choose otherwise. The demo's five. */
     public static final int DEFAULT_CARS = 5;
@@ -62,7 +68,21 @@ public final class RideController implements DispatchGate {
         if (state == null) {
             throw new IllegalArgumentException("state is required");
         }
+        if (state == State.OPEN && this.state != State.OPEN) {
+            // A train held in the station while the ride was closed has served its dwell long ago,
+            // and left the instant the ride opened — nobody had a chance to get on. Opening starts
+            // a loading period instead: see loadingRemaining().
+            reopenLoading = REOPEN_LOADING_TICKS;
+        }
         this.state = state;
+    }
+
+    /** Ticks a newly opened ride holds its train for boarding: a station's usual dwell. */
+    public static final int REOPEN_LOADING_TICKS = 60;
+
+    /** Ticks of the loading period after opening still to run — see {@link #setState}. */
+    public int loadingRemaining() {
+        return reopenLoading;
     }
 
     public DispatchMode dispatchMode() {
@@ -188,6 +208,11 @@ public final class RideController implements DispatchGate {
         if (state == State.CLOSED || emergencyStopped) {
             return false;
         }
+        // Checked before a manual press is consumed: pressing DISPATCH closes the gates, and the
+        // press still counts once they are shut.
+        if (gateHold > 0 || reopenLoading > 0) {
+            return false;
+        }
         if (dispatchMode == DispatchMode.AUTOMATIC) {
             return true;
         }
@@ -196,6 +221,38 @@ public final class RideController implements DispatchGate {
             return true;
         }
         return false;
+    }
+
+    /**
+     * The station's air gates are open, or have only just shut: no train leaves for {@code ticks}
+     * more ticks. The gates call this every tick they are open, so dispatch waits for them to close
+     * and then for them to have been shut a moment — a gate still swinging is not a closed gate.
+     */
+    public void holdForGates(int ticks) {
+        gateHold = Math.max(gateHold, ticks);
+    }
+
+    /** One tick of the gates' hold running out. */
+    public void tickGates() {
+        if (gateHold > 0) {
+            gateHold--;
+        }
+        if (reopenLoading > 0) {
+            reopenLoading--;
+        }
+    }
+
+    public boolean isHeldForGates() {
+        return gateHold > 0;
+    }
+
+    /** What guests call the ride; empty until someone names it. */
+    public String name() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name == null ? "" : name.trim();
     }
 
     /** Cars in each train the operator adds from now on. Trains already running keep theirs. */

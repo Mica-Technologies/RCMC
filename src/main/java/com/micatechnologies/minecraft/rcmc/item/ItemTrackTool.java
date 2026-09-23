@@ -221,7 +221,21 @@ public class ItemTrackTool extends Item {
         else {
             state.network().addSection(section);
         }
-        int createdElements = addTypedElements(state, section, session);
+        java.util.List<com.micatechnologies.minecraft.rcmc.physics.element.RideElement> created =
+            addTypedElements(state, section, session);
+        int createdElements = created.size();
+        // A station gets its platform: decking both sides at the cars' floor, and air gates where
+        // the train stops — see CoasterStations.layPlatform. Only into air; nothing is replaced.
+        java.util.List<String> platforms = new java.util.ArrayList<>();
+        for (com.micatechnologies.minecraft.rcmc.physics.element.RideElement element : created) {
+            if (element instanceof com.micatechnologies.minecraft.rcmc.physics.element.StationPlatform) {
+                com.micatechnologies.minecraft.rcmc.world.PlatformBuilder.Result laid =
+                    com.micatechnologies.minecraft.rcmc.world.CoasterStations.layPlatform(world, state,
+                        (com.micatechnologies.minecraft.rcmc.physics.element.StationPlatform) element,
+                        true, true, STATION_PLATFORM_WIDTH);
+                platforms.add(laid.blocks + " platform blocks and " + laid.gates + " air gates");
+            }
+        }
         state.markTrackDirty(world);
         // BOTH, always. Sending only the track leaves clients with a lift hill that renders as
         // plain rail — the element exists and works, but nothing draws a chain on it, so a builder
@@ -247,6 +261,10 @@ public class ItemTrackTool extends Item {
         say(player, TextFormatting.DARK_GRAY, "  Segments: " + describeTypes(session)
             + "  ->  " + createdElements + " element(s)");
 
+        for (String platform : platforms) {
+            say(player, TextFormatting.GRAY, "  Station: laid " + platform
+                + ". Rebuild or change it with /rcmc ride " + id + " platform.");
+        }
         report(player, section);
         say(player, TextFormatting.DARK_GRAY, "Run /rcmc train " + id + " to put a train on it.");
     }
@@ -304,17 +322,18 @@ public class ItemTrackTool extends Item {
      * which is free of Minecraft types and therefore testable — it was inline here, and shipped
      * broken because the only way to check it was to build a coaster and ride it.</p>
      */
-    private static int addTypedElements(RcmcWorldState state, TrackSection section,
-                                        TrackBuildSession session) {
-        int created = 0;
-        for (com.micatechnologies.minecraft.rcmc.physics.element.RideElement element
-            : com.micatechnologies.minecraft.rcmc.builder.SegmentElements.build(
-                section, session.pendingTypes())) {
+    private static java.util.List<com.micatechnologies.minecraft.rcmc.physics.element.RideElement>
+        addTypedElements(RcmcWorldState state, TrackSection section, TrackBuildSession session) {
+        java.util.List<com.micatechnologies.minecraft.rcmc.physics.element.RideElement> created =
+            com.micatechnologies.minecraft.rcmc.builder.SegmentElements.build(section, session.pendingTypes());
+        for (com.micatechnologies.minecraft.rcmc.physics.element.RideElement element : created) {
             state.elements().add(element);
-            created++;
         }
         return created;
     }
+
+    /** Blocks of platform either side of a station the builder lays, the edge course included. */
+    private static final int STATION_PLATFORM_WIDTH = 3;
 
     /**
      * A compact rendering of the type recorded at each node, e.g. {@code PPPLLLLPP}.

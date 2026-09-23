@@ -111,6 +111,14 @@ launch and a spike at one end. `/rcmc demo shuttle` builds a complete one.
     That is exactly how real launches behave, and it is why a launch can be tuned to overshoot or
     fall short in a way a chain lift structurally cannot.
 
+### Stations get a platform
+
+Committing a section with a **station** segment lays its platform for you: decking both sides at
+the cars' floor, a warning-striped edge, and **air gates** along the edge where the train stops.
+Blocks only go into air, plants or natural ground, never over anything you built. Change it with
+[`/rcmc ride <id> platform`](../reference/commands.md#rcmc-ride), and see
+[boarding](riding-and-operations.md#boarding) for how the gates and boarding work.
+
 ### Committing and validation
 
 On commit the section is run through the validator and any findings are reported to you — and then

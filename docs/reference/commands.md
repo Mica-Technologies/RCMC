@@ -22,7 +22,8 @@ subcommands and sides.
 
 Builds a complete demo coaster, with its platform at your feet: chain lift, a first drop that curves
 through the far turnaround, an airtime camelback, a banked climbing turn, and a block brake back
-into the station, so `/rcmc block <id> auto` divides it for two trains as built. Every bank and
+into the station, so `/rcmc block <id> auto` divides it for two trains as built. The station gets
+its platform, with air gates where the train stops. Every bank and
 hill is worked out from the speed the train carries there, so the demo passes
 [`/rcmc check`](#rcmc-check) at any size. Reports the section id it allocated, the spans of each
 element, and the exact `/rcmc train` line to run next.
@@ -233,12 +234,21 @@ are saved with the world and can be undone like any other edit. See
 
 ```
 /rcmc ride <sectionId> <open|test|close|stop|reset>
+/rcmc ride <sectionId> platform [left|right|both] [width]
+/rcmc ride <sectionId> name [name]
 ```
 
 The operator panel's state controls, for an admin or a command block. `open` lets riders board;
 `test` runs trains with nobody aboard; `close` lets trains finish their lap and hold them in the
 station; `stop` is the emergency stop; `reset` clears it and leaves the ride closed. See
 [operating a ride](../guide/riding-and-operations.md#operating-a-ride).
+
+`platform` lays a platform along the ride's station: decking at the cars' floor, a warning-striped
+edge, and air gates on the edge where the train stops. Both sides by default, 3 blocks wide
+(1 – 12). Blocks only go into air, plants or natural ground, so it never replaces anything built;
+run it again after changing the train's length and it fills in what is missing.
+
+`name` gives the ride the name its ride signs show; leave it out to clear it.
 
 ### `/rcmc transfer`
 

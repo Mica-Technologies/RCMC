@@ -53,6 +53,17 @@ class RideCodecTest {
     }
 
     @Test
+    @DisplayName("a ride's name survives a restart, and an unnamed ride stays unnamed")
+    void nameSurvives() {
+        RideControllers rides = new RideControllers();
+        rides.getOrCreate(4).setName("  The Corkscrew  ");
+        rides.getOrCreate(5);
+        RideControllers back = roundTrip(rides);
+        assertEquals("The Corkscrew", back.get(4).name());
+        assertEquals("", back.get(5).name());
+    }
+
+    @Test
     @DisplayName("an emergency stop survives a restart")
     void emergencyStopSurvives() {
         RideControllers rides = new RideControllers();

@@ -26,6 +26,8 @@ public final class RcmcBlocks {
         arrivalBoardPart;
     public static com.micatechnologies.minecraft.rcmc.block.sign.BlockStationSpeaker stationSpeaker;
     public static BlockOperatorPanel operatorPanel;
+    public static BlockAirGate airGate;
+    public static BlockRideSign rideSign;
 
     private RcmcBlocks() {
         throw new AssertionError("No instances.");
@@ -44,6 +46,8 @@ public final class RcmcBlocks {
         stationSpeaker = RcmcRegistry.addBlock(
             new com.micatechnologies.minecraft.rcmc.block.sign.BlockStationSpeaker());
         operatorPanel = RcmcRegistry.addBlock(new BlockOperatorPanel());
+        airGate = RcmcRegistry.addBlock(new BlockAirGate());
+        rideSign = RcmcRegistry.addBlock(new BlockRideSign());
 
         // An ItemBlock carries the block's registry name, not its own — they share a namespace and
         // Forge matches them by name when binding models.
@@ -64,6 +68,10 @@ public final class RcmcBlocks {
             com.micatechnologies.minecraft.rcmc.block.sign.BlockStationSpeaker.NAME));
         RcmcRegistry.addItem(new ItemBlock(operatorPanel)
             .setRegistryName(RcmcConstants.MOD_NAMESPACE, BlockOperatorPanel.NAME));
+        RcmcRegistry.addItem(new ItemBlock(airGate)
+            .setRegistryName(RcmcConstants.MOD_NAMESPACE, BlockAirGate.NAME));
+        RcmcRegistry.addItem(new ItemBlock(rideSign)
+            .setRegistryName(RcmcConstants.MOD_NAMESPACE, BlockRideSign.NAME));
 
         // Tile entities travel with their blocks. Registry-namespaced ids, per convention.
         net.minecraftforge.fml.common.registry.GameRegistry.registerTileEntity(
@@ -82,5 +90,11 @@ public final class RcmcBlocks {
         net.minecraftforge.fml.common.registry.GameRegistry.registerTileEntity(
             TileOperatorPanel.class,
             new net.minecraft.util.ResourceLocation(RcmcConstants.MOD_NAMESPACE, BlockOperatorPanel.NAME));
+        net.minecraftforge.fml.common.registry.GameRegistry.registerTileEntity(
+            TileAirGate.class,
+            new net.minecraft.util.ResourceLocation(RcmcConstants.MOD_NAMESPACE, BlockAirGate.NAME));
+        net.minecraftforge.fml.common.registry.GameRegistry.registerTileEntity(
+            TileRideSign.class,
+            new net.minecraft.util.ResourceLocation(RcmcConstants.MOD_NAMESPACE, BlockRideSign.NAME));
     }
 }

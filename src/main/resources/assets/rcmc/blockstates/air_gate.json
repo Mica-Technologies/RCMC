@@ -1,0 +1,35 @@
+{
+  "_comment": "The models draw the gate on the +z (south) side; FACING points at the track, so each variant rotates south onto the facing.",
+  "variants": {
+    "facing=south,open=false": {
+      "model": "rcmc:air_gate_closed"
+    },
+    "facing=south,open=true": {
+      "model": "rcmc:air_gate_open"
+    },
+    "facing=west,open=false": {
+      "model": "rcmc:air_gate_closed",
+      "y": 90
+    },
+    "facing=west,open=true": {
+      "model": "rcmc:air_gate_open",
+      "y": 90
+    },
+    "facing=north,open=false": {
+      "model": "rcmc:air_gate_closed",
+      "y": 180
+    },
+    "facing=north,open=true": {
+      "model": "rcmc:air_gate_open",
+      "y": 180
+    },
+    "facing=east,open=false": {
+      "model": "rcmc:air_gate_closed",
+      "y": 270
+    },
+    "facing=east,open=true": {
+      "model": "rcmc:air_gate_open",
+      "y": 270
+    }
+  }
+}

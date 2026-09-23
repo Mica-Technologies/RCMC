@@ -61,6 +61,10 @@ class RideControllerTest {
             RideControlLayer control = new RideControlLayer(elements, rides, network, TICK);
             for (int i = 0; i < ticks; i++) {
                 trains.tick(network, control, 4, TICK);
+                // As the world tick does: the gates' hold and a reopened ride's loading run down.
+                for (RideController ride : rides.all()) {
+                    ride.tickGates();
+                }
             }
         }
 
@@ -185,5 +189,26 @@ class RideControllerTest {
         ride.run(20 * 10);
         assertTrue(ride.train.reference().distance() > stopped + 5.0D,
             "released, the lift carries the train on again");
+    }
+
+    @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName("open air gates hold dispatch until they have been shut a while, and a DISPATCH press waits for them")
+    void airGatesHoldDispatch() {
+        RideController ride = new RideController(1);
+        ride.holdForGates(3);
+        org.junit.jupiter.api.Assertions.assertFalse(ride.mayDispatch(), "gates open: nothing leaves");
+        ride.tickGates();
+        ride.tickGates();
+        org.junit.jupiter.api.Assertions.assertFalse(ride.mayDispatch(), "just shut: still waiting");
+        ride.tickGates();
+        org.junit.jupiter.api.Assertions.assertTrue(ride.mayDispatch(), "shut long enough: it may go");
+
+        ride.setDispatchMode(RideController.DispatchMode.MANUAL);
+        ride.requestDispatch();
+        ride.holdForGates(1);
+        org.junit.jupiter.api.Assertions.assertFalse(ride.mayDispatch());
+        ride.tickGates();
+        org.junit.jupiter.api.Assertions.assertTrue(ride.mayDispatch(),
+            "the press made while the gates were open still sends the train once they shut");
     }
 }

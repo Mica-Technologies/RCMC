@@ -2,13 +2,22 @@
 
 ## Boarding
 
-**A coaster** is boarded by right-clicking a car. You take the next free seat, front row first —
-a car seats two abreast in every row — and the ride does the rest. A closed ride refuses riders,
-and says so.
+**A coaster** is boarded by right-clicking a car, **in its station, while the train is stopped
+there**. You take the next free seat, front row first — a car seats two abreast in every row — and
+the ride does the rest. A closed ride refuses riders, and says so, and so does a train anywhere but
+its station.
 
-Get off with sneak once the train has stopped, and you step out beside your seat, on its side of
-the car. While the train is moving the restraints hold you in: sneaking puts you straight back in
-your seat.
+Get off with sneak once the train is back in the station, and you step out beside your seat onto
+the platform. Anywhere else the restraints hold you in: sneaking puts you straight back in your
+seat. The one exception is an evacuation: when a ride has been emergency-stopped or closed, riders
+of a train stopped out on the circuit may climb out where it stands. Track with no station on it at
+all is a sandbox run, and boards and unloads anywhere.
+
+**Air gates** stand along a coaster platform's edge. They open while a train is loading, start to
+close shortly before it leaves — or when the operator presses DISPATCH — and the train does not move
+until they have been shut a moment. A ride that has just been opened gives the train waiting in its
+station a fresh loading time, gates open, before it goes; a closed or emergency-stopped ride keeps
+the gates open by the train it holds, so its riders can get off.
 
 **A metro** is boarded by *walking in*. While a train is berthed with its doors open, the car stops
 being a solid box and becomes just a floor, and anyone standing inside is seated automatically. So
@@ -111,6 +120,11 @@ It links to the nearest coaster station within 24 blocks, and its controls face 
 | Storage | With a linked [transfer track](building-a-coaster.md#storing-trains): **Store train** sends the next train on the transfer track to storage, **Retrieve** brings the stored one back. Pressed again, each cancels |
 | Hardware | Station dwell and pass-throughs, lift speed, launch speed and force, brake targets and drive-tyre speed, each with − and +. Changes apply at once and can be undone with `/rcmc undo` |
 | Trains | Lists the ride's trains with their speed. **Add train** puts a new one in the station, if it is clear. **x** removes a train. **Cars per new train** sets the length of the next one, and **Car** which car it is built from: sit-down, over-the-shoulder or wooden classic |
+
+Give the ride a name with [`/rcmc ride <id> name`](../reference/commands.md#rcmc-ride), and place a
+**Ride Sign** (`rcmc:ride_sign`) by its queue: it shows the name, whether the ride is open, and its
+rating — excitement, intensity and nausea, top speed, length and inversions — and flags a ride that
+fails its safety check. It links to the nearest coaster station and keeps itself up to date.
 
 A ride runs one train at a time unless it has block sections (`/rcmc block`); with N blocks it can
 run N − 1. Guests are turned away, with the reason, from a ride that is closed, testing or stopped.

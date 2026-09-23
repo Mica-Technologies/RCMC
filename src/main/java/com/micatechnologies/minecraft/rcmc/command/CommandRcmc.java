@@ -91,7 +91,8 @@ public class CommandRcmc extends CommandBase {
             return getListOfStringsMatchingLastWord(args, "shuttle");
         }
         if (args.length == 3 && "ride".equalsIgnoreCase(args[0])) {
-            return getListOfStringsMatchingLastWord(args, "open", "test", "close", "stop", "reset");
+            return getListOfStringsMatchingLastWord(args, "open", "test", "close", "stop", "reset",
+                "platform", "name");
         }
         if (args.length == 3 && "transfer".equalsIgnoreCase(args[0])) {
             return getListOfStringsMatchingLastWord(args, "off");
@@ -268,6 +269,13 @@ public class CommandRcmc extends CommandBase {
 
         state.markTrackDirty(world);
         broadcastTrack(world, state);
+        // A proper station: platforms both sides, air gates where the train stops.
+        com.micatechnologies.minecraft.rcmc.physics.element.StationPlatform demoStation =
+            com.micatechnologies.minecraft.rcmc.world.CoasterStations.stationOf(state, id);
+        com.micatechnologies.minecraft.rcmc.world.PlatformBuilder.Result platform = demoStation == null
+            ? new com.micatechnologies.minecraft.rcmc.world.PlatformBuilder.Result(0, 0)
+            : com.micatechnologies.minecraft.rcmc.world.CoasterStations.layPlatform(world, state, demoStation,
+                true, true, 3);
 
         reply(sender, TextFormatting.GREEN, "Built demo coaster #" + id + " — "
             + String.format("%.1f", section.totalLength()) + " blocks, "
@@ -280,6 +288,8 @@ public class CommandRcmc extends CommandBase {
         reply(sender, TextFormatting.GRAY, "Station " + fmt(demo.stationStart) + "-"
             + fmt(demo.stationEnd) + ", lift " + fmt(demo.liftStart) + "-" + fmt(demo.liftEnd)
             + ", brakes " + fmt(demo.brakeStart) + "-" + fmt(demo.brakeEnd) + ".");
+        reply(sender, TextFormatting.GRAY, "Station: " + platform.blocks + " platform blocks, "
+            + platform.gates + " air gates. Place a ride sign by it to show the ride's rating.");
         reply(sender, TextFormatting.GRAY,
             "Run /rcmc train " + id + " 5 0 to park a train in the station — it will dispatch itself.");
     }
@@ -659,63 +669,12 @@ public class CommandRcmc extends CommandBase {
         double from = Math.max(0.0D, stop - length * 0.75D);
         double to = Math.min(section.totalLength(), stop + length * 0.25D);
 
-        java.util.Set<BlockPos> placed = new java.util.HashSet<>();
-        int blocks = 0;
-        for (double s = from; s <= to; s += 0.5D) {
-            TrackFrame frame = section.frameAtDistance(s);
-            // Horizontal projection of the frame's right axis: a platform is level even where the
-            // track it serves is banked, because passengers stand on it.
-            double rx = frame.right.x;
-            double rz = frame.right.z;
-            double rl = Math.sqrt(rx * rx + rz * rz);
-            if (rl < 1.0e-6D) {
-                continue;
-            }
-            rx /= rl;
-            rz /= rl;
-            // Derived from the car floor rather than assumed: a platform block's top face is at
-            // surfaceY + 1, and the floor it must meet is frame.y + METRO_FLOOR_HEIGHT. Reading
-            // that constant means raising the underframe — as happened when it went from 1.0 to
-            // 1.5 — moves platforms with it instead of silently un-levelling every station.
-            //
-            // Rounded, because block tops are integers and the floor need not be: the residual is
-            // at most half a block, inside a player's 0.6 step height either way. Flooring could
-            // leave a 0.9 step at the doorway, which is the exact problem platforms exist to fix.
-            int surfaceY = (int) Math.round(
-                frame.position.y + CarSeating.METRO_FLOOR_HEIGHT - 1.0D);
-            for (int sign = -1; sign <= 1; sign += 2) {
-                if (sign < 0 && !left) {
-                    continue;
-                }
-                if (sign > 0 && !right) {
-                    continue;
-                }
-                for (int i = 0; i < width; i++) {
-                    double d = PLATFORM_INNER_OFFSET + i;
-                    BlockPos pos = new BlockPos(
-                        Math.floor(frame.position.x + rx * d * sign),
-                        surfaceY,
-                        Math.floor(frame.position.z + rz * d * sign));
-                    if (!placed.add(pos)) {
-                        continue;
-                    }
-                    if (!world.getBlockState(pos).getBlock().isReplaceable(world, pos)
-                        && !world.isAirBlock(pos)) {
-                        continue;
-                    }
-                    if (i == 0) {
-                        // The edge course carries the warning strip, facing the track it serves.
-                        EnumFacing facing = EnumFacing.getFacingFromVector(
-                            (float) (-rx * sign), 0.0F, (float) (-rz * sign));
-                        world.setBlockState(pos, RcmcBlocks.platformEdge.getDefaultState()
-                            .withProperty(net.minecraft.block.BlockHorizontal.FACING, facing), 2);
-                    } else {
-                        world.setBlockState(pos, RcmcBlocks.platform.getDefaultState(), 2);
-                    }
-                    blocks++;
-                }
-            }
-        }
+        // Derived from the car floor rather than assumed: raising the underframe — as happened when
+        // it went from 1.0 to 1.5 — moves platforms with it instead of silently un-levelling every
+        // station. No gates: metro doors are the train's.
+        int blocks = com.micatechnologies.minecraft.rcmc.world.PlatformBuilder.lay(world, section, from, to,
+            CarSeating.METRO_FLOOR_HEIGHT, PLATFORM_INNER_OFFSET, width, left, right, 1.0D, 0.0D,
+            station.stopPoint().sectionId()).blocks;
 
         // The platform is the answer to "which side do the doors open" — detect it from what was
         // just built rather than from the argument, so a hand-built platform and a commanded one
@@ -1995,11 +1954,24 @@ public class CommandRcmc extends CommandBase {
     private void ride(ICommandSender sender, World world, RcmcWorldState state, String[] args)
         throws CommandException {
         if (args.length < 3) {
-            throw new CommandException("/rcmc ride <sectionId> <open|test|close|stop|reset>");
+            throw new CommandException(RIDE_USAGE);
         }
         int sectionId = parseInt(args[1]);
         if (state.network().section(sectionId) == null) {
             throw new CommandException("No section #" + sectionId + " — try /rcmc info");
+        }
+        if ("platform".equalsIgnoreCase(args[2])) {
+            ridePlatform(sender, world, state, sectionId, args);
+            return;
+        }
+        if ("name".equalsIgnoreCase(args[2])) {
+            String name = args.length > 3 ? String.join(" ", java.util.Arrays.copyOfRange(args, 3, args.length)) : "";
+            state.rides().getOrCreate(state.rides().home(sectionId)).setName(name);
+            state.markTrainsDirty(world);
+            reply(sender, TextFormatting.GREEN, name.trim().isEmpty()
+                ? "Coaster #" + sectionId + " no longer has a name."
+                : "Coaster #" + sectionId + " is now called " + name.trim() + ".");
+            return;
         }
         com.micatechnologies.minecraft.rcmc.physics.ride.RideController ride =
             state.rides().getOrCreate(sectionId);
@@ -2032,10 +2004,40 @@ public class CommandRcmc extends CommandBase {
                 what = "reset, and closed";
                 break;
             default:
-                throw new CommandException("/rcmc ride <sectionId> <open|test|close|stop|reset>");
+                throw new CommandException(RIDE_USAGE);
         }
         state.markTrainsDirty(world);
         reply(sender, TextFormatting.GREEN, "Coaster #" + sectionId + " " + what + ".");
+    }
+
+    private static final String RIDE_USAGE =
+        "/rcmc ride <sectionId> <open|test|close|stop|reset|platform [left|right|both] [width]|name [name]>";
+
+    /**
+     * {@code /rcmc ride <sectionId> platform [left|right|both] [width]} — lays a platform along the
+     * ride's station, with air gates where the train stops. See {@code CoasterStations.layPlatform}.
+     */
+    private void ridePlatform(ICommandSender sender, World world, RcmcWorldState state, int sectionId,
+                              String[] args) throws CommandException {
+        com.micatechnologies.minecraft.rcmc.physics.element.StationPlatform station =
+            com.micatechnologies.minecraft.rcmc.world.CoasterStations.stationOf(state, sectionId);
+        if (station == null) {
+            throw new CommandException("Coaster #" + sectionId + " has no station to build a platform at");
+        }
+        String side = args.length > 3 ? args[3].toLowerCase(java.util.Locale.ROOT) : "both";
+        boolean left = "left".equals(side) || "both".equals(side);
+        boolean right = "right".equals(side) || "both".equals(side);
+        if (!left && !right) {
+            throw new CommandException("Side must be left, right or both — got " + args[3]);
+        }
+        int width = args.length > 4 ? parseInt(args[4], 1, 12) : 3;
+        com.micatechnologies.minecraft.rcmc.world.PlatformBuilder.Result laid =
+            com.micatechnologies.minecraft.rcmc.world.CoasterStations.layPlatform(world, state, station,
+                left, right, width);
+        reply(sender, TextFormatting.GREEN, "Platform at coaster #" + sectionId + "'s station: "
+            + laid.blocks + " blocks and " + laid.gates + " air gates laid.");
+        reply(sender, TextFormatting.GRAY, "  Blocks only go into air — anything already there stays."
+            + " The gates open while a train is loading, and the train waits for them to shut.");
     }
 
     /**

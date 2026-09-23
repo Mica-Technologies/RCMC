@@ -269,7 +269,16 @@ public final class RcmcWorldState {
      * <p>Server-side only, and required after <em>every</em> edit: {@code WorldSavedData} has no
      * change detection, so an unmarked edit is silently lost on restart.</p>
      */
+    /** Goes up by one with every edit to track, hardware or transit — what a cache of anything
+     *  worked out from them checks it is still current against. Not saved. */
+    private long trackVersion;
+
+    public long trackVersion() {
+        return trackVersion;
+    }
+
     public void markTrackDirty(World world) {
+        trackVersion++;
         if (!world.isRemote) {
             RcmcTrackData data = RcmcTrackData.get(world);
             data.markNetworkDirty();
@@ -634,6 +643,10 @@ public final class RcmcWorldState {
                     stopCollidedRides(event.world, state);
                 }
                 if (!state.remote) {
+                    for (com.micatechnologies.minecraft.rcmc.physics.ride.RideController ride
+                        : state.rides.all()) {
+                        ride.tickGates();
+                    }
                     TrainStrikes.tick(event.world, state);
                     stopRolledBackRides(event.world, state);
                     TransferOperations.carryOut(event.world, state);

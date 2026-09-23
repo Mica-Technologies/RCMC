@@ -28,6 +28,7 @@ public final class RideCodec {
     private static final String KEY_TRANSFER = "TransferRequest";
     private static final String KEY_CAR_MODEL = "CarModel";
     private static final String KEY_CAR_TYPE = "CarType";
+    private static final String KEY_NAME = "Name";
     private static final String KEY_CARS = "CarsPerTrain";
     private static final String KEY_HOMES = "RideHomes";
     private static final String KEY_MEMBER = "Member";
@@ -79,6 +80,9 @@ public final class RideCodec {
                 tag.setBoolean(KEY_ESTOP, ride.isEmergencyStopped());
                 tag.setString(KEY_TRANSFER, ride.transferRequest().name());
                 tag.setString(KEY_CAR_TYPE, ride.carType());
+                if (!ride.name().isEmpty()) {
+                    tag.setString(KEY_NAME, ride.name());
+                }
                 if (ride.stopCause() != null) {
                     tag.setString(KEY_CAUSE, ride.stopCause().name());
                 }
@@ -102,6 +106,9 @@ public final class RideCodec {
                 RideController.State.OPEN));
             ride.setDispatchMode(parse(RideController.DispatchMode.class, tag.getString(KEY_DISPATCH),
                 RideController.DispatchMode.AUTOMATIC));
+            if (tag.hasKey(KEY_NAME)) {
+                ride.setName(tag.getString(KEY_NAME));
+            }
             if (tag.hasKey(KEY_CAR_TYPE)) {
                 ride.setCarType(tag.getString(KEY_CAR_TYPE));
             }

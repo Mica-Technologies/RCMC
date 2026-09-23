@@ -108,6 +108,8 @@ because each tool gives them its own meaning:
 | `rcmc:station_sign` | Post-mounted line map: the line's stops in order with a "you are here" marker. Right-click cycles lines at an interchange |
 | `rcmc:arrival_board` | Ceiling-hung amber-on-black board, double-sided. Per-direction rows reading minutes (`3 min`), or `1 stop` / `N stops` until the line's trains have been timed, `APPR` when this station is the train's next stop and `BRD` while it is berthed, with the platform in brackets for a train due here (`BRD (2)`). A **multiblock**: needs 5 blocks across, centred on where you place it, and 2 down |
 | `rcmc:station_speaker` | Wall- or ceiling-mounted PA announcing approaching trains. Mounts on the face you click |
+| `rcmc:air_gate` | A gate for a coaster platform's edge, gate side toward the track. Links to the nearest coaster station; opens while a train is loading there and shuts before it leaves, and the train waits for it. Laid automatically with a coaster station's platform — see [Boarding](../guide/riding-and-operations.md#boarding) |
+| `rcmc:ride_sign` | Post-mounted board for a coaster's queue: the ride's name, open / closed / testing / stopped, and its rating and statistics. Links to the nearest coaster station within 32 blocks; right-click to relink |
 | `rcmc:operator_panel` | A coaster's control desk. Links to the nearest coaster station within 24 blocks when placed (or when first used, if none was near). Right-click to operate the ride: open / test / close, emergency stop, automatic or manual dispatch, the ride's hardware settings, and its trains. See [Operating a ride](../guide/riding-and-operations.md#operating-a-ride) |
 
 The three signage blocks **auto-link to the nearest station** on placement — including via
