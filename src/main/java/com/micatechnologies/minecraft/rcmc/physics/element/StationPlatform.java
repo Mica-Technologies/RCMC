@@ -106,6 +106,23 @@ public final class StationPlatform extends RideElementSpan {
     private final double dispatchSpeed;
     private final double tickSeconds;
 
+    /**
+     * How many times a dispatched train may run back through this platform before it is caught.
+     *
+     * <p>Zero for an ordinary circuit, where the next time a train reaches the station it has come
+     * round the lap. A shuttle coaster comes back through its station between launches — out to one
+     * spike, back through the platform, out to the other — and a platform that caught it the first
+     * time would end every ride halfway. With one pass-through the train runs back through once,
+     * and is caught the time after.</p>
+     */
+    private final int passThroughs;
+
+    /** Pass-throughs still owed to the train most recently dispatched. */
+    private int passesLeft;
+
+    /** Whether the train now on the platform is running through it rather than being served. */
+    private boolean passing;
+
     private Phase phase = Phase.ARRIVING;
     private int dwellRemaining;
 
@@ -126,7 +143,23 @@ public final class StationPlatform extends RideElementSpan {
     public StationPlatform(int sectionId, double startDistance, double endDistance,
                             double stopDistance, double brakeDeceleration, int dwellTicks,
                             double dispatchAcceleration, double dispatchSpeed, double tickSeconds) {
+        this(sectionId, startDistance, endDistance, stopDistance, brakeDeceleration, dwellTicks,
+            dispatchAcceleration, dispatchSpeed, tickSeconds, 0);
+    }
+
+    /**
+     * @param passThroughs how many times a dispatched train runs back through before it is caught;
+     *                     see the field
+     */
+    public StationPlatform(int sectionId, double startDistance, double endDistance,
+                            double stopDistance, double brakeDeceleration, int dwellTicks,
+                            double dispatchAcceleration, double dispatchSpeed, double tickSeconds,
+                            int passThroughs) {
         super(sectionId, startDistance, endDistance);
+        if (passThroughs < 0) {
+            throw new IllegalArgumentException("passThroughs must be >= 0, got " + passThroughs);
+        }
+        this.passThroughs = passThroughs;
         if (stopDistance < startDistance || stopDistance > endDistance) {
             throw new IllegalArgumentException("stopDistance " + stopDistance
                 + " must lie within [" + startDistance + ", " + endDistance + "]");
@@ -273,6 +306,12 @@ public final class StationPlatform extends RideElementSpan {
         if (servingTrain != trainId) {
             servingTrain = trainId;
             reset();
+            if (passesLeft > 0) {
+                // A pass-through: the platform stands aside and the train keeps going.
+                passesLeft--;
+                passing = true;
+                phase = Phase.DEPARTED;
+            }
         }
     }
 
@@ -282,9 +321,19 @@ public final class StationPlatform extends RideElementSpan {
      */
     public void release(int trainId) {
         if (servingTrain == trainId) {
+            if (!passing && (phase == Phase.DEPARTED || phase == Phase.DISPATCHING)) {
+                // Leaving after a dispatch — often before reaching dispatch speed, if the stop point
+                // is near the platform's end: this is where the pass-throughs start counting.
+                passesLeft = passThroughs;
+            }
+            passing = false;
             servingTrain = NO_TRAIN;
             reset();
         }
+    }
+
+    public int passThroughs() {
+        return passThroughs;
     }
 
     public int servingTrain() {
@@ -294,7 +343,8 @@ public final class StationPlatform extends RideElementSpan {
     /** The same platform, fresh: waiting for its first arrival, serving nobody. */
     public StationPlatform freshCopy() {
         return new StationPlatform(sectionId(), startDistance(), endDistance(), stopDistance,
-            brakeDeceleration, dwellTicks, dispatchAcceleration, dispatchSpeed, tickSeconds);
+            brakeDeceleration, dwellTicks, dispatchAcceleration, dispatchSpeed, tickSeconds,
+            passThroughs);
     }
 
     /**

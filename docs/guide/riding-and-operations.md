@@ -91,7 +91,7 @@ It links to the nearest coaster station within 24 blocks, and its controls face 
 | Open / Test / Close | **Open** is normal service. **Test** runs the trains but nobody may board. **Close** lets every train finish its lap and holds it in the station |
 | EMERGENCY STOP | Brakes every train on the ride to a stop wherever it is, including on the lift, and holds it there. It also closes the ride. Press **Reset emergency stop**, then **Open**, to run again. A stop the ride made itself says why in the badge: **E-STOP: COLLISION** or **E-STOP: ROLLBACK** |
 | Auto / Manual | **Auto** dispatches a train by itself once its dwell has run. **Manual** holds it until you press **DISPATCH**; one press sends one train |
-| Hardware | Station dwell, lift speed, launch speed and force, brake targets and drive-tyre speed, each with − and +. Changes apply at once and can be undone with `/rcmc undo` |
+| Hardware | Station dwell and pass-throughs, lift speed, launch speed and force, brake targets and drive-tyre speed, each with − and +. Changes apply at once and can be undone with `/rcmc undo` |
 | Trains | Lists the ride's trains with their speed. **Add train** puts a new one in the station, if it is clear. **x** removes a train. **Cars per new train** sets the length of the next one |
 
 A ride runs one train at a time unless it has block sections (`/rcmc block`); with N blocks it can

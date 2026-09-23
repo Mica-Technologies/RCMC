@@ -46,6 +46,8 @@ public final class ElementCodec {
     private static final String KEY_SPEED = "Speed";
     private static final String KEY_ACCEL = "Accel";
     private static final String KEY_MODE = "Mode";
+    /** Additive: a station saved before pass-throughs reads as zero, which is what it was. */
+    private static final String KEY_PASSES = "PassThroughs";
     private static final String KEY_STOP = "Stop";
     private static final String KEY_DWELL = "Dwell";
     private static final String KEY_DISPATCH_SPEED = "DispatchSpeed";
@@ -154,6 +156,7 @@ public final class ElementCodec {
             tag.setInteger(KEY_DWELL, station.dwellTicks());
             tag.setDouble(KEY_DISPATCH_ACCEL, station.dispatchAcceleration());
             tag.setDouble(KEY_DISPATCH_SPEED, station.dispatchSpeed());
+            tag.setInteger(KEY_PASSES, station.passThroughs());
         }
         else if (element instanceof DriveTyres) {
             tag.setString(KEY_TYPE, "drive_tyres");
@@ -188,7 +191,8 @@ public final class ElementCodec {
             case "station":
                 return new StationPlatform(section, start, end, tag.getDouble(KEY_STOP),
                     tag.getDouble(KEY_ACCEL), tag.getInteger(KEY_DWELL),
-                    tag.getDouble(KEY_DISPATCH_ACCEL), tag.getDouble(KEY_DISPATCH_SPEED), tick);
+                    tag.getDouble(KEY_DISPATCH_ACCEL), tag.getDouble(KEY_DISPATCH_SPEED), tick,
+                    Math.max(0, tag.getInteger(KEY_PASSES)));
             case "drive_tyres":
                 return new DriveTyres(section, start, end,
                     tag.getDouble(KEY_SPEED), tag.getDouble(KEY_ACCEL), tick);

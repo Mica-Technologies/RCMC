@@ -87,6 +87,9 @@ public class CommandRcmc extends CommandBase {
             return getListOfStringsMatchingLastWord(args, "create", "list", "remove", "start",
                 "stop", "signals", "set", "trains");
         }
+        if (args.length == 2 && "demo".equalsIgnoreCase(args[0])) {
+            return getListOfStringsMatchingLastWord(args, "shuttle");
+        }
         if (args.length == 3 && "block".equalsIgnoreCase(args[0])) {
             return getListOfStringsMatchingLastWord(args, "auto", "off");
         }
@@ -209,6 +212,10 @@ public class CommandRcmc extends CommandBase {
     private void buildDemo(ICommandSender sender, World world, RcmcWorldState state, String[] args)
         throws CommandException {
         EntityPlayer player = getCommandSenderAsPlayer(sender);
+        if (args.length > 1 && "shuttle".equalsIgnoreCase(args[1])) {
+            buildShuttleDemo(sender, world, state, player);
+            return;
+        }
         double scale = args.length > 1 ? parseDouble(args[1], 0.4D, 4.0D) : 1.0D;
         double lift = args.length > 2 ? parseDouble(args[2], 8.0D, 120.0D) : 34.0D;
 
@@ -239,6 +246,36 @@ public class CommandRcmc extends CommandBase {
             + ", brakes " + fmt(demo.brakeStart) + "-" + fmt(demo.brakeEnd) + ".");
         reply(sender, TextFormatting.GRAY,
             "Run /rcmc train " + id + " 5 0 to park a train in the station — it will dispatch itself.");
+    }
+
+    /**
+     * {@code /rcmc demo shuttle} — a launched shuttle coaster at the player's feet: station in the
+     * middle, a forward launch ahead of it, a backward launch behind, and a spike at each end. See
+     * {@code DemoShuttle} for the ride it gives.
+     */
+    private void buildShuttleDemo(ICommandSender sender, World world, RcmcWorldState state,
+                                  EntityPlayer player) {
+        int id = state.network().allocateSectionId();
+        com.micatechnologies.minecraft.rcmc.debug.DemoShuttle.Result demo =
+            com.micatechnologies.minecraft.rcmc.debug.DemoShuttle.build(id,
+                new Vec3(player.posX, player.posY, player.posZ));
+        state.network().addSection(demo.section);
+        double tick = RcmcConstants.SECONDS_PER_TICK;
+        RideElementSet elements = state.elements();
+        // One pass-through: the train runs back through the platform once, between the launches,
+        // and is caught the time after.
+        elements.add(new StationPlatform(id, demo.stationStart, demo.stationEnd, demo.stationStop,
+            8.0D, 60, 4.0D, 6.0D, tick, 1));
+        elements.add(new com.micatechnologies.minecraft.rcmc.physics.element.LaunchTrack(id,
+            demo.launchStart, demo.launchEnd, 22.0D, 8.0D));
+        elements.add(new com.micatechnologies.minecraft.rcmc.physics.element.LaunchTrack(id,
+            demo.backLaunchStart, demo.backLaunchEnd, -22.0D, 8.0D));
+        state.markTrackDirty(world);
+        broadcastTrack(world, state);
+        reply(sender, TextFormatting.GREEN, "Built shuttle coaster #" + id + " — "
+            + String.format("%.1f", demo.section.totalLength()) + " blocks, a spike at each end.");
+        reply(sender, TextFormatting.GRAY, "Out the front, back through the station, out the back,"
+            + " and caught going forward. Run /rcmc train " + id + " 5 0 to put a train on it.");
     }
 
     private static void pushSession(EntityPlayer player, TrackBuildSession session) {

@@ -45,6 +45,7 @@ public final class TrackBuildSession {
         PLAIN("Plain track"),
         LIFT("Chain lift"),
         LAUNCH("Launch track"),
+        LAUNCH_BACKWARD("Backward launch"),
         BRAKE("Brake run"),
         BLOCK_BRAKE("Block brake"),
         TYRES("Drive tyres"),
