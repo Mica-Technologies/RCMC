@@ -289,23 +289,82 @@ public final class DemoUnderground {
      * Real turnbacks do exactly this.</p>
      */
     private static TrackSection ring(int sectionId, Vec3 origin) {
-        double[][] xz = {
-            // Outbound: +X at z = -4.
-            {0, -TRACK_OFFSET}, {110, -TRACK_OFFSET}, {230, -TRACK_OFFSET},
-            {350, -TRACK_OFFSET}, {STRAIGHT_END, -TRACK_OFFSET},
-            // East turning loop: flare out, round, and back onto the other track.
-            {492, -9}, {512, -18}, {524, 0}, {512, 18}, {492, 9},
-            // Inbound: -X at z = +4.
-            {STRAIGHT_END, TRACK_OFFSET}, {350, TRACK_OFFSET}, {230, TRACK_OFFSET},
-            {110, TRACK_OFFSET}, {0, TRACK_OFFSET},
-            // West turning loop.
-            {-32, 9}, {-52, 18}, {-64, 0}, {-52, -18}, {-32, -9},
-        };
+        List<double[]> xz = new ArrayList<>();
+        // Outbound: +X at z = -4.
+        for (double x : new double[] {0, 110, 230, 350, STRAIGHT_END}) {
+            xz.add(new double[] {x, -TRACK_OFFSET});
+        }
+        // East turning loop, round onto the inbound track.
+        for (double[] p : turningLoop()) {
+            xz.add(new double[] {STRAIGHT_END + p[0], p[1]});
+        }
+        // Inbound: -X at z = +4.
+        for (double x : new double[] {STRAIGHT_END, 350, 230, 110, 0}) {
+            xz.add(new double[] {x, TRACK_OFFSET});
+        }
+        // West turning loop: the east one turned end for end.
+        for (double[] p : turningLoop()) {
+            xz.add(new double[] {-p[0], -p[1]});
+        }
         List<TrackNode> nodes = new ArrayList<>();
         for (double[] p : xz) {
             nodes.add(new TrackNode(new Vec3(origin.x + p[0], origin.y, origin.z + p[1])));
         }
         return new TrackSection(sectionId, nodes, true, TrackStyleIds.TRANSIT_TUNNEL);
+    }
+
+    /** Radius of a turning loop's arcs, blocks: trains take it at about sqrt(1.2 * 50) = 7.7 blocks/s. */
+    static final double LOOP_RADIUS = 50.0D;
+
+    /** Spacing of the nodes laid round a loop, blocks. */
+    private static final double LOOP_NODE_SPACING = 5.0D;
+
+    /**
+     * A balloon loop from the end of the outbound track at (0, -4), heading +X, round to the start
+     * of the inbound one at (0, +4), heading -X — as points strictly between the two, relative to
+     * the end of the straights.
+     *
+     * <p>The tracks are only eight blocks apart, so the loop first bends away from the other track,
+     * then swings round a big arc centred between them, then bends back: three arcs of
+     * {@link #LOOP_RADIUS}. The first bend turns through {@code acos((4 + r) / (R + r))}, which is
+     * exactly what brings the big arc's middle onto the centre line, so the loop closes on the
+     * inbound track by symmetry. It used to be a hand-placed balloon of radius 18 entered through
+     * S-bends tighter still, which held trains to 3 blocks/s.</p>
+     */
+    static List<double[]> turningLoop() {
+        double r = LOOP_RADIUS;
+        double big = LOOP_RADIUS;
+        double theta = Math.acos((TRACK_OFFSET + r) / (big + r));
+        // Arc lengths, and the curvature along each (negative: turning toward -z).
+        double[] lengths = {r * theta, big * (Math.PI + 2.0D * theta), r * theta};
+        double[] curvatures = {-1.0D / r, 1.0D / big, -1.0D / r};
+        double total = lengths[0] + lengths[1] + lengths[2];
+        List<double[]> points = new ArrayList<>();
+        double x = 0.0D;
+        double z = -TRACK_OFFSET;
+        double heading = 0.0D;
+        double ds = 0.05D;
+        double walked = 0.0D;
+        double nextNode = LOOP_NODE_SPACING;
+        int arc = 0;
+        double inArc = 0.0D;
+        // Stop one spacing short of the end: the inbound straight's first node is the loop's last.
+        while (walked < total - LOOP_NODE_SPACING * 0.5D) {
+            x += Math.cos(heading) * ds;
+            z += Math.sin(heading) * ds;
+            heading += curvatures[arc] * ds;
+            walked += ds;
+            inArc += ds;
+            if (inArc >= lengths[arc] && arc < 2) {
+                inArc -= lengths[arc];
+                arc++;
+            }
+            if (walked >= nextNode) {
+                points.add(new double[] {x, z});
+                nextNode += LOOP_NODE_SPACING;
+            }
+        }
+        return points;
     }
 
     /** The Airport Line: a straight single track along Z, one level down, crossing under Exchange. */
