@@ -51,6 +51,8 @@ public final class RideView {
     /** {@code RideController.DispatchMode} ordinal. */
     public final int dispatchMode;
     public final boolean emergencyStopped;
+    /** {@code RideController.StopCause} name while stopped, else empty. */
+    public final String stopCause;
     public final int carsPerTrain;
     public final int maxTrains;
     public final int blockCount;
@@ -62,6 +64,14 @@ public final class RideView {
     public RideView(int sectionId, String name, int state, int dispatchMode,
                     boolean emergencyStopped, int carsPerTrain, int maxTrains, int blockCount,
                     String message, List<TrainRow> trains, List<SettingRow> settings) {
+        this(sectionId, name, state, dispatchMode, emergencyStopped, "", carsPerTrain, maxTrains,
+            blockCount, message, trains, settings);
+    }
+
+    public RideView(int sectionId, String name, int state, int dispatchMode,
+                    boolean emergencyStopped, String stopCause, int carsPerTrain, int maxTrains,
+                    int blockCount, String message, List<TrainRow> trains, List<SettingRow> settings) {
+        this.stopCause = stopCause == null ? "" : stopCause;
         this.sectionId = sectionId;
         this.name = name == null ? "" : name;
         this.state = state;
@@ -81,6 +91,7 @@ public final class RideView {
         buf.writeByte(state);
         buf.writeByte(dispatchMode);
         buf.writeBoolean(emergencyStopped);
+        writeString(buf, stopCause);
         buf.writeByte(carsPerTrain);
         buf.writeShort(maxTrains);
         buf.writeShort(blockCount);
@@ -107,6 +118,7 @@ public final class RideView {
         int state = buf.readByte();
         int mode = buf.readByte();
         boolean stopped = buf.readBoolean();
+        String cause = readString(buf);
         int cars = buf.readByte();
         int maxTrains = buf.readShort();
         int blocks = buf.readShort();
@@ -122,7 +134,7 @@ public final class RideView {
         for (int i = 0; i < settingCount; i++) {
             settings.add(new SettingRow(buf.readInt(), buf.readByte(), buf.readDouble()));
         }
-        return new RideView(sectionId, name, state, mode, stopped, cars, maxTrains, blocks, message,
+        return new RideView(sectionId, name, state, mode, stopped, cause, cars, maxTrains, blocks, message,
             trains, settings);
     }
 

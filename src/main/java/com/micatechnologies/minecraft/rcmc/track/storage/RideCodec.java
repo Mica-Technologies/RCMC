@@ -23,6 +23,7 @@ public final class RideCodec {
     private static final String KEY_STATE = "State";
     private static final String KEY_DISPATCH = "Dispatch";
     private static final String KEY_ESTOP = "EmergencyStop";
+    private static final String KEY_CAUSE = "StopCause";
     private static final String KEY_CARS = "CarsPerTrain";
 
     private RideCodec() {
@@ -37,6 +38,9 @@ public final class RideCodec {
                 tag.setString(KEY_STATE, ride.state().name());
                 tag.setString(KEY_DISPATCH, ride.dispatchMode().name());
                 tag.setBoolean(KEY_ESTOP, ride.isEmergencyStopped());
+                if (ride.stopCause() != null) {
+                    tag.setString(KEY_CAUSE, ride.stopCause().name());
+                }
                 tag.setInteger(KEY_CARS, ride.carsPerTrain());
                 list.appendTag(tag);
             }
@@ -64,7 +68,8 @@ public final class RideCodec {
                 // Keeps the state read above: an e-stopped ride is also closed, but a save from a
                 // ride stopped and then deliberately reopened must not come back closed.
                 RideController.State state = ride.state();
-                ride.emergencyStop();
+                ride.emergencyStop(parse(RideController.StopCause.class, tag.getString(KEY_CAUSE),
+                    RideController.StopCause.OPERATOR));
                 ride.setState(state);
             }
             rides.put(ride);

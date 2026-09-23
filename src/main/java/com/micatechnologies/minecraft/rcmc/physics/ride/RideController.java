@@ -95,19 +95,43 @@ public final class RideController implements DispatchGate {
         return dispatchRequested;
     }
 
+    /** Why a ride stopped — shown to the operator, who has to know what to look for. */
+    public enum StopCause {
+        /** Someone pressed the button. */
+        OPERATOR,
+        /** Two trains on the circuit overlapped. */
+        COLLISION,
+        /** A train fell back down a lift and the anti-rollback dogs caught it. */
+        ROLLBACK
+    }
+
+    private StopCause stopCause;
+
     /**
      * Stops every train on the ride where it is and holds it there, until {@link #resetEmergency}.
      * Also closes the ride, as a real e-stop does: coming back into service is a deliberate act.
      */
     public void emergencyStop() {
+        emergencyStop(StopCause.OPERATOR);
+    }
+
+    /** {@link #emergencyStop()}, recording why. */
+    public void emergencyStop(StopCause cause) {
         emergencyStopped = true;
+        stopCause = cause == null ? StopCause.OPERATOR : cause;
         dispatchRequested = false;
         state = State.CLOSED;
+    }
+
+    /** Why the ride is stopped, or {@code null} while it is not. */
+    public StopCause stopCause() {
+        return emergencyStopped ? stopCause : null;
     }
 
     /** Clears the stop. The ride stays closed until the operator opens it again. */
     public void resetEmergency() {
         emergencyStopped = false;
+        stopCause = null;
     }
 
     public boolean isEmergencyStopped() {

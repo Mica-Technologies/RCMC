@@ -404,13 +404,41 @@ public final class RcmcWorldState {
                 if (ride.isEmergencyStopped()) {
                     continue;
                 }
-                ride.emergencyStop();
+                ride.emergencyStop(
+                    com.micatechnologies.minecraft.rcmc.physics.ride.RideController.StopCause.COLLISION);
                 state.markTrainsDirty(world);
                 net.minecraft.util.text.TextComponentString message =
                     new net.minecraft.util.text.TextComponentString(
                         net.minecraft.util.text.TextFormatting.RED + "Coaster #" + section
                             + ": trains collided — emergency stop. Remove a train at its operator "
                             + "panel before reopening, or add block sections with /rcmc block.");
+                for (net.minecraft.entity.player.EntityPlayer player : world.playerEntities) {
+                    player.sendMessage(message);
+                }
+            }
+        }
+
+        /**
+         * Catches a train falling back down a lift: e-stops its ride, which holds it where it is.
+         * See {@code Rollbacks} for why a ride has to stop rather than let the chain try again.
+         */
+        private static void stopRolledBackRides(World world, RcmcWorldState state) {
+            for (int section : com.micatechnologies.minecraft.rcmc.physics.ride.Rollbacks
+                .sectionsRollingBack(state.trains.asMap(), state.elements)) {
+                com.micatechnologies.minecraft.rcmc.physics.ride.RideController ride =
+                    state.rides.getOrCreate(section);
+                if (ride.isEmergencyStopped()) {
+                    continue;
+                }
+                ride.emergencyStop(
+                    com.micatechnologies.minecraft.rcmc.physics.ride.RideController.StopCause.ROLLBACK);
+                state.markTrainsDirty(world);
+                net.minecraft.util.text.TextComponentString message =
+                    new net.minecraft.util.text.TextComponentString(
+                        net.minecraft.util.text.TextFormatting.RED + "Coaster #" + section
+                            + ": a train rolled back on the lift — caught and held, emergency stop. "
+                            + "It did not have the speed to clear what follows the lift; reset at "
+                            + "the operator panel to send it up again.");
                 for (net.minecraft.entity.player.EntityPlayer player : world.playerEntities) {
                     player.sendMessage(message);
                 }
@@ -601,6 +629,9 @@ public final class RcmcWorldState {
 
                 if (!state.remote && state.trains.count() > 1) {
                     stopCollidedRides(event.world, state);
+                }
+                if (!state.remote) {
+                    stopRolledBackRides(event.world, state);
                 }
 
                 // After the tick, so the phases the sounds react to are this tick's. Server only;

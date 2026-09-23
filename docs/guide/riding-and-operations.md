@@ -89,7 +89,7 @@ It links to the nearest coaster station within 24 blocks, and its controls face 
 | Control | What it does |
 | --- | --- |
 | Open / Test / Close | **Open** is normal service. **Test** runs the trains but nobody may board. **Close** lets every train finish its lap and holds it in the station |
-| EMERGENCY STOP | Brakes every train on the ride to a stop wherever it is, including on the lift, and holds it there. It also closes the ride. Press **Reset emergency stop**, then **Open**, to run again |
+| EMERGENCY STOP | Brakes every train on the ride to a stop wherever it is, including on the lift, and holds it there. It also closes the ride. Press **Reset emergency stop**, then **Open**, to run again. A stop the ride made itself says why in the badge: **E-STOP: COLLISION** or **E-STOP: ROLLBACK** |
 | Auto / Manual | **Auto** dispatches a train by itself once its dwell has run. **Manual** holds it until you press **DISPATCH**; one press sends one train |
 | Hardware | Station dwell, lift speed, launch speed and force, brake targets and drive-tyre speed, each with − and +. Changes apply at once and can be undone with `/rcmc undo` |
 | Trains | Lists the ride's trains with their speed. **Add train** puts a new one in the station, if it is clear. **x** removes a train. **Cars per new train** sets the length of the next one |
@@ -208,6 +208,7 @@ brakes to that limit the same way it brakes to a station.
 | A train stops mid-circuit and stays there | **Valleying** — it did not have the energy to crest something. Detected and surfaced rather than left as a silent hang | Give it more energy: a taller lift, a shallower hill |
 | A metro train is parked and stuck | Same detection, but recoverable | `/rcmc line start` — entering service clears a valleyed train |
 | A coaster stopped with "trains collided — emergency stop" | Two trains on the ride overlapped | Remove a train at the operator panel, reset the emergency stop, and open the ride. Add block sections to run several trains |
+| A coaster stopped with "a train rolled back on the lift" | A train failed to clear something after the lift, fell back over the crest, and the lift's anti-rollback caught it — it is held where it was caught | Reset the emergency stop to send it up again; if it fails the same hill every time, give it more energy: a taller lift or a lower hill after it |
 | A train did not come back after a restart | Its track was deleted while the world was closed, so it has nowhere to be | Rebuild the section, then `/rcmc train` |
 | A service did not resume, but its train did | The line it worked was deleted or renamed, or the train can no longer reach any of its stations | `/rcmc line start <name> <trainId>` |
 | Track "ignores" a height you placed | Was the vertical-overshoot sag; now fixed by clamped node tangents. If you still see it, report it | — |

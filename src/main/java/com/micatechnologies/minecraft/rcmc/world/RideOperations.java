@@ -215,7 +215,8 @@ public final class RideOperations {
         }
         int blocks = blockCount(state, sectionId);
         return new RideView(sectionId, "Coaster #" + sectionId, ride.state().ordinal(),
-            ride.dispatchMode().ordinal(), ride.isEmergencyStopped(), ride.carsPerTrain(),
+            ride.dispatchMode().ordinal(), ride.isEmergencyStopped(),
+            ride.stopCause() == null ? "" : ride.stopCause().name(), ride.carsPerTrain(),
             RideController.maxTrains(blocks), blocks, message, trains, settings);
     }
 
