@@ -51,28 +51,37 @@ public final class PacketTrackEdit {
     public static class View implements IMessage {
 
         private TrackEditView view;
+        /** Whether this view may open the editor, or only refresh it; see {@code PacketRideView}. */
+        private boolean open;
 
         public View() {
         }
 
         public View(TrackEditView view) {
+            this(view, false);
+        }
+
+        public View(TrackEditView view, boolean open) {
             this.view = view;
+            this.open = open;
         }
 
         @Override
         public void fromBytes(ByteBuf buf) {
             view = TrackEditView.read(buf);
+            open = buf.readBoolean();
         }
 
         @Override
         public void toBytes(ByteBuf buf) {
             view.write(buf);
+            buf.writeBoolean(open);
         }
 
         public static class Handler implements IMessageHandler<View, IMessage> {
             @Override
             public IMessage onMessage(View message, MessageContext ctx) {
-                Rcmc.proxy.showTrackEditor(message.view);
+                Rcmc.proxy.showTrackEditor(message.view, message.open);
                 return null;
             }
         }

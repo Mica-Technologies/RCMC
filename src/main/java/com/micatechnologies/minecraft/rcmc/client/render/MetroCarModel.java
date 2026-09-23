@@ -586,14 +586,17 @@ final class MetroCarModel {
      * <p>Drawn by the caller <em>after</em> the opaque body with blending on: translucent geometry
      * has to come last or it blends against whatever happened to be drawn before it.</p>
      */
-    static void emitGlazing(BufferBuilder buffer, float bogieSpacing, float doorFraction,
-                            boolean outerFront, boolean outerRear) {
+    static void emitGlazing(BufferBuilder buffer, float bogieSpacing, float rightFraction,
+                            float leftFraction, boolean outerFront, boolean outerRear) {
         float bodyLength = bogieSpacing / TRUCK_CENTRE_RATIO;
         float half = bodyLength * 0.5F;
         float[] doorCentres = doorCentres(half);
         float doorHalf = DOOR_WIDTH * 0.5F;
 
         for (int side = -1; side <= 1; side += 2) {
+            // Each side's door glass moves with that side's leaves: at a one-sided platform the far
+            // side stays shut, windows and all.
+            float doorFraction = side > 0 ? rightFraction : leftFraction;
             float outer = side * BODY_HALF_WIDTH;
             float inner = side * (BODY_HALF_WIDTH - GLASS_THICKNESS);
             float from = -half;

@@ -59,7 +59,10 @@ public final class RideOperations {
     public static void open(EntityPlayerMP player, BlockPos panel, int sectionId) {
         SESSIONS.put(player.getUniqueID(),
             new Session(player.dimension, panel.toImmutable(), sectionId));
-        send(player, sectionId, "");
+        RcmcWorldState state = RcmcWorldState.of(player.world);
+        if (state != null) {
+            RcmcNetwork.sendTo(new PacketRideView(viewOf(state, sectionId, ""), true), player);
+        }
     }
 
     /** Applies one press from the panel, then answers with the ride as it now stands. */

@@ -136,20 +136,20 @@ public class RcmcClientProxy extends RcmcCommonProxy {
     }
 
     @Override
-    public void showTrackEditor(com.micatechnologies.minecraft.rcmc.net.TrackEditView view) {
+    public void showTrackEditor(com.micatechnologies.minecraft.rcmc.net.TrackEditView view, boolean open) {
         net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getMinecraft();
         mc.addScheduledTask(() -> {
             if (mc.currentScreen instanceof com.micatechnologies.minecraft.rcmc.client.gui.GuiTrackEditor) {
                 ((com.micatechnologies.minecraft.rcmc.client.gui.GuiTrackEditor) mc.currentScreen).update(view);
             }
-            else {
+            else if (open) {
                 mc.displayGuiScreen(new com.micatechnologies.minecraft.rcmc.client.gui.GuiTrackEditor(view));
             }
         });
     }
 
     @Override
-    public void showRideController(com.micatechnologies.minecraft.rcmc.net.RideView view) {
+    public void showRideController(com.micatechnologies.minecraft.rcmc.net.RideView view, boolean open) {
         net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getMinecraft();
         mc.addScheduledTask(() -> {
             if (mc.currentScreen instanceof com.micatechnologies.minecraft.rcmc.client.gui.GuiRideController
@@ -158,7 +158,7 @@ public class RcmcClientProxy extends RcmcCommonProxy {
                 ((com.micatechnologies.minecraft.rcmc.client.gui.GuiRideController) mc.currentScreen)
                     .update(view);
             }
-            else {
+            else if (open) {
                 mc.displayGuiScreen(new com.micatechnologies.minecraft.rcmc.client.gui.GuiRideController(view));
             }
         });

@@ -157,6 +157,13 @@ public final class TransitToolPreview {
         GlStateManager.disableTexture2D();
         GlStateManager.disableDepth();
         GlStateManager.disableCull();
+        // Unlit and full-bright: a marker drawn through terrain must read the same at night, and
+        // a nameplate drawn just before leaves GL lighting on, which dims a quad with no normals.
+        GlStateManager.disableLighting();
+        float lastX = net.minecraft.client.renderer.OpenGlHelper.lastBrightnessX;
+        float lastY = net.minecraft.client.renderer.OpenGlHelper.lastBrightnessY;
+        net.minecraft.client.renderer.OpenGlHelper.setLightmapTextureCoords(
+            net.minecraft.client.renderer.OpenGlHelper.lightmapTexUnit, 240.0F, 240.0F);
         Tessellator tessellator = Tessellator.getInstance();
         BufferBuilder buffer = tessellator.getBuffer();
         buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_COLOR);
@@ -168,6 +175,8 @@ public final class TransitToolPreview {
             buffer.pos(x + f[0], y + 3.0D, z + f[1]).color(r, g, b, 0.85F).endVertex();
         }
         tessellator.draw();
+        net.minecraft.client.renderer.OpenGlHelper.setLightmapTextureCoords(
+            net.minecraft.client.renderer.OpenGlHelper.lightmapTexUnit, lastX, lastY);
         GlStateManager.enableCull();
         GlStateManager.enableDepth();
         GlStateManager.enableTexture2D();
