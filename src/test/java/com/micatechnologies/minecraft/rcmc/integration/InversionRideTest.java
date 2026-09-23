@@ -44,7 +44,7 @@ class InversionRideTest {
     @CsvSource({
         "corkscrew, 14, POSITIVE", "corkscrew, 20, NEGATIVE", "corkscrew, 30, POSITIVE",
         "zero-g roll, 14, POSITIVE", "zero-g roll, 20, NEGATIVE", "zero-g roll, 30, POSITIVE",
-        "immelmann, 22, POSITIVE", "immelmann, 28, NEGATIVE", "immelmann, 36, POSITIVE",
+        "immelmann, 20, POSITIVE", "immelmann, 28, NEGATIVE", "immelmann, 36, POSITIVE",
         "dive loop, 14, POSITIVE", "dive loop, 20, NEGATIVE", "dive loop, 30, POSITIVE"})
     void ridesLikeAnInversion(String kind, double speed, RollDirection roll) {
         TrackElement element = element(kind, speed, roll);
@@ -96,6 +96,14 @@ class InversionRideTest {
             });
 
         assertTrue(furthest[0] > leave, kind + " stalled at " + furthest[0] + " of " + leave);
+
+        // And it forgives a train a little slower than it was built for. Found in game: an
+        // Immelmann built for 24 blocks/s, a train that arrived at 23.2, stopped upside down.
+        double[] slowest = {0.0D};
+        rater.simulate(network, new RideElementSet(), new TrackRef(1, enter),
+            new TrainSpec(5, 3.0D, 0.5D, 4), speed * 0.95D,
+            (where, v, g) -> slowest[0] = Math.max(slowest[0], where.distance()));
+        assertTrue(slowest[0] > leave, kind + " stalls 5% slow, at " + slowest[0] + " of " + leave);
         assertTrue(stats.inversionCount >= 1, kind + " never turned its riders over");
         assertTrue(worst[0] < 0.6D, kind + " throws riders sideways: " + worst[0] + " g");
         // Hanging lightly in the restraints over the top is what an inversion does — the front car of

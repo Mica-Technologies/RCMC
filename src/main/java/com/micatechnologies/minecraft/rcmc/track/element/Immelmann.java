@@ -15,17 +15,17 @@ import com.micatechnologies.minecraft.rcmc.track.math.Vec3;
  */
 public final class Immelmann implements TrackElement {
 
-    static final double PULL = 3.8D;
+    static final double PULL = 4.2D;
     static final double PULL_OUT = 2.2D;
     /** How far short of level, upside down, the load is fully off: the weightless crest runs from
      *  here to as far past level, and the half roll happens across it. */
     static final double CREST = Math.toRadians(30.0D);
     /** Pitch at which the load starts coming off: past vertical, where the loop keeps turning over
      *  under gravity alone. */
-    static final double RELEASE = Math.toRadians(110.0D);
+    static final double RELEASE = Math.toRadians(140.0D);
 
     /** Slowest entry, in blocks/s, an Immelmann gets over at. */
-    public static final double MIN_SPEED = 22.0D;
+    public static final double MIN_SPEED = 20.0D;
 
     /** How far to the side the train comes back, in blocks: it returns the way it went in, and
      *  must pass beside the track it came in on, not through it: past the track validator's

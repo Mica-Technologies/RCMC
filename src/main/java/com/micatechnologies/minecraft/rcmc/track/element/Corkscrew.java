@@ -136,7 +136,7 @@ public final class Corkscrew implements TrackElement {
             }
 
             double speedSquared = entrySpeed * entrySpeed - lost - 2.0D * GRAVITY * trainHeight(heights, k);
-            if (speedSquared < InversionPath.MIN_SPEED * InversionPath.MIN_SPEED) {
+            if (speedSquared < Math.pow(InversionPath.minimumSpeed(entrySpeed), 2.0D)) {
                 throw new IllegalArgumentException("too slow for a corkscrew: the train would stall");
             }
             double n = 1.0D + amp * Math.cos(Math.toRadians(roll)) * Math.pow(Math.sin(Math.PI * f), 2.0D);

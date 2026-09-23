@@ -56,10 +56,21 @@ final class InversionPath {
      *  the block the track validator asks for. */
     static final double NODE_SPACING = 0.5D;
 
-    /** Slowest the design lets the train get anywhere in an element, in blocks/s. Well above
-     *  stopping: the real train differs from the design by a little, and a little too slow at the
-     *  top of an Immelmann is a train stopped upside down. */
+    /**
+     * Slowest the design lets the train get anywhere in an element: {@link #MIN_SPEED_SHARE} of the
+     * entry speed, and never under {@link #MIN_SPEED} blocks/s.
+     *
+     * <p>Well above stopping. A builder sets the entry speed by what they expect the train to have,
+     * and it arrives a little slower as often as not; with the floor at a bare 5 blocks/s, an
+     * Immelmann built for 24 stalled upside down over the top when the train came in at 23.2.
+     * A floor a third of the entry speed rides through a shortfall of about 5%.</p>
+     */
+    static double minimumSpeed(double entrySpeed) {
+        return Math.max(MIN_SPEED, MIN_SPEED_SHARE * entrySpeed);
+    }
+
     static final double MIN_SPEED = 5.0D;
+    static final double MIN_SPEED_SHARE = 0.33D;
 
     /** Integration step, in blocks of heart path. */
     private static final double DS = 0.05D;
@@ -82,6 +93,7 @@ final class InversionPath {
 
     private final List<Point> points = new ArrayList<>();
     private final double entrySpeedSquared;
+    private final double minimumSpeedSquared;
     private double s;
     private double x;
     private double y;
@@ -92,7 +104,14 @@ final class InversionPath {
     private double lost;
 
     InversionPath(double entrySpeed) {
+        this(entrySpeed, MIN_SPEED_SHARE);
+    }
+
+    /** With the speed floor at {@code share} of the entry speed — see {@link #minimumSpeed}. */
+    InversionPath(double entrySpeed, double share) {
         entrySpeedSquared = entrySpeed * entrySpeed;
+        double floor = Math.max(MIN_SPEED, share * entrySpeed);
+        minimumSpeedSquared = floor * floor;
         points.add(new Point(0.0D, 0.0D, 0.0D, 0.0D));
     }
 
@@ -128,7 +147,7 @@ final class InversionPath {
     private void step(double n) {
         load = n;
         double speedSquared = speedSquared();
-        if (speedSquared < MIN_SPEED * MIN_SPEED) {
+        if (speedSquared < minimumSpeedSquared) {
             throw new IllegalArgumentException("too slow to get round: the train would stall");
         }
         double half = alpha + GRAVITY * (sigma * n - Math.cos(alpha)) / speedSquared * DS / 2.0D;

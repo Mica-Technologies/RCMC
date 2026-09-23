@@ -172,7 +172,7 @@ Twelve pieces, each with one adjustable parameter:
 | Vertical loop | Top radius | 3–20 (6) |
 | Corkscrew | Entry speed, blocks/s | 14–40 (18) |
 | Zero-g roll | Entry speed, blocks/s | 14–40 (18) |
-| Immelmann | Entry speed, blocks/s | 22–40 (24) |
+| Immelmann | Entry speed, blocks/s | 20–40 (24) |
 | Dive loop | Entry speed, blocks/s | 14–40 (20) |
 | Airtime hill | Radius | 6–48 (16) |
 
@@ -198,8 +198,9 @@ at**, not by a size. Each shapes itself for that speed:
 
 Dial in the speed the train will really have there. Run [`/rcmc check`](../reference/commands.md#rcmc-check)
 afterwards: too fast and the top turns to airtime, too slow and the check will show where the
-train stalls. The Immelmann needs the most speed, since the train has to get over the top upside
-down, so it starts at 22 blocks/s.
+train stalls. Each piece rides through a train up to about 5% slower than you set. The Immelmann
+needs the most speed, since the train has to get over the top upside down, so it starts at
+20 blocks/s.
 
 ---
 
