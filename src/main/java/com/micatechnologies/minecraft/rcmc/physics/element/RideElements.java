@@ -1,5 +1,8 @@
 package com.micatechnologies.minecraft.rcmc.physics.element;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.function.DoubleUnaryOperator;
 
 /**
@@ -66,5 +69,63 @@ public final class RideElements {
         }
         // An element with no copy here keeps its distances: better stale than silently dropped.
         return element;
+    }
+
+    /** Shorter than this, blocks, and what is left of an element either side of a cut is dropped. */
+    static final double MIN_PIECE = 1.0D;
+
+    /**
+     * What is left of {@code element} once {@code [from, to)} of section {@code sectionId} is given
+     * over to something else: the parts before and after it, each keeping its settings.
+     *
+     * <p>Retyping one span of a lift three spans long leaves the other two spans a lift — it does
+     * not take the whole lift away. {@code element} alone when it does not overlap the cut.</p>
+     *
+     * <p>A station keeps one piece, the one its stop point is on, or the longer when the stop was
+     * in the cut: a platform in two halves would be two stations. Transfer tracks and storage
+     * berths go whole, because the table and its berth are laid to match and cannot be trimmed
+     * apart.</p>
+     */
+    public static List<RideElement> cutAround(RideElement element, int sectionId, double from,
+                                              double to, double tickSeconds) {
+        boolean overlaps = element.sectionId() == sectionId
+            && element.endDistance() > from && element.startDistance() < to;
+        if (!overlaps) {
+            return Collections.singletonList(element);
+        }
+        if (element instanceof TransferTrack || element instanceof StorageBerth) {
+            return Collections.emptyList();
+        }
+        RideElement before = element.startDistance() < from - MIN_PIECE
+            ? moved(element, sectionId, d -> Math.min(d, from), tickSeconds) : null;
+        RideElement after = element.endDistance() > to + MIN_PIECE
+            ? moved(element, sectionId, d -> Math.max(d, to), tickSeconds) : null;
+        if (element instanceof StationPlatform && before != null && after != null) {
+            double stop = ((StationPlatform) element).stopDistance();
+            if (stop < from) {
+                after = null;
+            }
+            else if (stop >= to) {
+                before = null;
+            }
+            else if (length(before) >= length(after)) {
+                after = null;
+            }
+            else {
+                before = null;
+            }
+        }
+        List<RideElement> pieces = new ArrayList<>(2);
+        if (before != null) {
+            pieces.add(before);
+        }
+        if (after != null) {
+            pieces.add(after);
+        }
+        return pieces;
+    }
+
+    private static double length(RideElement element) {
+        return element.endDistance() - element.startDistance();
     }
 }

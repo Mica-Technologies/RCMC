@@ -228,7 +228,7 @@ public class ItemTrackEditor extends Item {
                                    int spanIndex, TrackBuildSession.SegmentType type) {
         double from = section.nodeDistance(spanIndex);
         double to = spanEnd(section, spanIndex);
-        removeOverlapping(state, section.id(), from, to);
+        cutOverlapping(state, section.id(), from, to);
         // Straight onto the span's own two ends. Going through the builder's node tags put it one
         // span early — a tag describes the span arriving at its node, not the one leaving it — so
         // the span the editor said it had changed was not the one that did.
@@ -308,12 +308,17 @@ public class ItemTrackEditor extends Item {
         return TrackBuildSession.SegmentType.PLAIN.next();
     }
 
-    private static void removeOverlapping(RcmcWorldState state, int sectionId,
+    private static void cutOverlapping(RcmcWorldState state, int sectionId,
                                           double from, double to) {
         for (RideElement element : new ArrayList<>(state.elements().elements())) {
             if (element.sectionId() == sectionId
                 && element.endDistance() > from && element.startDistance() < to) {
                 state.elements().remove(element);
+                // What lies either side of the span stays what it was.
+                for (RideElement piece : com.micatechnologies.minecraft.rcmc.physics.element.RideElements
+                    .cutAround(element, sectionId, from, to, RcmcConstants.SECONDS_PER_TICK)) {
+                    state.elements().add(piece);
+                }
             }
         }
     }
