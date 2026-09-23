@@ -420,8 +420,17 @@ public class CommandRcmc extends CommandBase {
         // Snapped to whole blocks, because the layout is reasoned about in blocks: a platform is a
         // rectangle of decking placed a fixed offset from a track, and half a block of drift is
         // enough to push an island's edge into the space the car body occupies.
-        Vec3 origin = new Vec3(Math.floor(player.posX), Math.floor(player.posY),
-            Math.floor(player.posZ));
+        //
+        // Raised if need be so the Airport Line's level, twelve blocks down, is above bedrock: run
+        // from the surface of a flat world it would otherwise be built below y = 0, which is to say
+        // not at all, leaving its stations with no track to stand beside.
+        int lowestRail = com.micatechnologies.minecraft.rcmc.debug.DemoUnderground.LOWER_LEVEL_DROP + 2;
+        double railY = Math.max(Math.floor(player.posY), lowestRail);
+        Vec3 origin = new Vec3(Math.floor(player.posX), railY, Math.floor(player.posZ));
+        if (railY > Math.floor(player.posY)) {
+            reply(sender, TextFormatting.GRAY, "Too near bedrock for the lower level; building with"
+                + " the upper level at y=" + (int) railY + " instead.");
+        }
         com.micatechnologies.minecraft.rcmc.debug.DemoUnderground.Plan plan =
             com.micatechnologies.minecraft.rcmc.debug.DemoUnderground
                 .build(ringId, airportId, origin);
@@ -462,6 +471,9 @@ public class CommandRcmc extends CommandBase {
                 line.name, stops, line.loop, line.turnbackLoop,
                 line.inboundLabel, line.outboundLabel));
         }
+
+        // Signage last: each arrival board faces, and so lays out, along the station it links to.
+        blocks += com.micatechnologies.minecraft.rcmc.world.MetroFabric.signage(world, plan, origin);
 
         state.markTrackDirty(world);
         broadcastTrack(world, state);

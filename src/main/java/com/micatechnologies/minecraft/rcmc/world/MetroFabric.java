@@ -1,6 +1,8 @@
 package com.micatechnologies.minecraft.rcmc.world;
 
 import com.micatechnologies.minecraft.rcmc.block.RcmcBlocks;
+import com.micatechnologies.minecraft.rcmc.block.sign.ArrivalBoardStructure;
+import com.micatechnologies.minecraft.rcmc.block.sign.TileArrivalBoard;
 import com.micatechnologies.minecraft.rcmc.debug.DemoUnderground;
 import com.micatechnologies.minecraft.rcmc.track.TrackNetwork;
 import com.micatechnologies.minecraft.rcmc.track.TrackRef;
@@ -11,6 +13,7 @@ import java.util.HashSet;
 import java.util.Set;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.init.Blocks;
+import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 
@@ -57,19 +60,24 @@ public final class MetroFabric {
         throw new AssertionError("No instances.");
     }
 
-    /** Builds the whole network's fabric. Returns how many blocks were placed. */
+    /**
+     * Builds the whole network's fabric apart from its signage. Returns how many blocks were placed.
+     *
+     * <p>Signage is {@link #signage}, laid separately once the stations exist: an arrival board
+     * takes its facing, and so its footprint, from the station it links to.</p>
+     */
     public static int build(World world, TrackNetwork network, DemoUnderground.Plan plan,
                             Vec3 origin) {
         Set<Long> interior = new HashSet<>();
         for (TrackSection section : plan.sections) {
             collectBore(network, section, interior);
         }
+        collectStationBoxes(plan, origin, interior);
 
         int placed = 0;
         placed += carve(world, interior);
         placed += line(world, interior, origin);
         placed += decks(world, plan, origin);
-        placed += signage(world, plan, origin);
         return placed;
     }
 
@@ -92,6 +100,36 @@ public final class MetroFabric {
                 int base = (int) Math.floor(frame.position.y);
                 for (int dy = 0; dy <= BORE_HEIGHT; dy++) {
                     interior.add(new BlockPos(bx, base + dy, bz).toLong());
+                }
+            }
+        }
+    }
+
+    /**
+     * The space over every platform, from deck level to the tunnel ceiling, as part of the interior.
+     *
+     * <p>Platforms are laid at fixed offsets from where the track would be if it ran dead straight,
+     * but near a terminus the spline leans into the turning loop and the bore follows it — a block
+     * short of the outer platform row. Without this the deck was laid in the wall line and its
+     * headroom clearance cut a platform-length slot through the wall: into rock underground,
+     * straight out to daylight in a flat world. Taking the platforms into the interior makes the
+     * lining go round them instead.</p>
+     */
+    private static void collectStationBoxes(DemoUnderground.Plan plan, Vec3 origin,
+                                            Set<Long> interior) {
+        int ox = (int) Math.floor(origin.x);
+        int oy = (int) Math.floor(origin.y);
+        int oz = (int) Math.floor(origin.z);
+        for (DemoUnderground.Stop stop : plan.stops) {
+            for (DemoUnderground.Deck deck : stop.decks) {
+                for (int x = deck.minX; x <= deck.maxX; x++) {
+                    for (int z = deck.minZ; z <= deck.maxZ; z++) {
+                        // From the deck up to the top of its level's bore.
+                        int railLevel = deck.y - DemoUnderground.DECK_RISE;
+                        for (int y = deck.y; y <= railLevel + BORE_HEIGHT; y++) {
+                            interior.add(new BlockPos(ox + x, oy + y, oz + z).toLong());
+                        }
+                    }
                 }
             }
         }
@@ -128,7 +166,12 @@ public final class MetroFabric {
                 }
                 IBlockState material;
                 if (face == net.minecraft.util.EnumFacing.DOWN) {
-                    material = Blocks.GRAVEL.getDefaultState();
+                    // Gravel falls. Underground it always rests on rock; built where the network
+                    // stands clear of the ground (a flat world) the whole floor dropped out the
+                    // first time a block beside it updated.
+                    material = world.getBlockState(neighbour.down()).isFullBlock()
+                        ? Blocks.GRAVEL.getDefaultState()
+                        : Blocks.STONEBRICK.getDefaultState();
                 }
                 else if (face == net.minecraft.util.EnumFacing.UP) {
                     // Lit along the running line, so the tunnel reads as a tunnel and the door-side
@@ -181,7 +224,10 @@ public final class MetroFabric {
             BlockPos pos = BlockPos.fromLong(packed);
             boolean edge = false;
             for (net.minecraft.util.EnumFacing face : net.minecraft.util.EnumFacing.HORIZONTALS) {
-                if (!deckBlocks.contains(pos.offset(face).toLong())) {
+                // Open air beside it, not merely the end of the deck: the far side of a side
+                // platform backs onto the tunnel wall and gets no edge strip.
+                BlockPos beside = pos.offset(face);
+                if (!deckBlocks.contains(beside.toLong()) && world.isAirBlock(beside)) {
                     edge = true;
                     break;
                 }
@@ -203,26 +249,46 @@ public final class MetroFabric {
         return placed;
     }
 
-    /** Hangs an arrival board over each platform, with a nameplate and a speaker beside it. */
-    private static int signage(World world, DemoUnderground.Plan plan, Vec3 origin) {
+    /**
+     * Hangs an arrival board over each platform, with a nameplate below and a speaker beside it.
+     * Call after the plan's stations are registered.
+     *
+     * <p>Each board is placed, linked, and then built out to the same five-by-two structure a player
+     * placing one by hand gets. A board is placed directly rather than through the item, so
+     * {@code onBlockPlacedBy} never runs; left to itself it would stay a single block with a
+     * five-block screen painted on air that a rider walks straight through.</p>
+     */
+    public static int signage(World world, DemoUnderground.Plan plan, Vec3 origin) {
         int ox = (int) Math.floor(origin.x);
         int oy = (int) Math.floor(origin.y);
         int oz = (int) Math.floor(origin.z);
         int placed = 0;
         for (DemoUnderground.Stop stop : plan.stops) {
             BlockPos board = new BlockPos(ox + stop.signX, oy + stop.signY, oz + stop.signZ);
-            // Placed directly rather than through the item, so the board is exactly where the
-            // layout wants it. That means onBlockPlacedBy never runs, so it stays a single block
-            // and links itself on its own retry tick — the behaviour every /setblock sign relies on.
             set(world, board, RcmcBlocks.arrivalBoard.getDefaultState());
             placed++;
+            EnumFacing.Axis width = EnumFacing.Axis.Z;
+            net.minecraft.tileentity.TileEntity tile = world.getTileEntity(board);
+            if (tile instanceof TileArrivalBoard) {
+                TileArrivalBoard arrival = (TileArrivalBoard) tile;
+                arrival.linkToNearestStation();
+                width = ArrivalBoardStructure.widthAxis(arrival.facingDegrees());
+                if (arrival.isLinked() && ArrivalBoardStructure.isClear(world, board, width)) {
+                    arrival.setStructured(true);
+                    ArrivalBoardStructure.build(world, board, width);
+                    placed += ArrivalBoardStructure.partPositions(board, width).size();
+                }
+            }
 
             BlockPos plate = board.down(3);
             if (world.isAirBlock(plate)) {
                 set(world, plate, RcmcBlocks.stationSign.getDefaultState());
                 placed++;
             }
-            BlockPos speaker = board.north(2);
+            // Just past the end of the screen, level with its lower row.
+            BlockPos speaker = board.down().offset(
+                EnumFacing.getFacingFromAxis(EnumFacing.AxisDirection.POSITIVE, width),
+                ArrivalBoardStructure.HALF_WIDTH + 1);
             if (world.isAirBlock(speaker)) {
                 set(world, speaker, RcmcBlocks.stationSpeaker.getDefaultState());
                 placed++;
