@@ -74,6 +74,22 @@ class TrackCodecTest {
     }
 
     @Test
+    @DisplayName("a split section's end handles survive a round trip, so it keeps its shape on reload")
+    void endHandlesRoundTrip() {
+        List<TrackNode> nodes = Arrays.asList(new TrackNode(new Vec3(0, 64, 0)),
+            new TrackNode(new Vec3(10, 66, 3)), new TrackNode(new Vec3(20, 64, 9)));
+        TrackSection section = new TrackSection(3, nodes, false, null,
+            com.micatechnologies.minecraft.rcmc.track.TrackPalette.DEFAULT,
+            new Vec3(-8, 60, -4), new Vec3(27, 61, 20), new Vec3(0.1D, 0.99D, 0.0D));
+        TrackSection restored = TrackCodec.readSection(TrackCodec.writeSection(section));
+
+        assertEquals(section.leadIn(), restored.leadIn());
+        assertEquals(section.leadOut(), restored.leadOut());
+        assertEquals(section.startUp(), restored.startUp());
+        assertEquals(section.totalLength(), restored.totalLength(), 1e-9);
+    }
+
+    @Test
     @DisplayName("joins survive, in both directions, and are written only once")
     void joinsRoundTrip() {
         TrackNetwork restored = TrackCodec.readNetwork(TrackCodec.writeNetwork(sampleNetwork()));

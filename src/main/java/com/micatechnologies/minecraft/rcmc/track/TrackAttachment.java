@@ -180,6 +180,10 @@ public final class TrackAttachment {
                 .distanceTo(combined.get(0).position()) <= TrackNetwork.MAX_JOIN_GAP) {
             combined.remove(combined.size() - 1);
         }
-        return new TrackSection(section.id(), combined, closed, section.styleId(), section.palette());
+        // The end built onto gets new nodes and a reflected handle; the far end keeps its own.
+        boolean atEnd = end == TrackNetwork.End.END;
+        return new TrackSection(section.id(), combined, closed, section.styleId(), section.palette(),
+            atEnd ? section.leadIn() : null, atEnd ? null : section.leadOut(),
+            atEnd ? section.startUp() : null);
     }
 }

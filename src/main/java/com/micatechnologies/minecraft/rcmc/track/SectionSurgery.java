@@ -206,7 +206,12 @@ public final class SectionSurgery {
             for (int k = 0; k <= n; k++) {
                 rotated.add(section.nodes().get((node + k) % n));
             }
-            TrackSection open = new TrackSection(id, rotated, false, section.styleId(), section.palette());
+            // The nodes either side of the cut stay on as the ends' handles, and the frames start
+            // from the one the circuit had there: the same curve and roll, opened.
+            TrackSection open = new TrackSection(id, rotated, false, section.styleId(), section.palette(),
+                section.nodes().get(Math.floorMod(node - 1, n)).position(),
+                section.nodes().get((node + 1) % n).position(),
+                section.unbankedFrameAtDistance(section.nodeDistance(node)).up);
             for (int j = 0; j < n; j++) {
                 int k = Math.floorMod(j - node, n);
                 moves.add(new SpanMove(id, start(section, j), end(section, j), id, start(open, k), end(open, k)));
@@ -217,10 +222,15 @@ public final class SectionSurgery {
         if (node <= 0 || node >= n - 1) {
             throw new IllegalArgumentException("open track splits at an inner node, not node " + node + " of " + n);
         }
+        // Each half keeps the neighbour it was cut from as its handle at the cut, and the second
+        // starts its frames where the whole had them: both halves are exactly the curve and roll
+        // they were, so the join has no bend and no twist.
         TrackSection first = new TrackSection(id, new ArrayList<>(section.nodes().subList(0, node + 1)), false,
-            section.styleId(), section.palette());
+            section.styleId(), section.palette(), section.leadIn(),
+            section.nodes().get(node + 1).position(), section.startUp());
         TrackSection second = new TrackSection(newId, new ArrayList<>(section.nodes().subList(node, n)), false,
-            section.styleId(), section.palette());
+            section.styleId(), section.palette(), section.nodes().get(node - 1).position(),
+            section.leadOut(), section.unbankedFrameAtDistance(section.nodeDistance(node)).up);
         for (int j = 0; j < n - 1; j++) {
             if (j < node) {
                 moves.add(new SpanMove(id, start(section, j), end(section, j), id, start(first, j), end(first, j)));
@@ -272,7 +282,9 @@ public final class SectionSurgery {
         List<TrackNode> nodes = new ArrayList<>(first.nodes().subList(0, first.nodes().size() - 1));
         nodes.add(junction(first.nodes().get(first.nodes().size() - 1), second.nodes().get(0)));
         nodes.addAll(second.nodes().subList(1, second.nodes().size()));
-        TrackSection merged = new TrackSection(a.id(), nodes, false, a.styleId(), a.palette());
+        // The outer ends keep their handles; the ends that met are inside the section now.
+        TrackSection merged = new TrackSection(a.id(), nodes, false, a.styleId(), a.palette(),
+            first.leadIn(), second.leadOut(), first.startUp());
 
         List<SpanMove> moves = new ArrayList<>();
         int firstSpans = first.nodes().size() - 1;

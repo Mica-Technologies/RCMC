@@ -54,12 +54,31 @@ public final class TrackSection {
      */
     private final double rollResidual;
 
+    /**
+     * An open section's end handles: the control points just beyond its first and last nodes, and
+     * the up vector its frames start from. {@code null} for the defaults — reflected handles and
+     * world-up — which is what every section built node by node has.
+     *
+     * <p>Set when a section is split from a longer one, so each half keeps the curve, and the roll,
+     * it had as part of the whole: the halves meet with no bend and no twist. Always {@code null}
+     * on a circuit, whose ends are each other.</p>
+     */
+    private final Vec3 leadIn;
+    private final Vec3 leadOut;
+    private final Vec3 startUp;
+
     public TrackSection(int id, List<TrackNode> nodes, boolean closed, String styleId) {
         this(id, nodes, closed, styleId, TrackPalette.DEFAULT);
     }
 
     public TrackSection(int id, List<TrackNode> nodes, boolean closed, String styleId,
                         TrackPalette palette) {
+        this(id, nodes, closed, styleId, palette, null, null, null);
+    }
+
+    /** With end handles; see {@link #leadIn()}. Ignored on a circuit. */
+    public TrackSection(int id, List<TrackNode> nodes, boolean closed, String styleId,
+                        TrackPalette palette, Vec3 leadIn, Vec3 leadOut, Vec3 startUp) {
         if (nodes == null) {
             throw new IllegalArgumentException("nodes must not be null");
         }
@@ -74,6 +93,9 @@ public final class TrackSection {
         this.closed = closed;
         this.styleId = styleId;
         this.palette = palette == null ? TrackPalette.DEFAULT : palette;
+        this.leadIn = closed ? null : leadIn;
+        this.leadOut = closed ? null : leadOut;
+        this.startUp = closed ? null : startUp;
 
         List<Vec3> positions = new ArrayList<>(nodes.size());
         for (TrackNode node : this.nodes) {
@@ -81,12 +103,12 @@ public final class TrackSection {
         }
         CatmullRomSpline spline = closed
             ? CatmullRomSpline.closed(positions)
-            : CatmullRomSpline.withPhantomEndpoints(positions);
+            : CatmullRomSpline.withEndHandles(positions, this.leadIn, this.leadOut);
         this.arcLength = new ArcLengthTable(spline);
 
         int sampleCount = (int) Math.max(MIN_FRAME_SAMPLES,
             Math.min(MAX_FRAME_SAMPLES, arcLength.totalLength() * FRAME_SAMPLES_PER_BLOCK));
-        this.frames = new ParallelTransportFrames(arcLength, sampleCount);
+        this.frames = new ParallelTransportFrames(arcLength, sampleCount, this.startUp);
 
         // Node i sits at u = i / segmentCount. A closed spline has one segment per node (the
         // last spans node n-1 back to node 0); an open one has n-1.
@@ -189,6 +211,32 @@ public final class TrackSection {
         return roll == 0.0D ? base : base.withBank(roll);
     }
 
+    /**
+     * The frame at {@code s} before the authored bank is applied: transported, and corrected for a
+     * circuit's residual. What a section continuing this one must start its own frames from.
+     */
+    public TrackFrame unbankedFrameAtDistance(double s) {
+        double distance = clampDistance(s);
+        TrackFrame base = frames.frameAtDistance(distance);
+        double roll = rollCorrectionAt(distance);
+        return roll == 0.0D ? base : base.withBank(roll);
+    }
+
+    /** The control point before the first node, or {@code null} for a reflected one. */
+    public Vec3 leadIn() {
+        return leadIn;
+    }
+
+    /** The control point after the last node, or {@code null} for a reflected one. */
+    public Vec3 leadOut() {
+        return leadOut;
+    }
+
+    /** The up vector the frames start from, or {@code null} for world-up. */
+    public Vec3 startUp() {
+        return startUp;
+    }
+
     /** Centreline position at distance {@code s}. */
     public Vec3 positionAtDistance(double s) {
         return arcLength.positionAtDistance(clampDistance(s));
@@ -269,7 +317,7 @@ public final class TrackSection {
     /** A copy painted differently. Geometry is rebuilt, which is wasteful but keeps sections
      *  genuinely immutable; recolouring is rare next to anything that reads them. */
     public TrackSection withPalette(TrackPalette newPalette) {
-        return new TrackSection(id, nodes, closed, styleId, newPalette);
+        return new TrackSection(id, nodes, closed, styleId, newPalette, leadIn, leadOut, startUp);
     }
 
     public double totalLength() {
@@ -303,28 +351,38 @@ public final class TrackSection {
 
     // ---- editing: each returns a new section, rebuilding derived geometry ----
 
+    // An end handle belongs to the end node it was taken beside: an edit that replaces that node
+    // with a new end (a node added past it, or the end node removed) drops the handle, and the new
+    // end gets the usual reflected one.
+
     public TrackSection withNode(int index, TrackNode replacement) {
         List<TrackNode> edited = new ArrayList<>(nodes);
         edited.set(index, replacement);
-        return new TrackSection(id, edited, closed, styleId, palette);
+        return new TrackSection(id, edited, closed, styleId, palette, leadIn, leadOut, startUp);
     }
 
     public TrackSection withNodeInserted(int index, TrackNode inserted) {
         List<TrackNode> edited = new ArrayList<>(nodes);
         edited.add(index, inserted);
-        return new TrackSection(id, edited, closed, styleId, palette);
+        boolean newFirst = index == 0;
+        boolean newLast = index == nodes.size();
+        return new TrackSection(id, edited, closed, styleId, palette, newFirst ? null : leadIn,
+            newLast ? null : leadOut, newFirst ? null : startUp);
     }
 
     public TrackSection withNodeRemoved(int index) {
         List<TrackNode> edited = new ArrayList<>(nodes);
         edited.remove(index);
-        return new TrackSection(id, edited, closed, styleId, palette);
+        boolean first = index == 0;
+        boolean last = index == nodes.size() - 1;
+        return new TrackSection(id, edited, closed, styleId, palette, first ? null : leadIn,
+            last ? null : leadOut, first ? null : startUp);
     }
 
     public TrackSection withNodeAppended(TrackNode appended) {
         List<TrackNode> edited = new ArrayList<>(nodes);
         edited.add(appended);
-        return new TrackSection(id, edited, closed, styleId, palette);
+        return new TrackSection(id, edited, closed, styleId, palette, leadIn, null, startUp);
     }
 
     public TrackSection withClosed(boolean nowClosed) {
@@ -332,7 +390,7 @@ public final class TrackSection {
     }
 
     public TrackSection withStyle(String newStyleId) {
-        return new TrackSection(id, nodes, closed, newStyleId, palette);
+        return new TrackSection(id, nodes, closed, newStyleId, palette, leadIn, leadOut, startUp);
     }
 
     /** Reverses the direction of travel. Bank angles negate, since right becomes left. */
@@ -342,7 +400,13 @@ public final class TrackSection {
             TrackNode node = nodes.get(i);
             flipped.add(node.withBank(-node.bankDegrees()));
         }
-        return new TrackSection(id, flipped, closed, styleId, palette);
+        if (closed) {
+            return new TrackSection(id, flipped, true, styleId, palette);
+        }
+        // The same curve run the other way: the handles swap ends, and the frames start from the
+        // one this section's had reached at its far end, so a car's roll is unchanged anywhere.
+        return new TrackSection(id, flipped, false, styleId, palette, leadOut, leadIn,
+            unbankedFrameAtDistance(totalLength()).up);
     }
 
     @Override

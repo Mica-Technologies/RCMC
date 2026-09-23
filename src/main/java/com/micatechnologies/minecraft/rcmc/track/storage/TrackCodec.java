@@ -60,6 +60,9 @@ public final class TrackCodec {
     private static final String KEY_CLOSED = "Closed";
     private static final String KEY_STYLE = "Style";
     private static final String KEY_PALETTE = "Palette";
+    private static final String KEY_LEAD_IN = "LeadIn";
+    private static final String KEY_LEAD_OUT = "LeadOut";
+    private static final String KEY_START_UP = "StartUp";
 
     private static final String KEY_X = "X";
     private static final String KEY_Y = "Y";
@@ -225,7 +228,33 @@ public final class TrackCodec {
             nodeList.appendTag(writeNode(node));
         }
         tag.setTag(KEY_NODES, nodeList);
+        // Only a section split from a longer one has these; absent means the defaults, which is
+        // also what every save from before they existed reads as.
+        writeVec(tag, KEY_LEAD_IN, section.leadIn());
+        writeVec(tag, KEY_LEAD_OUT, section.leadOut());
+        writeVec(tag, KEY_START_UP, section.startUp());
         return tag;
+    }
+
+    private static void writeVec(NBTTagCompound tag, String key,
+                                 com.micatechnologies.minecraft.rcmc.track.math.Vec3 v) {
+        if (v == null) {
+            return;
+        }
+        NBTTagCompound vec = new NBTTagCompound();
+        vec.setDouble(KEY_X, v.x);
+        vec.setDouble(KEY_Y, v.y);
+        vec.setDouble(KEY_Z, v.z);
+        tag.setTag(key, vec);
+    }
+
+    private static com.micatechnologies.minecraft.rcmc.track.math.Vec3 readVec(NBTTagCompound tag, String key) {
+        if (!tag.hasKey(key, 10)) {
+            return null;
+        }
+        NBTTagCompound vec = tag.getCompoundTag(key);
+        return new com.micatechnologies.minecraft.rcmc.track.math.Vec3(
+            vec.getDouble(KEY_X), vec.getDouble(KEY_Y), vec.getDouble(KEY_Z));
     }
 
     public static TrackSection readSection(NBTTagCompound tag) {
@@ -250,7 +279,10 @@ public final class TrackCodec {
             nodes,
             tag.getBoolean(KEY_CLOSED),
             tag.hasKey(KEY_STYLE, 8) ? tag.getString(KEY_STYLE) : null,
-            palette);
+            palette,
+            readVec(tag, KEY_LEAD_IN),
+            readVec(tag, KEY_LEAD_OUT),
+            readVec(tag, KEY_START_UP));
     }
 
     public static NBTTagCompound writeNode(TrackNode node) {
