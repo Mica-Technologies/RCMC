@@ -197,6 +197,18 @@ public final class TransitSignText {
      */
     public static String announcement(TransitLine line, int serviceDirection, int rawStopsAway,
                                       boolean atPlatform) {
+        return announcement(line, serviceDirection, rawStopsAway, atPlatform, "");
+    }
+
+    /**
+     * As above, naming the platform the train is pulling into — for a station with more than one,
+     * where "now arriving" alone leaves a passenger on the wrong island. Only the arrival call can
+     * say it: the berth is resolved once a train is running to this station, not before.
+     *
+     * @param platformLabel the berth's label, or empty to leave the platform out
+     */
+    public static String announcement(TransitLine line, int serviceDirection, int rawStopsAway,
+                                      boolean atPlatform, String platformLabel) {
         if (rawStopsAway < 0) {
             return null;
         }
@@ -209,11 +221,42 @@ public final class TransitSignText {
         }
         if (rawStopsAway == 0) {
             sentence.append(atPlatform ? " is now arriving" : " is now approaching");
+            if (platformLabel != null && !platformLabel.isEmpty()) {
+                sentence.append(atPlatform ? " at platform " : " platform ").append(platformLabel);
+            }
         } else if (rawStopsAway == 1) {
             sentence.append(" is one stop away");
         } else {
             sentence.append(" is ").append(rawStopsAway).append(" stops away");
         }
         return sentence.append('.').toString();
+    }
+
+    /**
+     * Which of a line's stops a strip sign with room for {@code rows} rows can show, as
+     * {@code {first, last}} inclusive, keeping {@code here} in view.
+     *
+     * <p>A sign used to show the first stops and cut the rest to "+N more" — so on a long line,
+     * the station the sign stands in, the one row it exists to mark, was often cut. The window is
+     * centred on it instead; a row at either end is given up to say what is off the sign that way,
+     * and only when something is.</p>
+     *
+     * @param here the sign's own stop, or {@code -1} if it is not on the line
+     */
+    public static int[] stopWindow(int stopCount, int here, int rows) {
+        if (stopCount <= rows) {
+            return new int[] {0, stopCount - 1};
+        }
+        int anchor = here < 0 ? 0 : here;
+        // Room for the stops once the "more" rows are paid for, trying the cheaper layouts first.
+        for (int shown = rows - 1; shown >= 1; shown--) {
+            int first = Math.max(0, Math.min(anchor - shown / 2, stopCount - shown));
+            int last = first + shown - 1;
+            int needed = shown + (first > 0 ? 1 : 0) + (last < stopCount - 1 ? 1 : 0);
+            if (needed <= rows) {
+                return new int[] {first, last};
+            }
+        }
+        return new int[] {anchor, anchor};
     }
 }

@@ -135,4 +135,43 @@ class TransitSignTextTest {
             TransitSignText.announcement(red, -1, 2, false));
         assertNull(TransitSignText.announcement(red, 1, -1, false));
     }
+
+    @Test
+    @DisplayName("at a station with several platforms the arrival call says which one")
+    void announcementNamesThePlatform() {
+        TransitLine line = new TransitLine("Circle", java.util.Arrays.asList(
+            new TransitStation("Kingsway", new com.micatechnologies.minecraft.rcmc.track.TrackRef(1, 0.0D)),
+            new TransitStation("Lakeshore", new com.micatechnologies.minecraft.rcmc.track.TrackRef(1, 50.0D))),
+            false, "INBOUND", "OUTBOUND");
+        String approaching = TransitSignText.announcement(line, 1, 0, false, "2");
+        String arriving = TransitSignText.announcement(line, 1, 0, true, "2");
+        org.junit.jupiter.api.Assertions.assertTrue(approaching.endsWith("is now approaching platform 2."), approaching);
+        org.junit.jupiter.api.Assertions.assertTrue(arriving.endsWith("is now arriving at platform 2."), arriving);
+        org.junit.jupiter.api.Assertions.assertFalse(
+            TransitSignText.announcement(line, 1, 1, false, "2").contains("platform"),
+            "a train further out has not chosen its platform here yet");
+        org.junit.jupiter.api.Assertions.assertEquals(TransitSignText.announcement(line, 1, 0, false),
+            TransitSignText.announcement(line, 1, 0, false, ""), "no label, no platform");
+    }
+
+    @Test
+    @DisplayName("a line-map sign always shows its own station, and never more rows than it has")
+    void stopWindowKeepsHereInView() {
+        for (int count = 1; count <= 30; count++) {
+            for (int here = 0; here < count; here++) {
+                for (int rows = 3; rows <= 10; rows++) {
+                    int[] w = TransitSignText.stopWindow(count, here, rows);
+                    String at = count + " stops, here " + here + ", " + rows + " rows: " + w[0] + ".." + w[1];
+                    org.junit.jupiter.api.Assertions.assertTrue(w[0] <= here && here <= w[1], "here cut off — " + at);
+                    int used = (w[1] - w[0] + 1) + (w[0] > 0 ? 1 : 0) + (w[1] < count - 1 ? 1 : 0);
+                    org.junit.jupiter.api.Assertions.assertTrue(used <= rows, "overflows — " + at);
+                    org.junit.jupiter.api.Assertions.assertTrue(count > rows || (w[0] == 0 && w[1] == count - 1),
+                        "a line that fits is shown whole — " + at);
+                }
+            }
+        }
+        // The case that was wrong: the 14th stop of 20, on a ten-row sign.
+        int[] w = TransitSignText.stopWindow(20, 13, 10);
+        org.junit.jupiter.api.Assertions.assertTrue(w[0] <= 13 && 13 <= w[1]);
+    }
 }

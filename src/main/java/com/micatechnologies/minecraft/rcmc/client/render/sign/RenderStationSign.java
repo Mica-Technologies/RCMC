@@ -2,11 +2,15 @@ package com.micatechnologies.minecraft.rcmc.client.render.sign;
 
 import com.micatechnologies.minecraft.rcmc.block.sign.TileStationSign;
 import com.micatechnologies.minecraft.rcmc.physics.transit.TransitLine;
+import com.micatechnologies.minecraft.rcmc.physics.transit.TransitPlatform;
+import com.micatechnologies.minecraft.rcmc.physics.transit.TransitSignText;
 import com.micatechnologies.minecraft.rcmc.physics.transit.TransitStation;
 import com.micatechnologies.minecraft.rcmc.world.RcmcWorldState;
+import com.micatechnologies.minecraft.rcmc.track.math.Vec3;
 import java.util.List;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.tileentity.TileEntitySpecialRenderer;
+import net.minecraft.util.math.BlockPos;
 
 /**
  * Draws the line-map sign: the linked line's stops in route order with a "you are here" marker.
@@ -67,17 +71,58 @@ public class RenderStationSign extends TileEntitySpecialRenderer<TileStationSign
         colours[0] = HEADER_COLOUR;
 
         int row = 1;
-        for (int i = 0; i < line.stationCount() && row < lines.length; i++) {
-            TransitStation stop = line.station(i);
-            boolean here = stop.name().equalsIgnoreCase(sign.stationName());
-            if (i == MAX_STOPS_SHOWN - 1 && line.stationCount() > MAX_STOPS_SHOWN) {
-                lines[row] = "... +" + (line.stationCount() - i) + " more";
-                colours[row] = MUTED_COLOUR;
-                break;
-            }
-            lines[row] = (here ? "> " : "- ") + stop.name();
-            colours[row] = here ? HERE_COLOUR : STOP_COLOUR;
+        String platform = platformHere(state, sign);
+        if (platform != null) {
+            lines[row] = "Platform " + platform;
+            colours[row] = MUTED_COLOUR;
             row++;
         }
+        int here = line.indexOfStation(sign.stationName());
+        int[] window = TransitSignText.stopWindow(line.stationCount(), here, lines.length - row);
+        if (window[0] > 0) {
+            lines[row] = "... " + window[0] + " before";
+            colours[row] = MUTED_COLOUR;
+            row++;
+        }
+        for (int i = window[0]; i <= window[1]; i++) {
+            TransitStation stop = line.station(i);
+            lines[row] = (i == here ? "> " : "- ") + stop.name();
+            colours[row] = i == here ? HERE_COLOUR : STOP_COLOUR;
+            row++;
+        }
+        if (window[1] < line.stationCount() - 1) {
+            lines[row] = "... +" + (line.stationCount() - 1 - window[1]) + " more";
+            colours[row] = MUTED_COLOUR;
+        }
+    }
+
+    /**
+     * The label of the berth this sign stands at, when its station has more than one and the berth
+     * has a label: the one whose stop point is nearest the sign. {@code null} otherwise.
+     */
+    private static String platformHere(RcmcWorldState state, TileStationSign sign) {
+        TransitStation station = state.transit().station(sign.stationName());
+        if (station == null || station.platforms().size() < 2) {
+            return null;
+        }
+        BlockPos at = sign.getPos();
+        String best = null;
+        double bestSq = Double.MAX_VALUE;
+        for (TransitPlatform platform : station.platforms()) {
+            if (platform.label().isEmpty()
+                || state.network().section(platform.stopPoint().sectionId()) == null) {
+                continue;
+            }
+            Vec3 p = state.network().frameAt(platform.stopPoint()).position;
+            double dx = p.x - (at.getX() + 0.5D);
+            double dy = p.y - at.getY();
+            double dz = p.z - (at.getZ() + 0.5D);
+            double sq = dx * dx + dy * dy + dz * dz;
+            if (sq < bestSq) {
+                bestSq = sq;
+                best = platform.label();
+            }
+        }
+        return best;
     }
 }

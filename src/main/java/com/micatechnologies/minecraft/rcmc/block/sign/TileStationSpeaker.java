@@ -166,7 +166,8 @@ public class TileStationSpeaker extends TileTransitSignBase {
                         snapshot.serviceDirection(), snapshot.nextStopIndex(), stationIndex);
                     String text = TransitSignText.announcement(line,
                         arriving == 0 ? snapshot.serviceDirection() : arriving,
-                        raw, snapshot.atPlatform());
+                        raw, snapshot.atPlatform(), raw == 0 && hasSeveralPlatforms(state)
+                            ? snapshot.platformLabel() : "");
                     if (text != null) {
                         announce(text);
                     }
@@ -177,6 +178,13 @@ public class TileStationSpeaker extends TileTransitSignBase {
         // Forget trains that have gone out of service, so the map cannot grow without bound and a
         // returning train re-announces from a clean slate.
         lastPhase.keySet().retainAll(present);
+    }
+
+    /** Whether this speaker's station has more than one berth, so an arrival must say which. */
+    private boolean hasSeveralPlatforms(RcmcWorldState state) {
+        com.micatechnologies.minecraft.rcmc.physics.transit.TransitStation station =
+            state.transit().station(stationName());
+        return station != null && station.platforms().size() > 1;
     }
 
     /**
