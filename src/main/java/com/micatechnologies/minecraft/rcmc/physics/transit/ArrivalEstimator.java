@@ -6,8 +6,10 @@ package com.micatechnologies.minecraft.rcmc.physics.transit;
  * <p>"Stops away" rather than minutes, on purpose. It is exact and deterministic — computed by
  * replaying the service pattern ({@link LineService#advanceToNextStop}'s exact stepping rules:
  * loop wrap, shuttle terminus bounce) from the train's next stop until it lands on the queried
- * station — where a minutes estimate would need speeds, dwell assumptions and a wall clock. A
- * minutes overlay can come later as pure presentation; this stays the truth underneath it.</p>
+ * station — where a minutes estimate would need speeds, dwell assumptions and a wall clock.
+ * Minutes are layered on top by {@link #secondsToStations}, from leg times the line's trains have
+ * been measured running ({@link LineTimings}); stops stay the truth underneath them, and the
+ * fallback wherever a leg has not been timed.</p>
  *
  * <p>Pure static function over pure types; the board renderer calls it per frame and the
  * physics never does.</p>
@@ -90,6 +92,79 @@ public final class ArrivalEstimator {
             index = next;
         }
         return -1L;
+    }
+
+    /**
+     * Seconds until a service reaches each station of its line, on its next visit — what an arrival
+     * board shows as minutes. {@code -1} for a station it cannot yet estimate.
+     *
+     * <p>Built from {@link LineTimings}: legs the line's trains have actually been timed running,
+     * added up along the same service pattern {@link #stopsAway} replays. The leg the train is on
+     * now counts from when it arrived at its last stop, so a train that has been running a while is
+     * nearer than a train that has just left. A leg nobody has timed yet ends the estimate there,
+     * and every station past it stays {@code -1} — a board then falls back to counting stops rather
+     * than guessing.</p>
+     *
+     * @param approaching          whether the train is running to {@code nextStopIndex}, rather than
+     *                             standing at it
+     * @param ticksSinceArrival    ticks since it last arrived at a stop, or negative if unknown —
+     *                             the first stop after entering service
+     * @param fallbackTicksToNext  an estimate for reaching {@code nextStopIndex} when the leg is
+     *                             untimed or already overrun, or negative for none
+     */
+    public static double[] secondsToStations(TransitLine line, LineTimings timings,
+                                             int serviceDirection, int nextStopIndex,
+                                             boolean approaching, long ticksSinceArrival,
+                                             double fallbackTicksToNext, double tickSeconds) {
+        int count = line.stationCount();
+        double[] seconds = new double[count];
+        java.util.Arrays.fill(seconds, -1.0D);
+        if (timings == null || timings.stationCount() != count
+            || nextStopIndex < 0 || nextStopIndex >= count) {
+            return seconds;
+        }
+        int index = nextStopIndex;
+        int direction = serviceDirection >= 0 ? 1 : -1;
+        double since = Math.max(0L, ticksSinceArrival);
+        double ticks;
+        if (!approaching) {
+            ticks = 0.0D;
+        }
+        else {
+            double leg = timings.legTicks(index, direction);
+            ticks = leg >= 0.0D && ticksSinceArrival >= 0 ? leg - since : -1.0D;
+            if (ticks < 0.0D) {
+                // Untimed, or running late on it: the train's own distance is the better guess.
+                ticks = fallbackTicksToNext;
+            }
+            if (ticks < 0.0D) {
+                return seconds;
+            }
+        }
+        seconds[index] = ticks * tickSeconds;
+        // Every later leg is timed from the arrival that began it. Standing at a stop, that arrival
+        // is this one, already `since` ticks ago; running, it is the next stop, `ticks` from now.
+        double clock = approaching ? ticks : -since;
+        for (int steps = 0; steps < 2 * count; steps++) {
+            int next = index + direction;
+            if (line.isLoop()) {
+                next = Math.floorMod(next, count);
+            }
+            else if (next < 0 || next >= count) {
+                direction = -direction;
+                next = index + direction;
+            }
+            index = next;
+            double leg = timings.legTicks(index, direction);
+            if (leg < 0.0D) {
+                break;
+            }
+            clock += leg;
+            if (seconds[index] < 0.0D) {
+                seconds[index] = Math.max(0.0D, clock) * tickSeconds;
+            }
+        }
+        return seconds;
     }
 
     /**

@@ -131,6 +131,26 @@ public final class TransitSignText {
     }
 
     /**
+     * An arrival board row: {@link #stopsLabel(int, boolean, String, String)}, but in minutes once
+     * the line's legs have been timed — {@code "3 min"}. A train due at this very station keeps its
+     * {@code BRD} / {@code APPR}, which say more than any number of minutes could.
+     *
+     * @param secondsAway the estimate for this train reaching this station, negative if none
+     */
+    public static String arrivalLabel(int rawStopsAway, boolean atPlatform, String platformLabel,
+                                      String directionLabel, double secondsAway) {
+        if (rawStopsAway <= 0 || secondsAway < 0.0D) {
+            return stopsLabel(rawStopsAway, atPlatform, platformLabel, directionLabel);
+        }
+        return minutesLabel(secondsAway);
+    }
+
+    /** Whole minutes, rounded up and never below one: a train 40 s away is {@code "1 min"}. */
+    public static String minutesLabel(double seconds) {
+        return Math.max(1L, (long) Math.ceil(seconds / 60.0D)) + " min";
+    }
+
+    /**
      * The in-car announcement made shortly after departure, naming the station the train is now
      * running to: {@code "Next stop: Alewife."} The station name is the one the service is bound
      * for next, resolved by the caller.

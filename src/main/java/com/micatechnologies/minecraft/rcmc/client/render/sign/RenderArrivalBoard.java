@@ -164,7 +164,7 @@ public class RenderArrivalBoard extends TileEntitySpecialRenderer<TileArrivalBoa
         // label, the row phrasing and the speaker announcement all come from TransitSignText, so a
         // board and a speaker can never describe the same train differently. Insertion order keeps
         // the groups stable per line definition rather than shuffling per frame.
-        Map<String, List<String>> byDirection = new LinkedHashMap<>();
+        Map<String, List<Row>> byDirection = new LinkedHashMap<>();
         for (TransitLine line : serving) {
             int stationIndex = line.indexOfStation(board.stationName());
             for (int direction : new int[] {1, -1}) {
@@ -189,42 +189,50 @@ public class RenderArrivalBoard extends TileEntitySpecialRenderer<TileArrivalBoa
                 // whose next stop is this station — the one case where the berth it resolved is
                 // one of ours. That is what turns an island's two rows from "a train is coming"
                 // into "a train is coming, and it is the far side you want".
-                String text = TransitSignText.stopsLabel(stops, snapshot.atPlatform(),
-                    snapshot.platformLabel(), line.labelFor(arriving));
+                double seconds = snapshot.secondsTo(stationIndex);
+                String text = TransitSignText.arrivalLabel(stops, snapshot.atPlatform(),
+                    snapshot.platformLabel(), line.labelFor(arriving), seconds);
                 if (text == null) {
                     continue;
                 }
-                byDirection.get(TransitSignText.destinationLabel(line, arriving)).add(text);
+                byDirection.get(TransitSignText.destinationLabel(line, arriving))
+                    .add(new Row(text, Row.order(stops, snapshot.atPlatform(), seconds)));
             }
         }
 
-        for (Map.Entry<String, List<String>> group : byDirection.entrySet()) {
-            List<String> rows = group.getValue();
-            // "Boarding" sorts before numbers by luck of the alphabet not being trusted here:
-            // sort by the leading number, Boarding first.
-            Collections.sort(rows, (a, b) -> Integer.compare(sortKey(a), sortKey(b)));
+        for (Map.Entry<String, List<Row>> group : byDirection.entrySet()) {
+            List<Row> rows = group.getValue();
+            Collections.sort(rows, (a, b) -> Double.compare(a.order, b.order));
             if (rows.isEmpty()) {
                 out.add(group.getKey() + "  --");
                 continue;
             }
             for (int i = 0; i < Math.min(ROWS_PER_DIRECTION, rows.size()); i++) {
-                out.add(i == 0 ? group.getKey() + "  " + rows.get(i) : "      " + rows.get(i));
+                String text = rows.get(i).text;
+                out.add(i == 0 ? group.getKey() + "  " + text : "      " + text);
             }
         }
     }
 
-    private static int sortKey(String row) {
-        if (row.startsWith("BRD")) {
-            return -1;
+    /**
+     * One row's text and where it sorts. Ordered by what the row means, not by parsing what it says:
+     * a board can mix "3 min" rows with "2 stops" rows for a line whose far legs are not timed yet.
+     */
+    private static final class Row {
+        final String text;
+        final double order;
+
+        Row(String text, double order) {
+            this.text = text;
+            this.order = order;
         }
-        if (row.startsWith("APPR")) {
-            return 0;
-        }
-        int space = row.indexOf(' ');
-        try {
-            return Integer.parseInt(space < 0 ? row : row.substring(0, space));
-        } catch (NumberFormatException e) {
-            return Integer.MAX_VALUE;
+
+        /** Boarding first, then approaching, then soonest by time, then untimed by stops. */
+        static double order(int stops, boolean atPlatform, double seconds) {
+            if (stops == 0) {
+                return atPlatform ? -2.0D : -1.0D;
+            }
+            return seconds >= 0.0D ? seconds : 1.0e9D + stops;
         }
     }
 }
