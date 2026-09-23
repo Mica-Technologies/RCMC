@@ -188,7 +188,68 @@ public class EntityCoasterCar extends Entity {
         // Either way it is never applied while the passenger list is being walked, which is the
         // point of queueing it.
         applyPendingDismounts();
+        applyStepOffs();
         boardWalkIns();
+    }
+
+    /** Coaster riders who got off, with where along the car and which side they sat. */
+    private final java.util.Map<java.util.UUID, double[]> stepOffs = new java.util.HashMap<>();
+
+    /**
+     * Remembers where a coaster rider sat as they get off, before vanilla moves them.
+     *
+     * <p>Vanilla's dismount search looks for room around the vehicle and, with the car on open
+     * track, settled on its roof: a rider who got off at the station was left standing on top of
+     * the car. They are stepped off beside their own seat instead, on the next tick, since vanilla
+     * places them after this returns.</p>
+     */
+    private void noteStepOff(Entity passenger) {
+        if (this.world.isRemote || frame == null || !(passenger instanceof EntityPlayer)) {
+            return;
+        }
+        Train train = trainOrNull();
+        if (train == null || train.spec().carStyle() == TrainSpec.CarStyle.METRO) {
+            return;
+        }
+        double dx = passenger.posX - frame.position.x;
+        double dz = passenger.posZ - frame.position.z;
+        double along = dx * frame.forward.x + dz * frame.forward.z;
+        double across = dx * frame.right.x + dz * frame.right.z;
+        stepOffs.put(passenger.getUniqueID(), new double[] {along, across});
+    }
+
+    private void applyStepOffs() {
+        if (stepOffs.isEmpty() || this.world.isRemote) {
+            return;
+        }
+        Train train = trainOrNull();
+        boolean moving = train != null && Math.abs(train.velocity()) > 1.0D;
+        for (java.util.Map.Entry<java.util.UUID, double[]> entry : stepOffs.entrySet()) {
+            EntityPlayer player = this.world.getPlayerEntityByUUID(entry.getKey());
+            // Moving: the restraint puts them back in their seat. Far off: they were teleported, and
+            // are not dragged back to the car.
+            if (moving || frame == null || player == null || player.isRiding() || !player.isEntityAlive()
+                || player.getDistanceSq(this) > 16.0D) {
+                continue;
+            }
+            double along = entry.getValue()[0];
+            double across = com.micatechnologies.minecraft.rcmc.physics.CoasterCarLayout
+                .stepOffAcross(entry.getValue()[1]);
+            double x = frame.position.x + frame.forward.x * along + frame.right.x * across;
+            double z = frame.position.z + frame.forward.z * along + frame.right.z * across;
+            // Track level first, then up a little for a platform built at car-floor height. Where
+            // every spot is blocked, vanilla's choice stands.
+            for (double lift : new double[] {0.0D, 0.5D, 1.0D}) {
+                double y = frame.position.y + lift;
+                AxisAlignedBB box = player.getEntityBoundingBox()
+                    .offset(x - player.posX, y - player.posY, z - player.posZ);
+                if (this.world.getCollisionBoxes(player, box).isEmpty()) {
+                    player.setPositionAndUpdate(x, y, z);
+                    break;
+                }
+            }
+        }
+        stepOffs.clear();
     }
 
     private static double clamp(double v) {
@@ -226,6 +287,7 @@ public class EntityCoasterCar extends Entity {
 
     @Override
     protected void removePassenger(Entity passenger) {
+        noteStepOff(passenger);
         super.removePassenger(passenger);
         standingOffsets.remove(passenger.getUniqueID());
         if (!this.world.isRemote && passenger instanceof EntityPlayer) {

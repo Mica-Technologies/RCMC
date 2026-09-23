@@ -42,6 +42,21 @@ class CarSeatingTest {
     }
 
     @Test
+    @DisplayName("a coaster rider steps off beside their own seat, clear of the car body")
+    void coasterRidersStepOffBesideTheirSeat() {
+        // Half a player's width: where they land must not overlap the tub, or they stand in it.
+        double playerHalfWidth = 0.3D;
+        for (int seat = 0; seat < CoasterCarLayout.ABREAST; seat++) {
+            double sat = CoasterCarLayout.across(seat);
+            double off = CoasterCarLayout.stepOffAcross(sat);
+            assertTrue(Math.signum(off) == Math.signum(sat),
+                "seat " + seat + " at " + sat + " steps off the other side, to " + off);
+            assertTrue(Math.abs(off) - playerHalfWidth > CoasterCarLayout.BODY_HALF_WIDTH,
+                "seat " + seat + " steps off to " + off + ", inside the body");
+        }
+    }
+
+    @Test
     @DisplayName("an unknown spec is treated as a single seat rather than as no seats")
     void nullSpecIsRideable() {
         assertEquals(1, CarSeating.capacity(null),
