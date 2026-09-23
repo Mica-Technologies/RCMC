@@ -48,6 +48,9 @@ public interface RcmcProxy {
     /** Opens the ride operator panel on {@code view}, or refreshes it if already open. Client only. */
     void showRideController(com.micatechnologies.minecraft.rcmc.net.RideView view, boolean open);
 
+    /** Opens or refreshes the metro line control desk. Client only; the server does nothing. */
+    void showLineControl(com.micatechnologies.minecraft.rcmc.net.LineView view, boolean open);
+
     /** Opens or refreshes the track editor screen. Client only; a no-op on a server. */
     void showTrackEditor(com.micatechnologies.minecraft.rcmc.net.TrackEditView view, boolean open);
 }

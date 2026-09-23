@@ -17,18 +17,22 @@ what makes track "metro" is its *style* and the trains you run on it.
 
 What differs is how you shape it. Transit alignments want:
 
-- **Gentle radii.** Coaster curves are tight on purpose. A metro at cruise speed on a coaster
-  radius produces lateral G a standing passenger will feel.
+- **Gentle radii.** Coaster curves are tight on purpose. Trains slow for every curve to keep the
+  sideways push on a standing passenger to about an eighth of a g, braking for it in advance the
+  way they brake for a station — so a tight curve costs time rather than comfort. A 30-block
+  radius holds them to about 6 blocks/s; line speed (15) needs a radius of about 190.
 - **Level platforms.** A station on a grade is buildable and will work, but a berthed train that
   wants to roll is a train fighting its own holding brake.
 - **Long, shallow gradients.** Metro trains climb under traction, not momentum.
 
-!!! warning "The tool does not enforce any of this yet"
+!!! tip "Hold the transit tool to see what to fix"
 
-    Transit-specific validation — gentler curve limits, level-platform checks, gradient limits at
-    stations — is not implemented. The transit tool previews where a click lands, not whether the
-    track there is suitable, and the validator checks only the shape of the track, not its curves
-    or gradients. For now, this is on you.
+    While you hold the transit tool, the track every line runs on is checked and anything worth a
+    look is marked on it: **curves** that slow trains below 5 blocks/s, **grades** over 6% (red over
+    10%, where a train stopped facing uphill can barely start), and **platforms** on a grade over
+    1.5% or a curve tighter than 150 blocks. Creating a line tells you how many there are, and
+    [`/rcmc line check`](../reference/commands.md#rcmc-line) lists them with coordinates. Nothing is
+    refused — they are advice.
 
 ### Give it the transit look
 
@@ -161,7 +165,19 @@ valleyed parked train** — taking control *is* the recovery.
 ```
 
 `line trains` lists every train in service — or every one on a line — with its direction, where it
-is heading, and whether it is running, boarding, or being held.
+is heading, and whether it is running, boarding, or being held — and if it is waiting out on the
+line, which train it is waiting behind.
+
+**Or run it from a Line Control Desk** (`rcmc:line_desk`). Right-click it for a live view of a
+line's trains and what each is doing, with buttons to **add a train** (it goes to the first clear
+platform and starts in service), **remove** one, **hold** one at its next platform with its doors
+open (and release it), and set the dwell and headway. The desk runs every line: it opens on the one
+serving the station nearest it, and the arrows step through the rest.
+
+**Trains never run into each other.** With or without signals, a train stops five blocks short of
+any train ahead of it, and one standing at a platform holds its brakes, grade or not. Two trains
+running *at each other* on one track stop short and stay there; `line trains` shows them in red,
+and a train started facing the wrong way on a line is turned to run with the rest.
 
 **Dwell** is how long the doors stay open at each stop; the default is 10 seconds. **Headway** is
 the least time between two trains leaving the same platform in the same direction. With a headway
@@ -354,8 +370,12 @@ its signals grant it. One braking law serves both — a train held at red simply
 distance of zero, doors shut, and proceeds when the authority extends.
 
 Equal division is a starting point, not a design. A real layout puts boundaries where a train can
-sensibly be held; **placing individual boundaries is not implemented yet**, so for now the count is
-the only knob.
+sensibly be held — on the approach to a platform, clear of the one before — so place them by hand:
+in the transit tool's **signal** mode, click the track where a signal goes and the block it lands in
+is split in two; sneak-click one to take it out. Every signal is marked while you are in signal mode.
+It signals every line that stops on that track. The tool warns when a block is shorter than the
+trains running on it, or when the signal stands inside a platform, where a held train would be half
+in the station.
 
 ---
 
@@ -369,7 +389,7 @@ Things you will run into, listed so they read as gaps rather than bugs:
   arrived — which, after a reload, is what it is.
 - **No door-alignment markers.** The platform knows where the train berths, but nothing marks where
   each doorway will land.
-- **Signal boundaries are equal divisions only** (above).
+- **Holds are not saved.** A train held at the desk is released by a restart.
 - **In multiplayer, a *remote* player walking inside a moving car appears frozen** where they
   boarded. Their own client is correct; per-passenger offsets are not synced yet.
 - **No per-agency liveries.** Metro stock is one look, painted by `/rcmc paint`.

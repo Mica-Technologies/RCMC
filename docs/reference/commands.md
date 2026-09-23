@@ -341,6 +341,9 @@ change when a service reverses. Announcements convert it to the rider's own left
 /rcmc line set <name> dwell <seconds>               how long the doors stay open at each stop
 /rcmc line set <name> headway <seconds|off>         least time between departures from a platform
 /rcmc line trains [name]                            list trains in service, and what holds any up
+/rcmc line hold <trainId>                           hold it at its next platform, doors open
+/rcmc line release <trainId>                        let it go again
+/rcmc line check [name]                             slow curves, steep grades, awkward platforms
 ```
 
 Dwell defaults to 10 seconds and headway to off; both accept up to 600 seconds, are saved with the

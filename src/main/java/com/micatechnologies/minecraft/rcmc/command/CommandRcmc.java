@@ -85,7 +85,7 @@ public class CommandRcmc extends CommandBase {
         }
         if (args.length == 2 && "line".equalsIgnoreCase(args[0])) {
             return getListOfStringsMatchingLastWord(args, "create", "list", "remove", "start",
-                "stop", "signals", "set", "trains");
+                "stop", "signals", "set", "trains", "check", "hold", "release");
         }
         if (args.length == 2 && "demo".equalsIgnoreCase(args[0])) {
             return getListOfStringsMatchingLastWord(args, "shuttle");
@@ -1322,6 +1322,25 @@ public class CommandRcmc extends CommandBase {
                 lineTrains(sender, state, transit, args);
                 return;
             }
+            case "check": {
+                lineCheck(sender, state, transit, args);
+                return;
+            }
+            case "hold":
+            case "release": {
+                if (args.length < 3) {
+                    throw new CommandException("/rcmc line " + args[1] + " <trainId>");
+                }
+                int trainId = parseInt(args[2]);
+                boolean hold = "hold".equalsIgnoreCase(args[1]);
+                if (!transit.setHeld(trainId, hold)) {
+                    throw new CommandException("Train " + trainId + " is not in service");
+                }
+                reply(sender, TextFormatting.GREEN, hold
+                    ? "Holding train #" + trainId + " at its next platform, doors open."
+                    : "Released train #" + trainId + ".");
+                return;
+            }
             default:
                 throw new CommandException("Unknown line subcommand " + args[1]);
         }
@@ -1366,6 +1385,55 @@ public class CommandRcmc extends CommandBase {
             + ". Trains already running pick it up at their next stop.");
     }
 
+    /**
+     * {@code /rcmc line check [name]} — the metro building checks, in chat: slow curves, steep
+     * grades, and platforms that are not level or straight. The transit tool shows the same on the
+     * track while it is held.
+     */
+    private void lineCheck(ICommandSender sender, RcmcWorldState state,
+                           com.micatechnologies.minecraft.rcmc.physics.transit.TransitSystem transit,
+                           String[] args) throws CommandException {
+        java.util.Collection<com.micatechnologies.minecraft.rcmc.physics.transit.TransitLine> lines;
+        if (args.length > 2) {
+            com.micatechnologies.minecraft.rcmc.physics.transit.TransitLine line = transit.line(args[2]);
+            if (line == null) {
+                throw new CommandException("No line named " + args[2] + " — try /rcmc line list");
+            }
+            lines = java.util.Collections.singletonList(line);
+        }
+        else {
+            lines = transit.lines();
+        }
+        if (lines.isEmpty()) {
+            throw new CommandException("No lines yet.");
+        }
+        List<com.micatechnologies.minecraft.rcmc.rating.RideWarning> warnings =
+            com.micatechnologies.minecraft.rcmc.physics.transit.MetroCheck.check(state.network(), transit, lines);
+        if (warnings.isEmpty()) {
+            reply(sender, TextFormatting.GREEN, "Nothing to flag: no slow curves, steep grades or awkward platforms.");
+            return;
+        }
+        reply(sender, TextFormatting.YELLOW, warnings.size() + " thing(s) to look at — hold the transit tool to "
+            + "see them on the track:");
+        int shown = 0;
+        for (com.micatechnologies.minecraft.rcmc.rating.RideWarning warning : warnings) {
+            if (++shown > 12) {
+                reply(sender, TextFormatting.GRAY, "  … and " + (warnings.size() - 12) + " more.");
+                break;
+            }
+            TrackSection section = state.network().section(warning.sectionId);
+            String where = "";
+            if (section != null) {
+                com.micatechnologies.minecraft.rcmc.track.math.Vec3 at =
+                    section.frameAtDistance((warning.from + warning.to) * 0.5D).position;
+                where = " (" + (int) Math.floor(at.x) + ", " + (int) Math.floor(at.y) + ", "
+                    + (int) Math.floor(at.z) + ")";
+            }
+            reply(sender, warning.severity == com.micatechnologies.minecraft.rcmc.rating.RideWarning.Severity.DANGER
+                ? TextFormatting.RED : TextFormatting.GOLD, "  " + warning.message() + where);
+        }
+    }
+
     /** {@code /rcmc line trains [name]} — every train in service, or every one on a line. */
     private void lineTrains(ICommandSender sender, RcmcWorldState state,
                             com.micatechnologies.minecraft.rcmc.physics.transit.TransitSystem transit,
@@ -1382,38 +1450,12 @@ public class CommandRcmc extends CommandBase {
             if (only != null && !line.name().equalsIgnoreCase(only)) {
                 continue;
             }
-            Train train = state.trains().train(entry.getKey());
-            String next = line.station(service.currentStopIndex()).name();
-            com.micatechnologies.minecraft.rcmc.physics.transit.TransitStopController controller =
-                service.controller();
-            String doing;
-            switch (controller.phase()) {
-                case APPROACHING:
-                    doing = "to " + next + ", " + fmt(Math.max(0.0D, service.distanceToNextStop()))
-                        + " blocks";
-                    break;
-                case BOARDING:
-                    doing = controller.phaseTicksRemaining() == 0
-                        ? "at " + next + ", held for headway"
-                        : "at " + next + ", boarding, " + seconds(controller.phaseTicksRemaining())
-                            + " left";
-                    break;
-                case DOORS_OPENING:
-                    doing = "at " + next + ", doors opening";
-                    break;
-                default:
-                    doing = "at " + next + ", doors closing";
-                    break;
-            }
-            int opposing = transit.headOnWith(entry.getKey(), state.trains(), state.network());
-            int ahead = transit.stoppingFor(entry.getKey());
-            String why = opposing >= 0 ? ", HEAD-ON with train #" + opposing + " on the same track"
-                : ahead >= 0 ? ", stopping for train #" + ahead + " ahead" : "";
-            reply(sender, opposing >= 0 ? TextFormatting.RED : TextFormatting.AQUA,
-                "#" + entry.getKey() + " " + line.name() + " "
-                + (service.serviceDirection() > 0 ? line.outboundLabel() : line.inboundLabel())
-                + ": " + doing + (train == null ? "" : ", " + fmt(Math.abs(train.velocity()))
-                    + " blocks/s") + why);
+            com.micatechnologies.minecraft.rcmc.physics.transit.ServiceStatus status =
+                com.micatechnologies.minecraft.rcmc.physics.transit.ServiceStatus.of(transit, entry.getKey(),
+                    service, state.trains(), state.network());
+            reply(sender, status.headOnWith >= 0 ? TextFormatting.RED : TextFormatting.AQUA,
+                "#" + entry.getKey() + " " + line.name() + " " + status.direction + ": " + status.doing
+                + ", " + fmt(status.speed) + " blocks/s" + status.why());
             shown++;
         }
         if (shown == 0) {
@@ -1525,7 +1567,8 @@ public class CommandRcmc extends CommandBase {
      * only comfortably exceed the longest braking distance on the line, and at the 15 blocks/s
      * default cruise and the metro driver's service brake that is under 100 blocks.
      */
-    private static final double SIGNAL_HORIZON = 500.0D;
+    private static final double SIGNAL_HORIZON =
+        com.micatechnologies.minecraft.rcmc.physics.transit.LineSignals.DEFAULT_HORIZON;
 
     /**
      * {@code /rcmc build …} — settings for the in-hand track builder.

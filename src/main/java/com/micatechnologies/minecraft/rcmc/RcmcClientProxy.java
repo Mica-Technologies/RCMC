@@ -106,6 +106,8 @@ public class RcmcClientProxy extends RcmcCommonProxy {
             com.micatechnologies.minecraft.rcmc.block.RcmcBlocks.airGate));
         bindModel(net.minecraft.item.Item.getItemFromBlock(
             com.micatechnologies.minecraft.rcmc.block.RcmcBlocks.rideSign));
+        bindModel(net.minecraft.item.Item.getItemFromBlock(
+            com.micatechnologies.minecraft.rcmc.block.RcmcBlocks.lineDesk));
     }
 
     private static void bindModel(net.minecraft.item.Item item) {
@@ -153,6 +155,19 @@ public class RcmcClientProxy extends RcmcCommonProxy {
             }
             else if (open) {
                 mc.displayGuiScreen(new com.micatechnologies.minecraft.rcmc.client.gui.GuiTrackEditor(view));
+            }
+        });
+    }
+
+    @Override
+    public void showLineControl(com.micatechnologies.minecraft.rcmc.net.LineView view, boolean open) {
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getMinecraft();
+        mc.addScheduledTask(() -> {
+            if (mc.currentScreen instanceof com.micatechnologies.minecraft.rcmc.client.gui.GuiLineControl) {
+                ((com.micatechnologies.minecraft.rcmc.client.gui.GuiLineControl) mc.currentScreen).update(view);
+            }
+            else if (open) {
+                mc.displayGuiScreen(new com.micatechnologies.minecraft.rcmc.client.gui.GuiLineControl(view));
             }
         });
     }

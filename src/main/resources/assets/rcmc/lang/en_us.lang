@@ -9,6 +9,7 @@ tile.rcmc.arrival_board.name=Arrival Board
 tile.rcmc.arrival_board_part.name=Arrival Board Panel
 tile.rcmc.station_speaker.name=Station Speaker
 tile.rcmc.operator_panel.name=Ride Operator Panel
+tile.rcmc.line_desk.name=Line Control Desk
 tile.rcmc.air_gate.name=Air Gate
 tile.rcmc.ride_sign.name=Ride Sign
 entity.coaster_car.name=Ride Car

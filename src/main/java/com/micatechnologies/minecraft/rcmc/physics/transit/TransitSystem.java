@@ -64,6 +64,9 @@ public final class TransitSystem {
     /** Every train on the network this tick, which a service must not run into. */
     private TrainManager tickTrains;
 
+    /** Trains an operator is holding at their next platform, doors open. */
+    private final java.util.Set<Integer> held = new java.util.HashSet<>();
+
     /** Trains just taken out of service → the service brake they stop on. */
     private final Map<Integer, Double> withdrawing = new LinkedHashMap<>();
 
@@ -421,7 +424,9 @@ public final class TransitSystem {
             serviceDirectionFrom(line, network, train.reference(), bestFacing, bestIndex), bestFacing,
             this::station);
         controller.setDwellTicks(operationsFor(line.name()).dwellTicks());
-        service.setDepartureGate(this::mayDepart);
+        // A held train finishes its approach and boards as usual, then waits at the platform with
+        // its doors open until released — the operator's hold, ahead of the line's own headway.
+        service.setDepartureGate((l, stop, direction) -> !held.contains(trainId) && mayDepart(l, stop, direction));
         services.put(trainId, service);
         arrivals.remove(trainId);
         // A train sitting at rest before service has usually already latched VALLEYED (zero
@@ -636,6 +641,7 @@ public final class TransitSystem {
         // Runtime state an undo must not wipe: the clock headways and leg times are measured on,
         // when trains last left each platform, and what the line's legs have been timed at.
         tick = previous.tick;
+        held.addAll(previous.held);
         lastDepartures.putAll(previous.lastDepartures);
         timingsByLine.putAll(previous.timingsByLine);
         int adopted = 0;
@@ -674,6 +680,30 @@ public final class TransitSystem {
         arrivals.clear();
         withdrawing.clear();
         stoppingFor.clear();
+        held.clear();
+    }
+
+    /**
+     * Holds or releases a train in service. A held train runs on to its next stop, boards there as
+     * usual and then waits with its doors open until released. Not saved: a restart releases it.
+     *
+     * @return whether the train is in service, and so was held or released
+     */
+    public boolean setHeld(int trainId, boolean hold) {
+        if (!services.containsKey(trainId)) {
+            return false;
+        }
+        if (hold) {
+            held.add(trainId);
+        }
+        else {
+            held.remove(trainId);
+        }
+        return true;
+    }
+
+    public boolean isHeld(int trainId) {
+        return held.contains(trainId);
     }
 
     // --- Operations: dwell and headway. ---------------------------------------------------------
@@ -767,6 +797,7 @@ public final class TransitSystem {
         }
         arrivals.keySet().retainAll(services.keySet());
         stoppingFor.keySet().retainAll(services.keySet());
+        held.retainAll(services.keySet());
         withdrawing.keySet().removeIf(id -> trains.train(id) == null || services.containsKey(id));
         for (LineSignals signals : signalsByLine.values()) {
             signals.updateOccupancy(trains);

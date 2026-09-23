@@ -69,6 +69,10 @@ public final class RcmcNetwork {
             nextId++, Side.CLIENT);
         CHANNEL.registerMessage(PacketRideCheck.Handler.class, PacketRideCheck.class,
             nextId++, Side.CLIENT);
+        CHANNEL.registerMessage(PacketLineView.Handler.class, PacketLineView.class,
+            nextId++, Side.CLIENT);
+        CHANNEL.registerMessage(PacketLineAction.Handler.class, PacketLineAction.class,
+            nextId++, Side.SERVER);
     }
 
     public static void sendTo(Object message, EntityPlayerMP player) {

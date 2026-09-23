@@ -28,6 +28,7 @@ public final class RcmcBlocks {
     public static BlockOperatorPanel operatorPanel;
     public static BlockAirGate airGate;
     public static BlockRideSign rideSign;
+    public static BlockLineDesk lineDesk;
 
     private RcmcBlocks() {
         throw new AssertionError("No instances.");
@@ -48,6 +49,7 @@ public final class RcmcBlocks {
         operatorPanel = RcmcRegistry.addBlock(new BlockOperatorPanel());
         airGate = RcmcRegistry.addBlock(new BlockAirGate());
         rideSign = RcmcRegistry.addBlock(new BlockRideSign());
+        lineDesk = RcmcRegistry.addBlock(new BlockLineDesk());
 
         // An ItemBlock carries the block's registry name, not its own — they share a namespace and
         // Forge matches them by name when binding models.
@@ -72,6 +74,8 @@ public final class RcmcBlocks {
             .setRegistryName(RcmcConstants.MOD_NAMESPACE, BlockAirGate.NAME));
         RcmcRegistry.addItem(new ItemBlock(rideSign)
             .setRegistryName(RcmcConstants.MOD_NAMESPACE, BlockRideSign.NAME));
+        RcmcRegistry.addItem(new ItemBlock(lineDesk)
+            .setRegistryName(RcmcConstants.MOD_NAMESPACE, BlockLineDesk.NAME));
 
         // Tile entities travel with their blocks. Registry-namespaced ids, per convention.
         net.minecraftforge.fml.common.registry.GameRegistry.registerTileEntity(
