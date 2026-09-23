@@ -65,7 +65,8 @@ Item: **`rcmc:transit_tool`**.
 | Sneak + right-click air | Abandon what is being assembled |
 
 In **station** mode, right-click the track where a train should stop. That point on the spline is
-the station; the train berths centred on it.
+the station; a train berths with its **lead car** stopped there, so leave the platform running back
+from it.
 
 !!! tip "Names come from the item's own name"
 
@@ -78,10 +79,14 @@ the station; the train berths centred on it.
 By command instead:
 
 ```
-/rcmc station <name>          create or move a station at the track you are aiming at
+/rcmc station <name>          create or move a station at the track nearest where you stand
 /rcmc station list
 /rcmc station remove <name>
 ```
+
+By command it is where you **stand** that counts, not where you look: the nearest track within 16
+blocks. Re-running `/rcmc station` for an existing name moves it to one fresh berth and drops any
+extra platforms it had.
 
 Station names are spoken aloud by the announcement system as text-to-speech rather than played
 from baked clips, which is precisely why **arbitrary player-chosen names work**.
@@ -115,7 +120,7 @@ a line does not go stale when you rebuild the track underneath it.
 ## 4. Put a train into service
 
 ```
-/rcmc train <sectionId> <cars> <startSpeed> metro
+/rcmc train [sectionId] [cars] [startSpeed] metro
 /rcmc line start <lineName> <trainId> [cruiseSpeed]
 /rcmc line stop <trainId>
 ```
@@ -148,9 +153,10 @@ height**. That is the entire point of it. A metro floor sits 2.0 blocks above th
 player's step height is 0.6, so without a platform you are jumping at a doorway; with one you walk
 straight in, level.
 
-It only fills air and replaceable blocks, so it completes a station rather than bulldozing one, and
-it is centred on the stop point so the platform runs *back* along the train rather than from its
-nose.
+It only fills air and replaceable blocks, so it completes a station rather than bulldozing one. A
+train stops with its lead car at the stop point, so the platform runs *back* along the train rather
+than from its nose: three-quarters of its length behind the stop point, a quarter ahead. It is laid
+at the station's **first berth** only; the far side of an island is decked by hand.
 
 !!! note "Why the car floor is a whole block"
 
@@ -207,8 +213,9 @@ an island shows one direction and leaves the other blank: there is nothing on th
 to resolve. Add the second berth and the board fills both — which is the point of the exercise.
 
 Once a station has more than one berth and the berths are labelled, a board also puts the platform
-in brackets against a train that is **due here** — `Boarding (1)`, `now approaching (2)`. It appears
-only on those rows, and deliberately: a train still stops away has picked its platform at the
+in brackets against a train that is **due here** — `BRD (1)`, `APPR (2)`: boarding and
+approaching, abbreviated the way real boards abbreviate them so the destination keeps the room. It
+appears only on those rows, and deliberately: a train still stops away has picked its platform at the
 station it is running to, not at this one, so a number against it would send you to the wrong side
 of the island on the strength of somebody else's platform.
 
@@ -224,12 +231,22 @@ right door when it opens. A rider can only walk out through a door that actually
 | Block | What it shows |
 | --- | --- |
 | `rcmc:station_sign` | Post-mounted line map: the linked line's stops in order, with a "you are here" marker. Right-click cycles lines at an interchange |
-| `rcmc:arrival_board` | Ceiling-hung amber-on-black board: per-direction "N stops away" rows, "Boarding" while a train is berthed. Hang it under a ceiling with **5 blocks of clearance across and 2 down** — the panel is physically the size it looks |
+| `rcmc:arrival_board` | Ceiling-hung amber-on-black board: per-direction rows reading `1 stop` or `N stops`, `APPR` when this station is the train's next stop, and `BRD` while it is berthed here. Hang it under a ceiling with **5 blocks of clearance across and 2 down** — the panel is physically the size it looks |
 | `rcmc:station_speaker` | Wall- or ceiling-mounted PA that announces approaching trains |
 
 All three **auto-link to the nearest station** when placed, and store only that station's *name*.
 Every frame resolves against the live registry, so a sign can never go stale — rename or move a
 station and the signs follow.
+
+The trains carry signs of their own, driven by the same live service data, and blank on a car
+that is not in service:
+
+- **Inside each car**, a sign under the ceiling at both ends reads **`Next stop: X`** while running
+  and **`Now at: X`** while berthed, with the line, direction and destination beneath —
+  `Green  OUT/South`. Text too long for the panel scrolls.
+- **Outside**, each side of the car carries an amber destination sign showing the terminus in
+  capitals, `SOUTH`, so you can read where a train is going from the platform. A loop line has no
+  terminus, so it shows the line's name instead.
 
 Arrivals are given in **stops away**, not minutes. That is exact and deterministic — it replays the
 service pattern, including loop wrap and shuttle terminus bounce — where a minutes estimate would
@@ -259,10 +276,10 @@ it), and falls back to an on-screen subtitle otherwise.
 ## Switches and junctions
 
 A line is a line; a **network** needs switches. In **switch** mode on the transit tool: click the
-**throat** end, then each **branch** end, then ++c++.
+**throat** end, then each **branch** end, then ++c++. A switch needs at least two branches.
 
 ```
-/rcmc switch create <throatSection> <start|end> <branchSection> <start|end> [...]
+/rcmc switch create <throatSection> <start|end> <branchSection> <start|end> <branchSection> <start|end> [...]
 /rcmc switch list
 /rcmc switch throw <throatSection> <start|end> [branchIndex]     no index = cycle to the next
 /rcmc switch remove <throatSection> <start|end>

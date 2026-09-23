@@ -13,7 +13,7 @@ Everything registers under the `rcmc:` prefix and appears in the mod's own creat
 | Right-click a block | Place a node one block above it |
 | Sneak + right-click a block | Place a node and commit the section |
 | Right-click air | Commit the section |
-| Sneak + right-click air | Undo the last node; on an empty session, cancel |
+| Sneak + right-click air | Undo the last node. With no nodes pending it does nothing — `/rcmc build cancel` resets the session |
 | ++g++ | Cycle segment type: plain → chain lift → launch track → brake run → drive tyres → station |
 | ++r++ | Reset height and bank adjustments |
 | Shift + scroll | Height of the pending node, 0.5 blocks per notch |
@@ -35,7 +35,7 @@ parameter.
 | Sneak + right-click air | Undo the last piece; on an empty chain, cancel |
 | ++g++ or ++ctrl++ + scroll | Cycle the selected piece |
 | Shift + scroll | Resize the selected piece |
-| ++r++ | Undo the last piece — the keybind that works while flying |
+| ++r++ | Undo the last piece — the same as sneak + right-click air, without having to aim at nothing |
 
 Pieces: straight, slope (signed rise), curve left/right, helix left/right, vertical loop,
 corkscrew, airtime hill. Full parameter ranges are in
@@ -76,8 +76,8 @@ station called Central. Unnamed falls back to `Station N` / `Line N`.
 
 ## Keybinds
 
-Four bindings, all rebindable under **Controls → RCMC**, all reused across tools because each tool
-gives them its own meaning:
+Four bindings, all rebindable under **Controls → Rails & Coasters**, all reused across tools
+because each tool gives them its own meaning:
 
 | Key | Track tool | Piece tool | Track editor | Transit tool |
 | --- | --- | --- | --- | --- |
@@ -96,7 +96,7 @@ gives them its own meaning:
 | `rcmc:platform` | Station platform decking |
 | `rcmc:platform_edge` | Platform edge with the tactile warning strip; faces the track |
 | `rcmc:station_sign` | Post-mounted line map: the line's stops in order with a "you are here" marker. Right-click cycles lines at an interchange |
-| `rcmc:arrival_board` | Ceiling-hung amber-on-black board, double-sided. Per-direction "N stops away", "Boarding" while berthed, with the platform in brackets for a train due here. A **multiblock**: needs 5 blocks across, centred on where you place it, and 2 down |
+| `rcmc:arrival_board` | Ceiling-hung amber-on-black board, double-sided. Per-direction rows reading `1 stop` or `N stops`, `APPR` when this station is the train's next stop and `BRD` while it is berthed, with the platform in brackets for a train due here (`BRD (2)`). A **multiblock**: needs 5 blocks across, centred on where you place it, and 2 down |
 | `rcmc:station_speaker` | Wall- or ceiling-mounted PA announcing approaching trains. Mounts on the face you click |
 | `rcmc:operator_panel` | A coaster's control desk. Links to the nearest coaster station within 24 blocks when placed (or when first used, if none was near). Right-click to operate the ride: open / test / close, emergency stop, automatic or manual dispatch, the ride's hardware settings, and its trains. See [Operating a ride](../guide/riding-and-operations.md#operating-a-ride) |
 

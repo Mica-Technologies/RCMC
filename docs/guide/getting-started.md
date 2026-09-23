@@ -62,13 +62,19 @@ operator permission (`/rcmc` is permission level 2) and some open space.
     registers a line called **Metro**. The train enters service, drives itself between stations,
     berths, opens its doors and reverses at each terminus.
 
-    For a tunnelled closed loop instead of a straight line:
+    For a whole underground network instead of a single line:
 
     ```
     /rcmc metrodemo underground
     ```
 
-    That one builds a double-track subway loop and registers a line called **Subway**.
+    That one builds two lines and nine stations at your feet: the **Circle** line, a double-track
+    circuit with a turning loop at each end, and the **Airport** line, a single track one level
+    below that crosses under it at the **Exchange** interchange. Beyond the track it bores the
+    tunnel, lays the platforms, hangs an arrival board, station sign and speaker at each station,
+    and registers the stations and both lines — ready for a train. It places a great many blocks,
+    so expect a pause. In a world too shallow for the lower level, such as a superflat one, it
+    raises itself so the Airport level still fits above bedrock, and tells you the height it used.
 
 The demo commands echo the exact follow-up command to run, including the section id they
 allocated, so you never have to guess it.
@@ -81,7 +87,8 @@ allocated, so you never have to guess it.
   pickaxe — use [`/rcmc rmsection`](../reference/commands.md#rcmc-rmsection) or the track editor.
 - **Supports, platforms and signage are** real blocks, and behave like blocks.
 - Everything persists with the world, versioned from day one: track, ride hardware, stations,
-  lines, switches, signalling, **and the trains running on them**. A metro service resumes on the
+  lines, switches, signalling — both a metro line's signals and a coaster's `/rcmc block`
+  sections — **and the trains running on them**. A metro service resumes on the
   same line at the same cruise speed when the world reloads.
 
 ## Next steps

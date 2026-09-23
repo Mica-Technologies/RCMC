@@ -38,7 +38,9 @@ and a line called **Metro**, registered and ready for a train.
 
 With `underground` (or the synonyms `network` / `loop` / `subway`): the whole two-line underground
 network, built at your feet — track, tunnel, platforms, decking, signage, stations and lines in one
-command. It places on the order of a hundred thousand blocks, so expect a pause.
+command. It places on the order of a hundred thousand blocks, so expect a pause. The Airport line
+runs twelve blocks below where you stand; in a world too shallow for that, such as a superflat one,
+the whole network is raised until the lower level clears bedrock, and the command says so.
 
 | | **Circle** | **Airport** |
 | --- | --- | --- |
@@ -134,11 +136,19 @@ Steps back and forward through track edits, server-side.
 ### `/rcmc train`
 
 ```
-/rcmc train <sectionId> <cars> <startSpeed> [coaster|metro|metrocompact|metrolong] [distance]
+/rcmc train [sectionId] [cars] [startSpeed] [coaster|metro|metrocompact|metrolong] [distance]
 ```
 
-Spawns a train on a section. Defaults to the coaster car style. A train parked in a station
-dispatches itself.
+Spawns a train on a section. A train parked in a station dispatches itself. Every argument is
+optional, but they are positional, so to give one you must give all those before it.
+
+| Argument | Range | Default |
+| --- | --- | --- |
+| `sectionId` | — | The first section in the world |
+| `cars` | 1 – 12 | 5 |
+| `startSpeed` | 0 – 60 blocks/s | 0 |
+| style | see below | `coaster` |
+| `distance` | 0 – section length | The section's first coaster station stop point, else 0 |
 
 `distance` places the train at a point along the section instead of at its first station stop point.
 On a metro circuit whose two directions are its two tracks, *where* a train starts is *which way* it
@@ -163,6 +173,9 @@ Simulates a lap **offline** — no entity is spawned, so it is safe to run on a 
 has a train — and reports excitement, intensity and nausea, plus a separate safety verdict. An
 incomplete lap is called out explicitly.
 
+`sectionId` may be left off only while the world has exactly one section; once there are several,
+name the one to rate.
+
 ### `/rcmc block`
 
 ```
@@ -170,7 +183,8 @@ incomplete lap is called out explicitly.
 ```
 
 Divides a coaster circuit into `count` equal block sections, each holding at most one train, or
-removes block signalling with `off`. Reports the safe train count for the division. See
+removes block signalling with `off`. Reports the safe train count for the division. Block sections
+are saved with the world and can be undone like any other edit. See
 [multi-train operation](../guide/riding-and-operations.md#multi-train-operation).
 
 ---
@@ -180,7 +194,7 @@ removes block signalling with `off`. Reports the safe train count for the divisi
 ### `/rcmc station`
 
 ```
-/rcmc station <name>                                  create or move a station at the track you are aiming at
+/rcmc station <name>                                  create or move a station at the track nearest where you stand
 /rcmc station list
 /rcmc station remove <name>
 /rcmc station doors <name> [platform] <left|right|both|auto>    which side the doors open
@@ -189,6 +203,11 @@ removes block signalling with `off`. Reports the safe train count for the divisi
 /rcmc station platform <name> list
 /rcmc station platform <name> label <label|number> <new label>    rename a berth; 'none' clears it
 ```
+
+`/rcmc station <name>` and `platform … add` both use the point on the track **nearest where you are
+standing**, within 16 blocks — not where you are looking — so stand beside the track at the spot a
+train's lead car should stop. Running `/rcmc station <name>` again for a station that already exists
+moves it to a single new berth: any extra platforms it had are dropped, and must be added again.
 
 **Platforms** are the berths at a station — one per track through it. A station has one by default,
 which is every ordinary single-track stop. An **island platform** has a running line down each side,
@@ -215,7 +234,7 @@ through it — so re-adding would have to hit the same point exactly and would l
 the way past.
 
 Labels are worth setting on an island, because an arrival board names the berth a train is pulling
-into: `Boarding (2)`. A label that only repeats the direction the row already sits under is left off
+into: `BRD (2)`. A label that only repeats the direction the row already sits under is left off
 the board, so prefer `1` and `2` over `Inbound` and `Outbound` if you want it to show.
 
 **Door side** is normally worked out for you: placing a station, or laying a platform, looks either
@@ -247,13 +266,14 @@ graph, so it survives changes to the track underneath.
 ### `/rcmc switch`
 
 ```
-/rcmc switch create <throatSection> <start|end> <branchSection> <start|end> [...]
+/rcmc switch create <throatSection> <start|end> <branchSection> <start|end> <branchSection> <start|end> [...]
 /rcmc switch list
 /rcmc switch throw <throatSection> <start|end> [branchIndex]     no index = cycle to the next branch
 /rcmc switch remove <throatSection> <start|end>
 ```
 
-Each end is named by its section id and which end of it — `start` or `end`. Trailing moves against
+A switch needs a throat and **at least two branches**; `create` refuses fewer. Each end is named
+by its section id and which end of it — `start` or `end`. Trailing moves against
 the points dead-end.
 
 ### `/rcmc platform`
@@ -262,8 +282,19 @@ the points dead-end.
 /rcmc platform <station> [length] [width] [left|right|both]
 ```
 
-Lays a platform along the alignment at exactly car-floor height, following the spline's curve and
-centred on the stop point. Only fills air and replaceable blocks.
+Lays a platform along the alignment at exactly car-floor height, following the spline's curve. A
+train stops with its **lead car** at the stop point, so the platform runs mostly back along the
+train: three-quarters of `length` behind the stop point and a quarter ahead of it. Only fills air
+and replaceable blocks.
+
+| Argument | Range | Default |
+| --- | --- | --- |
+| `length` | 4 – 200 | 40 |
+| `width` | 1 – 12 | 4 |
+| side | `left`, `right`, `both` | `both` |
+
+It builds at the station's **first berth** only. For the other track of an island, lay that side by
+hand — the door detection reads a hand-built platform exactly like this one.
 
 ---
 
