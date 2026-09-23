@@ -66,6 +66,9 @@ public final class TransitCodec {
     private static final String KEY_IN_LABEL = "InboundLabel";
     private static final String KEY_OUT_LABEL = "OutboundLabel";
     private static final String KEY_STOPS = "Stops";
+    /** Per-line operating settings. Additive: a line without them reads as the defaults. */
+    private static final String KEY_DWELL = "DwellTicks";
+    private static final String KEY_HEADWAY = "HeadwayTicks";
     private static final String KEY_DOOR_SIDE = "DoorSide";
     private static final String KEY_PLATFORMS = "Platforms";
     private static final String KEY_LABEL = "Label";
@@ -104,6 +107,10 @@ public final class TransitCodec {
                 stops.appendTag(writeStation(station));
             }
             tag.setTag(KEY_STOPS, stops);
+            com.micatechnologies.minecraft.rcmc.physics.transit.LineOperations operations =
+                transit.operationsFor(line.name());
+            tag.setInteger(KEY_DWELL, operations.dwellTicks());
+            tag.setInteger(KEY_HEADWAY, operations.headwayTicks());
             lineList.appendTag(tag);
         }
         root.setTag(KEY_LINES, lineList);
@@ -161,6 +168,14 @@ public final class TransitCodec {
                     tag.getBoolean(KEY_TURNBACK_LOOP),
                     orDefault(tag.getString(KEY_IN_LABEL), "INBOUND"),
                     orDefault(tag.getString(KEY_OUT_LABEL), "OUTBOUND")));
+                com.micatechnologies.minecraft.rcmc.physics.transit.LineOperations defaults =
+                    com.micatechnologies.minecraft.rcmc.physics.transit.LineOperations.DEFAULT;
+                int dwell = tag.hasKey(KEY_DWELL) ? tag.getInteger(KEY_DWELL) : defaults.dwellTicks();
+                int headway = tag.hasKey(KEY_HEADWAY) ? tag.getInteger(KEY_HEADWAY) : 0;
+                int max = com.micatechnologies.minecraft.rcmc.physics.transit.LineOperations.MAX_TICKS;
+                transit.setOperations(tag.getString(KEY_NAME),
+                    new com.micatechnologies.minecraft.rcmc.physics.transit.LineOperations(
+                        Math.max(0, Math.min(max, dwell)), Math.max(0, Math.min(max, headway))));
             }
         }
 

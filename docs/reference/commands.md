@@ -258,7 +258,15 @@ change when a service reverses. Announcements convert it to the rider's own left
 /rcmc line start <name> <trainId> [cruiseSpeed]     put a train into service on the line
 /rcmc line stop <trainId>                           withdraw it
 /rcmc line signals <name> <count|off>               install or clear block signalling
+/rcmc line set <name> dwell <seconds>               how long the doors stay open at each stop
+/rcmc line set <name> headway <seconds|off>         least time between departures from a platform
+/rcmc line trains [name]                            list trains in service
 ```
+
+Dwell defaults to 10 seconds and headway to off; both accept up to 600 seconds, are saved with the
+line, and apply to running trains from their next stop. With a headway set, a train that would
+leave a platform sooner than that after the previous train in the same direction waits with its
+doors open. `line list` shows each line's settings.
 
 A line stores its ordered **stations**; the route between them is discovered by walking the track
 graph, so it survives changes to the track underneath.

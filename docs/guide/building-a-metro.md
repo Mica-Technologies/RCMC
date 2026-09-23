@@ -143,6 +143,25 @@ speed you set, computes a constant-deceleration stopping curve to the next stop,
 full door cycle, and departs. At a shuttle terminus it reverses. **Entering service also clears a
 valleyed parked train** — taking control *is* the recovery.
 
+### Running the line
+
+```
+/rcmc line trains [lineName]
+/rcmc line set <lineName> dwell <seconds>
+/rcmc line set <lineName> headway <seconds|off>
+```
+
+`line trains` lists every train in service — or every one on a line — with its direction, where it
+is heading, and whether it is running, boarding, or being held.
+
+**Dwell** is how long the doors stay open at each stop; the default is 10 seconds. **Headway** is
+the least time between two trains leaving the same platform in the same direction. With a headway
+set, a train that has caught up with the one ahead keeps its doors open until the gap has opened
+up again — which is what stops a line bunching, where a late train collects more passengers, runs
+later still, and ends up nose to tail with the early one behind it. Pick a headway a little under a
+lap time divided by the number of trains. Both settings are saved with the line, undo like any
+other edit, and reach trains already running at their next stop.
+
 ---
 
 ## Making a station feel like a place
