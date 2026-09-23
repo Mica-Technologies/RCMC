@@ -25,7 +25,7 @@ import java.util.Map;
  * <p>Pure Java like the rest of {@code physics}: no Minecraft types, so a multi-coaster park's
  * signalling is testable without a game instance.</p>
  */
-public final class BlockSystems implements TrainManager.ExternalAcceleration {
+public final class BlockSystems implements BoundaryHold, TrainManager.ExternalAcceleration {
 
     /** Insertion-ordered so {@code /rcmc info} lists coasters in the order they were signalled. */
     private final Map<Integer, BlockSystem> bySection = new LinkedHashMap<>();
@@ -88,6 +88,12 @@ public final class BlockSystems implements TrainManager.ExternalAcceleration {
     public boolean isHolding(int trainId, Train train) {
         BlockSystem system = systemFor(train);
         return system != null && system.isHolding(trainId, train);
+    }
+
+    @Override
+    public boolean isHeldAtBoundary(int trainId, Train train) {
+        BlockSystem system = systemFor(train);
+        return system != null && system.isHeldAtBoundary(trainId, train);
     }
 
     private BlockSystem systemFor(Train train) {

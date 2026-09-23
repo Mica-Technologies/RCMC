@@ -46,19 +46,18 @@ import java.util.Map;
  * directly: its signature is fixed by {@link TrainManager.ExternalAcceleration}. The distance is
  * therefore resolved once, during the snapshot, and cached for {@link #forTrain} to read back.</p>
  *
- * <h2>Occupancy is tracked by lead-car reference only</h2>
+ * <h2>A train occupies every block its body is in</h2>
  *
- * <p>A train is considered "in" whichever block contains {@code train.reference()} — the lead
- * car's position — exactly the simplification {@code RideElementSet} already makes for ride
- * elements. For a single-car train this is exact. For a multi-car train, the rear cars can still
- * physically occupy the block behind the one the lead car has entered, for as long as the train's
- * length takes to fully cross the boundary. This is why real block signalling requires blocks to
- * be sized comfortably longer than the longest train that will run through them, and why this
- * class does not attempt the more expensive per-car check: it would still be an approximation
- * (parallel transport, not a physical hull), and getting the sizing right is a park-authoring
- * responsibility this class cannot discharge for the author. {@link #detectCollisions} — used only
- * when safety is disabled, see below — is the one place this class <em>does</em> use full train
- * length, precisely because that check exists to catch exactly this kind of overlap.</p>
+ * <p>A train's <em>own</em> block — the one braking decisions are measured from — is whichever
+ * block contains {@code train.reference()}, the lead car. But for keeping trains apart it occupies
+ * every block any part of it is in, sampled from the lead car back to the tail
+ * ({@link #bodyBlocks}), and a follower is held out of all of them.</p>
+ *
+ * <p>This used to be lead car only, with block sizing left as the builder's problem. That stopped
+ * being defensible once blocks were bounded by a ride's own hardware: a station is a block boundary,
+ * and a train standing at a platform always straddles it. Leaving, its lead car cleared the station
+ * block while three cars were still at the platform — and the next train was let in on top of them.
+ * {@link #detectCollisions} still measures full length independently, as the check on this one.</p>
  *
  * <h2>Braking targets the next block's entrance, not the current block's exit</h2>
  *
@@ -143,7 +142,7 @@ import java.util.Map;
  * {@link #detectCollisions}, which runs regardless of the safety flag, is how a caller finds out
  * that happened: see {@link Collision}.</p>
  */
-public final class BlockSystem implements TrainManager.ExternalAcceleration {
+public final class BlockSystem implements TrainManager.ExternalAcceleration, BoundaryHold {
 
     /**
      * Speed below which a held train is considered genuinely at rest for the purposes of
@@ -209,6 +208,25 @@ public final class BlockSystem implements TrainManager.ExternalAcceleration {
      * check reads, and it must report a block free the instant its occupant's reference leaves it.
      */
     private final Map<Integer, Integer> occupancy = new LinkedHashMap<>();
+
+    /**
+     * Every block each train's body is in, lead car to tail — what keeps a follower out. See the
+     * class javadoc.
+     */
+    private final Map<Integer, java.util.Set<Integer>> bodyBlocks = new LinkedHashMap<>();
+
+    /**
+     * Within this distance of an occupied block's entrance, a train is held rather than braked:
+     * see {@link #isHeldAtBoundary}. Longer than the last tick of any approach, so a train is caught
+     * before the final creep, not after it.
+     */
+    static final double HOLD_ZONE = 0.75D;
+
+    /** The network from the latest snapshot, for the gravity a held train must be kept against. */
+    private TrackNetwork snapshotNetwork;
+
+    /** Spacing of the points a train's body is sampled at, in blocks. Shorter than any block. */
+    private static final double BODY_SAMPLE = 1.0D;
 
     /**
      * trainId -> index of the most recent block that train was ever literally inside. Unlike
@@ -317,12 +335,18 @@ public final class BlockSystem implements TrainManager.ExternalAcceleration {
      *                for wrapped collisions — see "Wrap, and its one real limitation" above
      */
     public void updateOccupancy(TrainManager trains, TrackNetwork network) {
+        snapshotNetwork = network;
         occupancy.clear();
+        bodyBlocks.clear();
         for (Map.Entry<Integer, Train> entry : trains.asMap().entrySet()) {
             int index = blockIndexContaining(entry.getValue().reference());
             if (index >= 0) {
                 occupancy.put(entry.getKey(), index);
                 lastEnteredBlock.put(entry.getKey(), index);
+            }
+            java.util.Set<Integer> body = blocksUnder(entry.getValue(), network);
+            if (!body.isEmpty()) {
+                bodyBlocks.put(entry.getKey(), body);
             }
         }
         // Drop bookkeeping for trains that no longer exist at all, so removing a train does not
@@ -370,7 +394,12 @@ public final class BlockSystem implements TrainManager.ExternalAcceleration {
         BlockSection nextBlock = blocks.get(next);
         double remaining = (nextBlock.startDistance() - ENTRY_MARGIN) - ref.distance();
 
-        boolean wraps = closedCircuit && index + 1 >= blocks.size();
+        // Closing the ring: the next block's entrance is behind the train in raw distance, and
+        // really a lap on. Tested against the margin rather than zero, because a train inside its
+        // own block's last ENTRY_MARGIN is legitimately just short of the next entrance; and a train
+        // in the seam-side part of a wrapping block is already on the near side of it.
+        boolean wraps = closedCircuit && index + 1 >= blocks.size()
+            && remaining < -ENTRY_MARGIN - 1.0e-9D;
         if (wraps) {
             BlockSection currentBlock = blocks.get(index);
             if (currentBlock.sectionId() == nextBlock.sectionId()) {
@@ -480,7 +509,60 @@ public final class BlockSystem implements TrainManager.ExternalAcceleration {
                 return true;
             }
         }
+        for (Map.Entry<Integer, java.util.Set<Integer>> entry : bodyBlocks.entrySet()) {
+            if (entry.getKey() != excludingTrainId && entry.getValue().contains(next)) {
+                return true;
+            }
+        }
         return false;
+    }
+
+    /**
+     * Whether {@code train} is at the entrance of a block another train occupies, within
+     * {@link #HOLD_ZONE} of it: stopped there by this system, which overrides every other control
+     * until the block clears.
+     */
+    @Override
+    public boolean isHeldAtBoundary(int trainId, Train train) {
+        if (!safetyEnabled) {
+            return false;
+        }
+        Integer index = referenceBlock(trainId);
+        if (index == null || !nextBlockOccupiedBySomeoneElse(index, trainId)) {
+            return false;
+        }
+        Double remaining = nextEntranceRemaining.get(trainId);
+        return remaining != null && remaining <= HOLD_ZONE;
+    }
+
+    /**
+     * The blocks under {@code train}'s whole length: its lead car's point and every point back
+     * along the track to its tail, wrapping through a closed section's seam. Cars trail the lead
+     * car toward decreasing distance, as {@code Train} lays them out, whichever way it is moving.
+     */
+    private java.util.Set<Integer> blocksUnder(Train train, TrackNetwork network) {
+        java.util.Set<Integer> under = new java.util.TreeSet<>();
+        TrackRef lead = train.reference();
+        if (lead == null) {
+            return under;
+        }
+        TrackSection section = network == null ? null : network.section(lead.sectionId());
+        double length = train.spec().totalLength();
+        for (double back = 0.0D; ; back = Math.min(length, back + BODY_SAMPLE)) {
+            double d = lead.distance() - back;
+            if (section != null && section.isClosed()) {
+                double lap = section.totalLength();
+                d = ((d % lap) + lap) % lap;
+            }
+            int index = blockIndexContaining(new TrackRef(lead.sectionId(), d));
+            if (index >= 0) {
+                under.add(index);
+            }
+            if (back >= length) {
+                break;
+            }
+        }
+        return under;
     }
 
     /**
@@ -508,6 +590,15 @@ public final class BlockSystem implements TrainManager.ExternalAcceleration {
         int next = nextIndex(index);
         if (next < 0 || !nextBlockOccupiedBySomeoneElse(index, trainId)) {
             return 0.0D;
+        }
+        if (isHeldAtBoundary(trainId, train)) {
+            // Stopped, and kept stopped against anything: gravity on a lift, the station's dispatch
+            // push, a chain. The approach curve alone could not do this — below it the brake lets
+            // go, whatever was pushing the train gets a tick, and a tick at a time it crept over
+            // the line into an occupied block.
+            double hold = com.micatechnologies.minecraft.rcmc.physics.element.VelocityServo
+                .accelerationToHold(train.velocity(), 0.0D, brakeDeceleration, tickSeconds);
+            return snapshotNetwork == null ? hold : hold - train.averageGravityAlongTrack(snapshotNetwork);
         }
         Double remaining = nextEntranceRemaining.get(trainId);
         // Should always be present — updateOccupancy computes it for exactly this trainId whenever
@@ -541,6 +632,12 @@ public final class BlockSystem implements TrainManager.ExternalAcceleration {
         double direction = remaining >= 0.0D ? 1.0D : -1.0D;
         double idealSpeed = direction * Math.sqrt(2.0D * planningDeceleration * Math.abs(remaining));
 
+        // Gravity along the track, which the brake also has to beat. The curve above is planned at
+        // the brake's own rate; on a downgrade gravity was taking a share of that, the train ran
+        // faster than planned, and it arrived at the boundary unable to stop. So the brake cancels
+        // the part of gravity that is speeding the train up, and the plan is what it gets.
+        double gravity = snapshotNetwork == null ? 0.0D : train.averageGravityAlongTrack(snapshotNetwork);
+
         // A block brake only ever removes energy, exactly like BrakeRun and StationPlatform's
         // approach phase — never push the train faster in the direction it is already travelling,
         // and never brake once it is already at or inside the conservative envelope.
@@ -548,15 +645,16 @@ public final class BlockSystem implements TrainManager.ExternalAcceleration {
             if (v <= idealSpeed) {
                 return 0.0D;
             }
-            double maxWithoutReversing = v / tickSeconds;
-            return -Math.min(brakeDeceleration, maxWithoutReversing);
+            // Exactly to rest by the end of the tick, and no further: gravity included.
+            double toRest = v / tickSeconds + gravity;
+            return -Math.max(0.0D, Math.min(brakeDeceleration + Math.max(0.0D, gravity), toRest));
         }
         if (v < 0.0D) {
             if (v >= idealSpeed) {
                 return 0.0D;
             }
-            double maxWithoutReversing = -v / tickSeconds;
-            return Math.min(brakeDeceleration, maxWithoutReversing);
+            double toRest = -v / tickSeconds - gravity;
+            return Math.max(0.0D, Math.min(brakeDeceleration + Math.max(0.0D, -gravity), toRest));
         }
         return 0.0D;
     }

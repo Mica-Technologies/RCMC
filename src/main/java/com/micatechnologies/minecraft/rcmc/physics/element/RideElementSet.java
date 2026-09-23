@@ -153,7 +153,41 @@ public final class RideElementSet implements TrainManager.ExternalAcceleration {
             station.claim(trainId);
             station.setGate(gates.apply(station.sectionId()));
         }
-        return element == null ? 0.0D : element.accelerationFor(train);
+        if (element == null) {
+            return chainUnderTail(train);
+        }
+        return element.accelerationFor(train);
+    }
+
+    /**
+     * A chain lift keeps pushing a train until its last car is off the chain — but only pushing.
+     *
+     * <p>Elements are found by the lead car, so a chain used to let go the moment the lead car
+     * passed the crest. A train arriving at chain speed never noticed; one that had been stopped at
+     * the top of the lift, and restarted from rest, sat balanced on the crest with half its cars on
+     * each side and never went over. Real chain dogs are one-way: they drive every car still on the
+     * chain, and a train is free to outrun them as it tips over the top. So beyond the lift's end,
+     * for as long as the train's own length still reaches back onto it, the chain may push and never
+     * brake.</p>
+     */
+    private double chainUnderTail(Train train) {
+        TrackRef lead = train.reference();
+        double length = train.spec().totalLength();
+        for (RideElement element : elements) {
+            if (!(element instanceof ChainLift) || element.sectionId() != lead.sectionId()) {
+                continue;
+            }
+            ChainLift lift = (ChainLift) element;
+            boolean forward = lift.chainSpeed() >= 0.0D;
+            double past = forward
+                ? lead.distance() - lift.endDistance()
+                : lift.startDistance() - lead.distance();
+            if (past > 0.0D && past <= length) {
+                double push = lift.accelerationFor(train);
+                return forward ? Math.max(0.0D, push) : Math.min(0.0D, push);
+            }
+        }
+        return 0.0D;
     }
 
     /**
