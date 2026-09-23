@@ -221,5 +221,6 @@ frame for track that has not changed. **Recolouring rebuilds a section's mesh** 
 any other edit, which is fine because painting is occasional, but it is not free during a live
 colour sweep.
 
-Distance culling and level-of-detail are **not implemented yet**, so a very large park at a long
-render distance will draw more track geometry than it strictly needs to.
+Track more than 256 blocks from the camera is not drawn at all. Level of detail is **not
+implemented yet**, so everything nearer than that is drawn in full detail, which in a very large
+park is more track geometry than it strictly needs.

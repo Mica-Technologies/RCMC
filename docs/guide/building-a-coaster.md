@@ -22,7 +22,7 @@ Item: **`rcmc:track_tool`**.
 | Right-click a block | Place a track node one block above it |
 | Sneak + right-click a block | Place a node **and commit** the section |
 | Right-click air | Commit the section as it stands |
-| Sneak + right-click air | Undo the last node; on an empty session, cancel |
+| Sneak + right-click air | Undo the last node (does nothing once none are left — see `/rcmc build cancel` below) |
 | ++g++ | Cycle the segment type of nodes placed from now on |
 | ++r++ | Reset height/bank adjustments |
 | Shift + scroll | Adjust the pending node's height (0.5 blocks per notch) |
@@ -33,6 +33,13 @@ at least two nodes to have geometry, every edit rebuilds its curve, and a half-b
 never be visible to a train. A **ghost preview** shows the provisional curve as translucent track —
 not a centreline, because a centreline does not tell you whether the rails will clip terrain or how
 the banking will sit, which are the two things you are actually judging.
+
+While you hold the tool, a **builder HUD** in the top-left corner shows its state as it stands: the
+segment type the next nodes will be, the current bank and height offset, how many nodes are
+pending (and whether the section will close into a circuit), and the run, rise and grade from the
+last node to the cursor. A grade that is too steep is flagged in amber with a hint to place a node
+partway, and when the cursor is over the first node the panel says the next click will close the
+circuit. A short key legend sits underneath. It hides while the ++f3++ debug screen is open.
 
 !!! tip "Every node you place changes the curve on *both* sides of it"
 
@@ -98,10 +105,13 @@ Item: **`rcmc:piece_tool`**.
 | Shift + scroll | Resize the selected piece |
 | ++r++ | Undo the last piece |
 
+The builder HUD shows the piece tool's state too: the selected piece, its parameter, and how many
+pieces and nodes the chain has so far.
+
 !!! note "Why ++r++ duplicates sneak+right-click-air"
 
-    The sneak *flag* is never reliably set while flying, and coaster building is done flying. The
-    keybind is the path that actually works in the air.
+    Both work, on the ground or flying. Undo is something you do constantly, and a key of its own
+    is a better gesture for it than sneak + right-click, which also has to be aimed at empty air.
 
 ### The palette
 
@@ -196,7 +206,7 @@ Trains are painted by command, since a moving train is not something you point a
 ## Testing the ride
 
 ```
-/rcmc train <sectionId> <cars> <startSpeed>     spawn a train
+/rcmc train [sectionId] [cars] [startSpeed]     spawn a train (defaults: first section, 5 cars, at rest)
 /rcmc rate <sectionId>                          excitement / intensity / nausea
 /rcmc block <sectionId> <count|off>             divide into block sections for multi-train running
 /rcmc info                                      list sections and trains

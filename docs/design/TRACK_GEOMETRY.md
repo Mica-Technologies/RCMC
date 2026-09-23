@@ -87,16 +87,18 @@ Interpolation interpolates **only `up`** (nlerp). Position and tangent come from
 directly — lerping two sampled positions cuts the corner, which visibly sinks a car into the
 inside of a tight turn.
 
-### Known limitation: the closed-circuit seam
+### The closed-circuit seam
 
 Parallel transport is **not periodic**. On a closed circuit, the frame arriving back at `s = 0`
 generally differs from the starting frame by a residual roll — the curve's total torsion, a real
 geometric quantity (the same effect as a Foucault pendulum's precession). Left alone it shows as
 a visible seam where a car crosses the start/finish line.
 
-The fix is to distribute the residual linearly over the circuit's length once the section is
-known to be closed. That belongs in the **track-network layer**, which is the only layer that
-knows a circuit closes — not in `ParallelTransportFrames`, which sees one open section.
+The fix is to distribute the residual linearly over the circuit's length, and `TrackSection` does
+exactly that when a section is closed: it measures the roll the frame comes back with and cancels
+it a little at a time all the way round, so the frame arrives back at the start as it left. That
+lives in `TrackSection`, which knows the circuit closes — not in `ParallelTransportFrames`, which
+sees one open run.
 
 ## Layer 4 — banking
 
@@ -109,12 +111,21 @@ this turn 45°", and the ride-rating system wants to compare authored bank again
 curve's lateral G would *require* — the difference is exactly what makes a turn feel
 uncomfortable, which is a thing the rating system should be able to punish.
 
-## What is not here yet
+## Built on top of this
 
-- **Track network** — joining sections end-to-end, switches, junctions, the closed-circuit
-  residual fix
-- **Track styles** — rail gauge, tie spacing, support generation, per-style models
-- **Mesh generation** — sweeping a cross-section along the frames into a renderable buffer
-- **Persistence** — how a section's nodes survive a world save and a chunk unload
+This page covers one section's geometry. The layers above it all exist:
 
-All are scheduled in `docs/AGENT-PLANS/MASTER_PLAN.md`.
+- **Track network** — `TrackNetwork` joins sections end to end and owns switches: a throat
+  leading to a choice of branches, with selection state. `TrackWalk` walks the graph read-only for
+  routing.
+- **Track styles** — the coaster look and four transit styles (`TrackStyleIds`, drawn by the
+  client-only `TrackStyles`), per section and purely visual; see
+  [track styles](../reference/track-styles.md). Support columns are generated under the track,
+  and are solid.
+- **Mesh generation** — `TrackMeshBuilder` sweeps each style's cross-section along the frames into
+  a cached, renderable mesh.
+- **Persistence** — sections are stored in the world's saved data (`TrackCodec`), not as blocks,
+  so a train keeps running through unloaded chunks. Edits are undoable.
+
+What genuinely remains is presentation: sections more than 256 blocks away are skipped, but there
+is **no level of detail**, so every section within that range is drawn in full detail.

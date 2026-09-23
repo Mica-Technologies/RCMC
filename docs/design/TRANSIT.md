@@ -25,7 +25,8 @@ physics/transit/          Pure Java. Zero Minecraft types, like the rest of phys
   JerkLimiter             Comfort bound on d(command)/dt
   TrainDriver             The ATO control law
   TransitStopController   The station service cycle
-  TransitStation          A named point on the track
+  TransitStation          A named place: one or more platforms
+  TransitPlatform         One track's berth: stop point, door side, label
   TransitLine             An ordered list of stations, loop or shuttle
   LineService             Per-train route following
   LineSignals             Movement authority
@@ -131,6 +132,19 @@ stored, so a line does not go stale when the track under it is rebuilt.
 velocity, and an overshoot guard — a stop point slid past reads as *negative remaining* via a short
 behind-probe, never as a lost station.
 
+### Stations and platforms
+
+A `TransitStation` is a named **place**, not a point. It holds one or more `TransitPlatform`s, one
+per track through it: each a stop point, a door side and a label for signage. An ordinary stop has
+one; an island platform has two, because it is one place with a running line down each side. The
+door side lives on the platform rather than the station, since the two tracks look out at the same
+decking from opposite hands.
+
+A line lists stations, and the berth is chosen as the train runs: `TransitStation.platformFor` picks
+the platform nearest ahead along the track the train is actually on. `stopPoint()` and `doorSide()`
+on the station remain as shorthand for its first platform, for the callers that only care about
+that.
+
 ### Two kinds of terminus
 
 An out-and-back line's service pattern is the same either way — stations in order, then back in
@@ -177,6 +191,8 @@ there worth saving. What *is* persisted is each line's blocks, margin and horizo
 ## Persistence
 
 Stations, lines and signalling are authored content and save with the track (`TransitCodec`).
+A coaster's `/rcmc block` sections, the other kind of signalling, save the same way in `BlockCodec`,
+and both are part of the undo history.
 **Trains and their services save alongside them** (`TrainCodec`), so a metro line is still running
 when the world comes back.
 
@@ -291,4 +307,4 @@ keep it that way.
 | Signal boundaries are equal divisions | Placing individual boundaries is tool work that has not been done; the command divides evenly as a starting point |
 | Remote players' in-car walking is not synced | Offsets are computed on each side from local input, so a remote player renders where they boarded |
 | No transit-specific build validation | Gentler curve radii, level platforms and station gradient limits are not enforced |
-| `TransitStation` and `TransitLine` have no dedicated tests | Covered only incidentally by the service-flow tests |
+| `TransitLine` has no dedicated tests | Covered only incidentally by the service-flow tests |

@@ -96,19 +96,30 @@ assert the thing that actually matters:
 
 If `PhysicsIntegratorTest` starts failing, the integrator changed — not the test.
 
+## Built on top of this
+
+The model above is the core. These all exist and sit on it:
+
+- **G-forces** — `GForces`: the centripetal term `v²·κ`, from the spline's curvature
+  (`CatmullRomSpline.curvatureAt`), plus gravity, projected onto the car's banked axes to give
+  vertical and lateral load; longitudinal is `dv/dt`. Because bank is already in the frame, how much
+  of a turn the bank absorbed needs no special case. They drive the rider HUD and its screen
+  effects, and the ride ratings.
+- **Multi-car trains** — a train is rigid, so all cars share one `TrainState` and are offset by
+  fixed distances along `s`. Gravity is **averaged over the whole train** (`Train`), not sampled at
+  one point: this is why a long train crests a hill differently from a short one, and it is a real,
+  felt part of coaster behaviour.
+- **Valleying detection** — a train that runs out of speed on a grade too shallow to restart it is
+  latched `VALLEYED`, a fault status shown in `/rcmc info` and on the operator panel rather than
+  left as a silent hang. Taking the train under control — a metro entering service — clears it.
+- **Client prediction** — the client runs the same integrator between the server's corrections,
+  four a second, so a ride is smooth at coaster speeds that vanilla entity tracking cannot keep up
+  with.
+
 ## Not yet implemented
 
-- **G-forces** — vertical (`v²/r + g·cos`), lateral (`v²/r` vs authored bank), longitudinal
-  (`dv/dt`). Needed for both rider feedback and ride ratings. Requires curvature, which is the
-  second derivative of the spline — currently only the first is exposed.
-- **Multi-car trains** — a train is rigid, so all cars share one `TrainState` and are offset by
-  fixed distances along `s`. Gravity must then be summed over the *whole* train, not evaluated at
-  a single point: this is why a long train crests a hill differently from a short one, and it is
-  a real, felt part of coaster behaviour.
-- **Friction/drag varying with track style** — wooden vs steel, wheel condition, weather
-- **Valleying detection** — a train that stops mid-circuit is a stuck state that needs an
-  operator-visible failure, not a silent hang
-- **Client prediction and reconciliation** — see the master plan; vanilla's entity tracking is
-  far too coarse for coaster speeds
-
-See `docs/AGENT-PLANS/MASTER_PLAN.md` for scheduling.
+- **Eased reconciliation** — a server correction is applied to the client's train as a hard set,
+  not blended toward. A visible snap is more diagnostic than a smoothing that hides drift, so this
+  waits until the divergence has been measured.
+- **Friction and drag varying with track style** — wooden vs steel, wheel condition, weather.
+  Rolling resistance and air drag are single world-wide values for now.
