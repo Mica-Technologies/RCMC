@@ -230,6 +230,9 @@ public class EntityCoasterCar extends Entity {
         standingOffsets.remove(passenger.getUniqueID());
         if (!this.world.isRemote && passenger instanceof EntityPlayer) {
             RECENT_DISMOUNTS.put(passenger.getUniqueID(), this.world.getTotalWorldTime());
+            if (passenger.isEntityAlive() && !isDead) {
+                leftThisCar.put(passenger.getUniqueID(), this.world.getTotalWorldTime());
+            }
         }
     }
 
@@ -245,10 +248,14 @@ public class EntityCoasterCar extends Entity {
         if (this.world.isRemote) {
             return;
         }
-        boolean doorsOpen = com.micatechnologies.minecraft.rcmc.world.MetroDoors
-            .areOpen(this.world, trainId());
         Train train = trainOrNull();
         boolean moving = train != null && Math.abs(train.velocity()) > 1.0D;
+        if (train == null || train.spec().carStyle() != TrainSpec.CarStyle.METRO) {
+            holdCoasterRiders(moving);
+            return;
+        }
+        boolean doorsOpen = com.micatechnologies.minecraft.rcmc.world.MetroDoors
+            .areOpen(this.world, trainId());
         if (!doorsOpen && !moving) {
             return;
         }
@@ -277,6 +284,44 @@ public class EntityCoasterCar extends Entity {
                 continue;
             }
             player.startRiding(this);
+        }
+    }
+
+    /** Who stepped off this coaster car, and on which tick — the restraint below reads it. */
+    private final java.util.Map<java.util.UUID, Long> leftThisCar = new java.util.HashMap<>();
+
+    /**
+     * Coaster restraints: a rider who lets go while the car is moving is put straight back.
+     *
+     * <p>Coaster cars are boarded by right-clicking, never by walking in. They used to share the
+     * metro walk-in check, and for coaster stock that check accepted anyone near the car — so a
+     * train spawned on a player, or one that ran through somebody standing on the track, seated
+     * them, past the ride's open/closed gate. Only a rider who was in THIS car a moment ago is
+     * re-seated now, and only while it moves; at rest they step off as normal.</p>
+     */
+    private void holdCoasterRiders(boolean moving) {
+        if (leftThisCar.isEmpty()) {
+            return;
+        }
+        long now = this.world.getTotalWorldTime();
+        java.util.Iterator<java.util.Map.Entry<java.util.UUID, Long>> it =
+            leftThisCar.entrySet().iterator();
+        while (it.hasNext()) {
+            java.util.Map.Entry<java.util.UUID, Long> left = it.next();
+            if (now - left.getValue() > 2) {
+                it.remove();
+                continue;
+            }
+            if (!moving) {
+                continue;
+            }
+            EntityPlayer player = this.world.getPlayerEntityByUUID(left.getKey());
+            // Near the car: a rider teleported away (/tp, a portal) is not dragged back.
+            if (player != null && !player.isRiding() && player.isEntityAlive()
+                && player.getDistanceSq(this) < 16.0D && canFitPassenger(player)) {
+                it.remove();
+                player.startRiding(this);
+            }
         }
     }
 
@@ -359,9 +404,8 @@ public class EntityCoasterCar extends Entity {
      */
     private boolean isInsideBody(Entity entity, TrainSpec spec) {
         if (spec == null || frame == null || spec.carStyle() != TrainSpec.CarStyle.METRO) {
-            // Coaster stock is short enough that its bounding box IS its body, and it is boarded by
-            // right-clicking rather than by walking in.
-            return true;
+            // Only metro cars are walked into; coaster stock is boarded by right-clicking.
+            return false;
         }
         double dx = entity.posX - frame.position.x;
         double dy = entity.posY - frame.position.y;
