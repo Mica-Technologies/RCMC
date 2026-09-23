@@ -75,6 +75,8 @@ public final class TrainCodec {
     private static final String KEY_COUPLING_GAP = "CouplingGap";
     private static final String KEY_SEATS = "Seats";
     private static final String KEY_CAR_STYLE = "CarStyle";
+    /** Additive: a train saved before car types had the one car there was, the sit-down. */
+    private static final String KEY_COASTER_MODEL = "CoasterModel";
     private static final String KEY_BODY_COLOUR = "BodyColour";
     private static final String KEY_TRIM_COLOUR = "TrimColour";
     private static final String KEY_SEAT_COLOUR = "SeatColour";
@@ -137,6 +139,7 @@ public final class TrainCodec {
         tag.setDouble(KEY_COUPLING_GAP, spec.couplingGap());
         tag.setInteger(KEY_SEATS, spec.seatsPerCar());
         tag.setInteger(KEY_CAR_STYLE, spec.carStyle().ordinal());
+        tag.setInteger(KEY_COASTER_MODEL, spec.coasterModel().ordinal());
         tag.setInteger(KEY_BODY_COLOUR, spec.bodyColour());
         tag.setInteger(KEY_TRIM_COLOUR, spec.trimColour());
         tag.setInteger(KEY_SEAT_COLOUR, spec.seatColour());
@@ -165,7 +168,8 @@ public final class TrainCodec {
                 tag.getInteger(KEY_BODY_COLOUR),
                 tag.getInteger(KEY_TRIM_COLOUR),
                 tag.getInteger(KEY_SEAT_COLOUR),
-                TrainSpec.CarStyle.byOrdinal(tag.getInteger(KEY_CAR_STYLE)));
+                TrainSpec.CarStyle.byOrdinal(tag.getInteger(KEY_CAR_STYLE)),
+                TrainSpec.CoasterModel.byOrdinal(tag.getInteger(KEY_COASTER_MODEL)));
             Train train = new Train(spec, integrator,
                 new TrackRef(tag.getInteger(KEY_SECTION), tag.getDouble(KEY_DISTANCE)),
                 tag.getDouble(KEY_VELOCITY));

@@ -56,7 +56,7 @@ public final class CarSeating {
     public static final double METRO_FLOOR_HEIGHT = 2.00D;
 
     /** Seat height for a coaster car — riders sit much closer to the rails. */
-    public static final double COASTER_SEAT_HEIGHT = 0.31D;
+    public static final double COASTER_SEAT_HEIGHT = CoasterCarLayout.SEAT_HEIGHT;
 
     /** Clear space kept at each end of the saloon, so no seat lands in the cab area. */
     private static final double END_MARGIN = 2.0D;
@@ -75,10 +75,9 @@ public final class CarSeating {
      * (8/10/12) and which until 2026-07-21 only decided how many cushions were <em>drawn</em>. A
      * ten-seat car that admitted one passenger was why a metro could not really be ridden.</p>
      *
-     * <p>Coaster cars stay at one rider deliberately: {@code CarModel}'s seat rows have no
-     * corresponding offsets here, so extra riders would stack on the centreline. That is a real
-     * gap, but a coaster one, and it should be closed by giving coasters a seat layout rather than
-     * by letting them overfill.</p>
+     * <p>A coaster car seats every seat of every row, laid out by {@link CoasterCarLayout}. It held
+     * one rider until that layout existed, because the model's rows had no offsets here and a second
+     * rider would have been stacked on the first.</p>
      */
     public static int capacity(TrainSpec spec) {
         if (spec == null) {
@@ -86,7 +85,7 @@ public final class CarSeating {
         }
         return spec.carStyle() == TrainSpec.CarStyle.METRO
             ? Math.max(1, spec.seatsPerCar())
-            : 1;
+            : CoasterCarLayout.capacity(spec);
     }
 
     /** Seat height above the frame origin for this spec's style. */
@@ -96,12 +95,16 @@ public final class CarSeating {
     }
 
     /**
-     * Lateral offset of seat {@code index}: alternating benches for a metro, centreline otherwise.
+     * Lateral offset of seat {@code index}: alternating benches for a metro, a row two abreast for a
+     * coaster ({@link CoasterCarLayout}).
      * Even indices take the right-hand bench, odd the left.
      */
     public static double acrossOffset(TrainSpec spec, int index) {
-        if (spec == null || spec.carStyle() != TrainSpec.CarStyle.METRO || index < 0) {
+        if (spec == null || index < 0) {
             return 0.0D;
+        }
+        if (spec.carStyle() != TrainSpec.CarStyle.METRO) {
+            return CoasterCarLayout.across(index);
         }
         return (index % 2 == 0 ? 1.0D : -1.0D) * BENCH_HALF_SEPARATION;
     }
@@ -115,8 +118,11 @@ public final class CarSeating {
      * always lands a rider on a cushion and degrades gracefully at any seat count.</p>
      */
     public static double alongOffset(TrainSpec spec, int index) {
-        if (spec == null || spec.carStyle() != TrainSpec.CarStyle.METRO || index < 0) {
+        if (spec == null || index < 0) {
             return 0.0D;
+        }
+        if (spec.carStyle() != TrainSpec.CarStyle.METRO) {
+            return CoasterCarLayout.along(spec, index);
         }
         int rows = Math.max(1, capacity(spec) / 2);
         if (rows == 1) {

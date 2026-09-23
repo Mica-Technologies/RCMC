@@ -128,6 +128,9 @@ public final class RideOperations {
                 return removeTrain(world, state, sectionId, first);
             case TUNE:
                 return tune(world, state, sectionId, first, second, value);
+            case CYCLE_CAR_MODEL:
+                ride.setCarModel(ride.carModel().next());
+                return changed(world, state, "New trains will be " + ride.carModel().label + " cars.");
             case STORE_TRAIN:
                 return transfer(world, state, sectionId, ride, RideController.TransferRequest.STORE);
             case RETRIEVE_TRAIN:
@@ -203,8 +206,9 @@ public final class RideOperations {
             return "Wait for the station to clear first.";
         }
         int id = TrainSpawner.spawn(world, state, sectionId,
-            new TrainSpec(ride.carsPerTrain(), 3.0D, 0.5D, 4), station.stopDistance(), 0.0D);
-        return "Added train #" + id + " (" + ride.carsPerTrain() + " cars).";
+            new TrainSpec(ride.carsPerTrain(), 3.0D, 0.5D, 4).withCoasterModel(ride.carModel()),
+            station.stopDistance(), 0.0D);
+        return "Added train #" + id + " (" + ride.carsPerTrain() + " " + ride.carModel().label + " cars).";
     }
 
     private static String removeTrain(World world, RcmcWorldState state, int sectionId,
@@ -273,7 +277,8 @@ public final class RideOperations {
             ride.stopCause() == null ? "" : ride.stopCause().name(), ride.carsPerTrain(),
             RideController.maxTrains(blocks), blocks, message, trains, settings)
             .withTransfer(transferState, ride.transferRequest().ordinal(),
-                stored == null ? -1 : stored);
+                stored == null ? -1 : stored)
+            .withCarModel(ride.carModel().ordinal());
     }
 
     static StationPlatform stationOf(RcmcWorldState state, int sectionId) {

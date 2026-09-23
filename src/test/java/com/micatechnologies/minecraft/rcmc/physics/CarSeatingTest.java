@@ -27,9 +27,18 @@ class CarSeatingTest {
     }
 
     @Test
-    @DisplayName("a coaster car still seats exactly one, having no seat layout of its own")
-    void coasterCarsSeatOne() {
-        assertEquals(1, CarSeating.capacity(TrainSpec.singleCar()));
+    @DisplayName("a coaster car seats every seat, each rider in a place of their own")
+    void coasterCarsSeatEveryone() {
+        TrainSpec spec = TrainSpec.singleCar();
+        assertEquals(4, CarSeating.capacity(spec), "two rows of two");
+        java.util.Set<String> places = new java.util.HashSet<>();
+        for (int i = 0; i < CarSeating.capacity(spec); i++) {
+            double across = CarSeating.acrossOffset(spec, i);
+            double along = CarSeating.alongOffset(spec, i);
+            assertTrue(Math.abs(along) < spec.carLength() * 0.5D, "inside the car: " + along);
+            places.add(String.format("%.3f,%.3f", across, along));
+        }
+        assertEquals(4, places.size(), "nobody sits on anybody: " + places);
     }
 
     @Test

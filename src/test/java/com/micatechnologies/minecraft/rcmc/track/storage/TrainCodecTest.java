@@ -96,6 +96,18 @@ class TrainCodecTest {
     }
 
     @Test
+    @DisplayName("a coaster train keeps the car it was built from")
+    void coasterModelRoundTrips() {
+        TrainManager trains = new TrainManager();
+        trains.add(3, new Train(new TrainSpec(5, 3.0D, 0.5D, 4)
+            .withCoasterModel(TrainSpec.CoasterModel.SHOULDER), integrator(), new TrackRef(1, 10.0D), 0.0D));
+        NBTTagCompound tag = new NBTTagCompound();
+        TrainCodec.write(trains, null, tag);
+        assertEquals(TrainSpec.CoasterModel.SHOULDER,
+            TrainCodec.read(tag, integrator()).train(3).spec().coasterModel());
+    }
+
+    @Test
     @DisplayName("train ids survive, so a reloaded world cannot hand out one already in use")
     void idsSurvive() {
         TrainManager trains = new TrainManager();

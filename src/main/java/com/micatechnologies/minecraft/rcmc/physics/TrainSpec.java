@@ -41,11 +41,55 @@ public final class TrainSpec {
         }
     }
 
+    /**
+     * Which coaster car a {@link CarStyle#COASTER} train is built from. Decides the model and the
+     * restraints riders are shown in, and nothing about how the train moves — every type seats two
+     * abreast in rows, laid out by {@code CoasterCarLayout}.
+     */
+    public enum CoasterModel {
+        /** A modern sit-down car: bucket seats and a lap bar per row. */
+        SIT_DOWN("Sit-down, lap bars", "coaster"),
+        /** Tall seats with over-the-shoulder restraints, as a looping coaster uses. */
+        SHOULDER("Over-the-shoulder", "shoulder"),
+        /** A classic wooden-coaster car: bench seats, high sides, one bar per row. */
+        WOODEN("Wooden classic", "wooden");
+
+        public final String label;
+        /** The word {@code /rcmc train} takes for it. */
+        public final String word;
+
+        CoasterModel(String label, String word) {
+            this.label = label;
+            this.word = word;
+        }
+
+        public CoasterModel next() {
+            return values()[(ordinal() + 1) % values().length];
+        }
+
+        /** Ordinal-indexed lookup for the wire format, clamped rather than trusted. */
+        public static CoasterModel byOrdinal(int ordinal) {
+            CoasterModel[] all = values();
+            return all[Math.max(0, Math.min(all.length - 1, ordinal))];
+        }
+
+        /** By {@link #word}, case-insensitively; {@code null} for anything else. */
+        public static CoasterModel byWord(String word) {
+            for (CoasterModel model : values()) {
+                if (model.word.equalsIgnoreCase(word)) {
+                    return model;
+                }
+            }
+            return null;
+        }
+    }
+
     private final int carCount;
     private final double carLength;
     private final double couplingGap;
     private final int seatsPerCar;
     private final CarStyle carStyle;
+    private final CoasterModel coasterModel;
 
     /**
      * Paint, as ordinals into {@code TrackPalette.Colour}.
@@ -83,6 +127,13 @@ public final class TrainSpec {
 
     public TrainSpec(int carCount, double carLength, double couplingGap, int seatsPerCar,
                      int bodyColour, int trimColour, int seatColour, CarStyle carStyle) {
+        this(carCount, carLength, couplingGap, seatsPerCar, bodyColour, trimColour, seatColour,
+            carStyle, CoasterModel.SIT_DOWN);
+    }
+
+    public TrainSpec(int carCount, double carLength, double couplingGap, int seatsPerCar,
+                     int bodyColour, int trimColour, int seatColour, CarStyle carStyle,
+                     CoasterModel coasterModel) {
         if (carCount < 1) {
             throw new IllegalArgumentException("carCount must be >= 1, got " + carCount);
         }
@@ -103,6 +154,40 @@ public final class TrainSpec {
         this.trimColour = trimColour;
         this.seatColour = seatColour;
         this.carStyle = carStyle;
+        this.coasterModel = coasterModel == null ? CoasterModel.SIT_DOWN : coasterModel;
+    }
+
+    public CoasterModel coasterModel() {
+        return coasterModel;
+    }
+
+    /** Same cars, same paint, same everything: what a client compares to see a repaint. */
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof TrainSpec)) {
+            return false;
+        }
+        TrainSpec other = (TrainSpec) o;
+        return carCount == other.carCount && Double.compare(carLength, other.carLength) == 0
+            && Double.compare(couplingGap, other.couplingGap) == 0 && seatsPerCar == other.seatsPerCar
+            && bodyColour == other.bodyColour && trimColour == other.trimColour
+            && seatColour == other.seatColour && carStyle == other.carStyle
+            && coasterModel == other.coasterModel;
+    }
+
+    @Override
+    public int hashCode() {
+        return java.util.Objects.hash(carCount, carLength, couplingGap, seatsPerCar, bodyColour,
+            trimColour, seatColour, carStyle, coasterModel);
+    }
+
+    /** The same train built from a different coaster car. */
+    public TrainSpec withCoasterModel(CoasterModel model) {
+        return new TrainSpec(carCount, carLength, couplingGap, seatsPerCar, bodyColour, trimColour,
+            seatColour, carStyle, model);
     }
 
     public int bodyColour() {
@@ -135,7 +220,7 @@ public final class TrainSpec {
             part == Part.BODY ? colour : bodyColour,
             part == Part.TRIM ? colour : trimColour,
             part == Part.SEATS ? colour : seatColour,
-            carStyle);
+            carStyle, coasterModel);
     }
 
     /** A single car, roughly the size of a standard coaster car. */

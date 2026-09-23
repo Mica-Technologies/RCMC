@@ -28,7 +28,7 @@ public class GuiRideController extends GuiScreen {
 
     private static final int PANEL_WIDTH = 360;
     private static final int PANEL_HEIGHT = 214;
-    private static final int MAX_TRAIN_ROWS = 4;
+    private static final int MAX_TRAIN_ROWS = 3;
     private static final int MAX_SETTING_ROWS = 8;
 
     private static final int ID_OPEN = 0;
@@ -43,6 +43,7 @@ public class GuiRideController extends GuiScreen {
     private static final int ID_CARS_UP = 9;
     private static final int ID_STORE = 10;
     private static final int ID_RETRIEVE = 11;
+    private static final int ID_CAR_MODEL = 12;
     /** Remove-train buttons are numbered from here, one per listed train. */
     private static final int ID_REMOVE_BASE = 100;
     /** Setting buttons: down at 200 + 2i, up at 201 + 2i. */
@@ -129,6 +130,8 @@ public class GuiRideController extends GuiScreen {
             buttonList.add(new GuiButton(id, x + 152, y + 106 + i * 18, 18, 16, "x"));
             removeButtonTrain.put(id, view.trains.get(i).trainId);
         }
+        buttonList.add(new GuiButton(ID_CAR_MODEL, x, y + 164, 170, 16, "Car: "
+            + com.micatechnologies.minecraft.rcmc.physics.TrainSpec.CoasterModel.byOrdinal(view.carModel).label));
         buttonList.add(new GuiButton(ID_CARS_DOWN, x + 118, y + 182, 16, 16, "-"));
         buttonList.add(new GuiButton(ID_CARS_UP, x + 154, y + 182, 16, 16, "+"));
 
@@ -181,6 +184,9 @@ public class GuiRideController extends GuiScreen {
                 return;
             case ID_ADD_TRAIN:
                 send(Action.ADD_TRAIN);
+                return;
+            case ID_CAR_MODEL:
+                send(Action.CYCLE_CAR_MODEL);
                 return;
             case ID_STORE:
                 send(Action.STORE_TRAIN);

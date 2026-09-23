@@ -1,199 +1,300 @@
 package com.micatechnologies.minecraft.rcmc.client.render;
 
-import net.minecraft.client.renderer.BufferBuilder;
+import com.micatechnologies.minecraft.rcmc.physics.CoasterCarLayout;
+import com.micatechnologies.minecraft.rcmc.physics.TrainSpec;
 
 /**
- * Geometry for a coaster car, emitted in the car's own local frame.
+ * A coaster car, in the car's own local frame: <b>+X</b> its right, <b>+Y</b> up out of its seats,
+ * <b>+Z</b> the way it travels, the origin on the track centreline.
  *
- * <p>Local axes match the {@code TrackFrame} basis the renderer loads: <b>+X</b> is the car's
- * right, <b>+Y</b> is up out of its roof, <b>+Z</b> is the direction of travel. The origin sits on
- * the track centreline, so the chassis hangs slightly below zero and the body rises above it — the
- * same relationship a real car has to its rails.</p>
+ * <p>Three cars, one per {@link TrainSpec.CoasterModel}, on one running gear:</p>
+ * <ul>
+ *   <li><b>Sit-down</b> — a flared tub, bucket seats, a T-shaped lap bar per row.</li>
+ *   <li><b>Over-the-shoulder</b> — the same tub with tall seats, headrests, and a harness over
+ *       each rider: what a car that goes upside down needs, and looks like it needs.</li>
+ *   <li><b>Wooden classic</b> — straight high sides with planking and a capped top rail, a bench
+ *       per row, one bar across it.</li>
+ * </ul>
  *
- * <p>Still untextured flat-shaded boxes rather than a proper model. What it does buy over the
- * single box it replaces is <em>legibility</em>: a rider can see where the seats are, which end is
- * the front, and that the cars are coupled rather than merely adjacent. Those read at a glance and
- * are what made the single box look like a placeholder even at distance.</p>
+ * <p>The seats are where {@link CoasterCarLayout} says, at its seat height, which is where a rider
+ * is put — so riders sit on cushions, not in the air beside them. The lead car carries a sculpted
+ * nose; the others a short cowl, so the front of the train reads as the front.</p>
  *
- * <p>Separated from {@code RenderCoasterCar} because the render class should be about <em>when</em>
- * and <em>where</em> to draw; this is about <em>what</em>. It also keeps the vertex maths in one
- * place, which matters now that there are a dozen boxes rather than one.</p>
+ * <p>The running gear sits outboard of the rails, as it does on a real car: road wheels on top of
+ * each rail, guide wheels on its outer face, a yoke round them. Nothing of the car comes below the
+ * railheads between them — the ties and the spine are there.</p>
  */
 final class CarModel {
 
-    /**
-     * Top of the running rails, in the same local units. Everything structural sits at or above
-     * this: the rails occupy -0.05..+0.05 about the centreline and the tie webbing runs from -0.05
-     * down to the spine, so any part of the car dipping below it clips straight through the track.
-     * The first version of this model put the floor at -0.04 and the rails came up through it.
-     */
-    private static final float RAIL_TOP = 0.05F;
+    /** Top of the running rails, from the track's coaster style: ±0.55 gauge, 0.1 square rail. */
+    static final float RAIL_TOP = 0.05F;
+    private static final float RAIL_CENTRE = 0.55F;
+    private static final float RAIL_OUTER = 0.60F;
 
-    // --- Chassis: the structural underframe, riding just clear of the railheads. ---------------
+    // Chassis and tub.
     private static final float CHASSIS_HALF_WIDTH = 0.40F;
     private static final float CHASSIS_BOTTOM = RAIL_TOP + 0.01F;
-    private static final float CHASSIS_TOP = RAIL_TOP + 0.10F;
+    private static final float FLOOR_BOTTOM = RAIL_TOP + 0.11F;
+    private static final float FLOOR_TOP = (float) CoasterCarLayout.SEAT_HEIGHT - 0.07F;
+    private static final float TUB_HALF_WIDTH = 0.62F;
+    private static final float TUB_TOP = 0.64F;
+    private static final float TUB_FLARE = 0.06F;
+    private static final float TUB_WALL = 0.07F;
 
-    // --- Body tub: the part riders sit inside. ------------------------------------------------
-    private static final float BODY_HALF_WIDTH = 0.62F;
-    private static final float BODY_FLOOR = CHASSIS_TOP;
-    private static final float BODY_FLOOR_TOP = BODY_FLOOR + 0.09F;
-    private static final float BODY_TOP = BODY_FLOOR + 0.62F;
-    private static final float BODY_WALL = 0.09F;
+    // Seats.
+    private static final float SEAT_TOP = (float) CoasterCarLayout.SEAT_HEIGHT;
+    private static final float SEAT_HALF_WIDTH = 0.24F;
+    private static final float SEAT_DEPTH_FRONT = 0.22F;
+    private static final float SEAT_DEPTH_BACK = 0.30F;
+    private static final float BACK_THICKNESS = 0.10F;
 
-    /** The nose tapers in, so the leading end reads as the front from any angle. */
-    private static final float NOSE_TAPER = 0.22F;
+    // Running gear.
+    private static final float ROAD_WHEEL_RADIUS = 0.075F;
+    private static final float GUIDE_WHEEL_RADIUS = 0.05F;
+    private static final float YOKE_OUTER = 0.78F;
+    private static final float YOKE_PLATE = 0.06F;
 
-    // --- Seats. --------------------------------------------------------------------------------
-    private static final float SEAT_BACK_HEIGHT = 0.42F;
-    private static final float SEAT_BACK_THICKNESS = 0.10F;
-    private static final float SEAT_BASE_HEIGHT = 0.07F;
-
-    /**
-     * Bogies are drawn as a pair of side plates OUTSIDE the rail gauge rather than as one box
-     * across the car. A single box wide enough to look like a wheel assembly would enclose both
-     * rails and clip them; sitting outboard reads as wheels gripping the rail from the side.
-     */
-    private static final float BOGIE_INNER = 0.62F;
-    private static final float BOGIE_OUTER = 0.76F;
-    private static final float BOGIE_HALF_LENGTH = 0.18F;
-    private static final float BOGIE_TOP = RAIL_TOP + 0.06F;
-    private static final float BOGIE_BOTTOM = RAIL_TOP - 0.10F;
-
-    private static final float COUPLING_HALF_WIDTH = 0.07F;
-    private static final float COUPLING_TOP = CHASSIS_TOP - 0.02F;
-    private static final float COUPLING_BOTTOM = CHASSIS_BOTTOM + 0.02F;
-
-    /**
-     * The chassis and bogies are NOT paintable, deliberately. They are the running gear rather
-     * than the bodywork, and every real coaster leaves them dark — letting them be recoloured
-     * would mostly produce trains that read as toys.
-     */
-    private static final float[] CHASSIS_COLOR = {0.22F, 0.22F, 0.24F};
-    private static final float[] BOGIE_COLOR = {0.30F, 0.31F, 0.34F};
+    private static final float[] CHASSIS = {0.22F, 0.22F, 0.24F};
+    private static final float[] YOKE = {0.28F, 0.29F, 0.32F};
+    private static final float[] WHEEL = {0.12F, 0.12F, 0.13F};
+    private static final float[] HUB = {0.55F, 0.56F, 0.58F};
+    private static final float[] METAL = {0.62F, 0.63F, 0.66F};
+    private static final float[] LAMP = {1.0F, 0.94F, 0.72F};
 
     private CarModel() {
         throw new AssertionError("No instances.");
     }
 
     /**
-     * Emits one car.
+     * One car.
      *
-     * @param length       car length in blocks, along the direction of travel
-     * @param seatRows     number of seat rows; two riders abreast per row
-     * @param couplingGap  distance to the next car's body, in blocks. A coupling bar is drawn only
-     *                     when this is positive and this is not the last car — a bar projecting
-     *                     off the back of the final car would read as a broken train.
-     * @param drawCoupling whether to draw the rear coupling bar
+     * @param lead         whether this is the front car, which gets the nose
+     * @param drawCoupling whether to draw the bar to the car behind — not on the last car
      */
-    static void emit(BufferBuilder buffer, float length, int seatRows, float couplingGap,
-                     boolean drawCoupling, float[] bodyColour, float[] trimColour,
-                     float[] seatColour) {
-        float halfLength = length * 0.5F;
+    static CarMesh build(TrainSpec spec, boolean lead, boolean drawCoupling,
+                         float[] body, float[] trim, float[] seats) {
+        CarMesh mesh = new CarMesh();
+        float half = (float) spec.carLength() * 0.5F;
+        TrainSpec.CoasterModel model = spec.coasterModel();
 
-        box(buffer, -CHASSIS_HALF_WIDTH, CHASSIS_BOTTOM, -halfLength,
-            CHASSIS_HALF_WIDTH, CHASSIS_TOP, halfLength, CHASSIS_COLOR);
+        mesh.box(-CHASSIS_HALF_WIDTH, CHASSIS_BOTTOM, -half, CHASSIS_HALF_WIDTH, FLOOR_BOTTOM, half, CHASSIS);
+        mesh.box(-TUB_HALF_WIDTH, FLOOR_BOTTOM, -half, TUB_HALF_WIDTH, FLOOR_TOP, half, CHASSIS);
+        runningGear(mesh, half * 0.62F);
+        runningGear(mesh, -half * 0.62F);
 
-        emitBody(buffer, halfLength, bodyColour, trimColour);
-        emitSeats(buffer, halfLength, Math.max(1, seatRows), seatColour);
+        if (model == TrainSpec.CoasterModel.WOODEN) {
+            woodenBody(mesh, half, lead, body, trim);
+        }
+        else {
+            modernBody(mesh, half, lead, body, trim);
+        }
+        for (int row = 0; row < CoasterCarLayout.rows(spec); row++) {
+            float centre = (float) CoasterCarLayout.rowCentre(spec, row);
+            switch (model) {
+                case WOODEN:
+                    benchRow(mesh, centre, seats, trim);
+                    break;
+                case SHOULDER:
+                    shoulderRow(mesh, centre, seats);
+                    break;
+                case SIT_DOWN:
+                default:
+                    lapBarRow(mesh, centre, seats);
+                    break;
+            }
+        }
 
-        // Bogies sit inboard of the ends, where the pivot points actually are on a real car — at
-        // the very ends they read as skids rather than as wheel assemblies.
-        float bogieAt = halfLength * 0.62F;
-        emitBogie(buffer, bogieAt);
-        emitBogie(buffer, -bogieAt);
+        float gap = (float) spec.couplingGap();
+        if (drawCoupling && gap > 0.0F) {
+            mesh.box(-0.07F, CHASSIS_BOTTOM + 0.02F, -half - gap, 0.07F, FLOOR_BOTTOM - 0.02F, -half, CHASSIS);
+        }
+        return mesh;
+    }
 
-        if (drawCoupling && couplingGap > 0.0F) {
-            // Spans the full gap to meet the next car's nose, so a train reads as coupled rather
-            // than as separate cars flying in formation.
-            box(buffer, -COUPLING_HALF_WIDTH, COUPLING_BOTTOM, -halfLength - couplingGap,
-                COUPLING_HALF_WIDTH, COUPLING_TOP, -halfLength, CHASSIS_COLOR);
+    // --- Running gear. -------------------------------------------------------------------------
+
+    /** A wheel assembly across the car at {@code z}: a yoke each side round a road and a guide wheel. */
+    private static void runningGear(CarMesh mesh, float z) {
+        for (float s : new float[] {1.0F, -1.0F}) {
+            // Outer plate and the top plate over the road wheels.
+            box(mesh, s, YOKE_OUTER - YOKE_PLATE, YOKE_OUTER, RAIL_TOP - 0.10F, FLOOR_TOP, z - 0.24F, z + 0.24F, YOKE);
+            box(mesh, s, RAIL_CENTRE - 0.07F, YOKE_OUTER, FLOOR_TOP - 0.05F, FLOOR_TOP, z - 0.24F, z + 0.24F, YOKE);
+            for (float along : new float[] {-0.12F, 0.12F}) {
+                mesh.cylinderX(s * RAIL_CENTRE, RAIL_TOP + ROAD_WHEEL_RADIUS, z + along,
+                    ROAD_WHEEL_RADIUS, 0.035F, 10, WHEEL);
+                mesh.cylinderX(s * (RAIL_CENTRE + 0.037F), RAIL_TOP + ROAD_WHEEL_RADIUS, z + along,
+                    0.03F, 0.004F, 6, HUB);
+            }
+            // Guide wheel against the rail's outer face.
+            mesh.cylinderY(s * (RAIL_OUTER + GUIDE_WHEEL_RADIUS + 0.005F), 0.0F, z,
+                GUIDE_WHEEL_RADIUS, 0.03F, 8, WHEEL);
         }
     }
 
-    /** Floor, two side walls, and a tapered nose and tail. Open on top so riders are visible. */
-    private static void emitBody(BufferBuilder buffer, float halfLength,
-                                 float[] bodyColour, float[] trimColour) {
-        // A properly thick floor slab, not a sheet — the rails run just beneath it and a thin one
-        // let them show through.
-        box(buffer, -BODY_HALF_WIDTH, BODY_FLOOR, -halfLength,
-            BODY_HALF_WIDTH, BODY_FLOOR_TOP, halfLength, CHASSIS_COLOR);
-
-        // Side walls, inset at the nose so the front narrows.
-        box(buffer, BODY_HALF_WIDTH - BODY_WALL, BODY_FLOOR, -halfLength,
-            BODY_HALF_WIDTH, BODY_TOP, halfLength - NOSE_TAPER, bodyColour);
-        box(buffer, -BODY_HALF_WIDTH, BODY_FLOOR, -halfLength,
-            -BODY_HALF_WIDTH + BODY_WALL, BODY_TOP, halfLength - NOSE_TAPER, bodyColour);
-
-        // Tapered nose: narrower, and carried a little lower, which is what makes the leading end
-        // read as the front rather than just as "the other end".
-        box(buffer, -BODY_HALF_WIDTH + NOSE_TAPER, BODY_FLOOR, halfLength - NOSE_TAPER,
-            BODY_HALF_WIDTH - NOSE_TAPER, BODY_TOP - 0.10F, halfLength, trimColour);
-
-        // Rear bulkhead, closing the tub off behind the last row.
-        box(buffer, -BODY_HALF_WIDTH, BODY_FLOOR, -halfLength,
-            BODY_HALF_WIDTH, BODY_TOP - 0.06F, -halfLength + BODY_WALL, bodyColour);
-    }
-
-    /** Rows of seat bases and backs, evenly spread along the tub. */
-    private static void emitSeats(BufferBuilder buffer, float halfLength, int rows,
-                                  float[] seatColour) {
-        float usable = halfLength * 2.0F - NOSE_TAPER - BODY_WALL;
-        float rowPitch = usable / rows;
-        float firstCentre = halfLength - NOSE_TAPER - rowPitch * 0.5F;
-
-        for (int i = 0; i < rows; i++) {
-            float centre = firstCentre - i * rowPitch;
-            float inner = BODY_HALF_WIDTH - BODY_WALL;
-
-            box(buffer, -inner, BODY_FLOOR_TOP, centre - rowPitch * 0.30F,
-                inner, BODY_FLOOR_TOP + SEAT_BASE_HEIGHT, centre + rowPitch * 0.30F, seatColour);
-
-            // Back sits at the rear of its own row, so a rider occupies the space in front of it.
-            float backAt = centre - rowPitch * 0.30F;
-            box(buffer, -inner, BODY_FLOOR_TOP, backAt - SEAT_BACK_THICKNESS,
-                inner, BODY_FLOOR_TOP + SEAT_BACK_HEIGHT, backAt, seatColour);
+    /** A box on one side of the car: {@code x0..x1} measured outward, mirrored for the left. */
+    private static void box(CarMesh mesh, float side, float x0, float x1, float y0, float y1,
+                            float z0, float z1, float[] colour) {
+        if (side > 0.0F) {
+            mesh.box(x0, y0, z0, x1, y1, z1, colour);
+        }
+        else {
+            mesh.box(-x1, y0, z0, -x0, y1, z1, colour);
         }
     }
 
-    private static void emitBogie(BufferBuilder buffer, float atZ) {
-        box(buffer, BOGIE_INNER, BOGIE_BOTTOM, atZ - BOGIE_HALF_LENGTH,
-            BOGIE_OUTER, BOGIE_TOP, atZ + BOGIE_HALF_LENGTH, BOGIE_COLOR);
-        box(buffer, -BOGIE_OUTER, BOGIE_BOTTOM, atZ - BOGIE_HALF_LENGTH,
-            -BOGIE_INNER, BOGIE_TOP, atZ + BOGIE_HALF_LENGTH, BOGIE_COLOR);
+    // --- Bodies. -------------------------------------------------------------------------------
+
+    /** Outer skin of the modern tub at height {@code y}: it flares out toward the top. */
+    private static float tubOuter(float y) {
+        return TUB_HALF_WIDTH + TUB_FLARE * (y - FLOOR_BOTTOM) / (TUB_TOP - FLOOR_BOTTOM);
     }
 
-    /**
-     * An axis-aligned box between two corners.
-     *
-     * <p>Winding is not maintained: the renderer draws with culling disabled, because the basis it
-     * loads is left-handed and therefore mirrors every face. See {@code RenderCoasterCar} for why
-     * that is not fixed here.</p>
-     */
-    private static void box(BufferBuilder buffer, float x1, float y1, float z1,
-                            float x2, float y2, float z2, float[] color) {
-        float r = color[0];
-        float g = color[1];
-        float b = color[2];
-        // Slight per-face shading so edges read against each other without any lighting.
-        quad(buffer, x1, y1, z1, x1, y2, z1, x2, y2, z1, x2, y1, z1, r, g, b, 0.82F);
-        quad(buffer, x2, y1, z2, x2, y2, z2, x1, y2, z2, x1, y1, z2, r, g, b, 0.86F);
-        quad(buffer, x1, y1, z2, x1, y2, z2, x1, y2, z1, x1, y1, z1, r, g, b, 0.72F);
-        quad(buffer, x2, y1, z1, x2, y2, z1, x2, y2, z2, x2, y1, z2, r, g, b, 0.72F);
-        quad(buffer, x1, y2, z1, x1, y2, z2, x2, y2, z2, x2, y2, z1, r, g, b, 1.0F);
-        quad(buffer, x1, y1, z2, x1, y1, z1, x2, y1, z1, x2, y1, z2, r, g, b, 0.55F);
+    private static void modernBody(CarMesh mesh, float half, boolean lead, float[] body, float[] trim) {
+        float front = half - (float) CoasterCarLayout.FRONT_CLEARANCE;
+        for (float s : new float[] {1.0F, -1.0F}) {
+            // A flared side with a rolled top edge.
+            float[][] side = {
+                {s * TUB_HALF_WIDTH, FLOOR_BOTTOM},
+                {s * tubOuter(TUB_TOP - 0.04F), TUB_TOP - 0.04F},
+                {s * (tubOuter(TUB_TOP) - 0.02F), TUB_TOP},
+                {s * (tubOuter(TUB_TOP) - TUB_WALL - 0.02F), TUB_TOP},
+                {s * (TUB_HALF_WIDTH - TUB_WALL), FLOOR_TOP},
+            };
+            mesh.prismZ(side, -half, front, body, true, false);
+            // A trim stripe standing just proud of the skin.
+            float y0 = 0.44F;
+            float y1 = 0.50F;
+            float[][] stripe = {
+                {s * tubOuter(y0), y0}, {s * (tubOuter(y0) + 0.012F), y0},
+                {s * (tubOuter(y1) + 0.012F), y1}, {s * tubOuter(y1), y1},
+            };
+            mesh.prismZ(stripe, -half, front, trim, true, true);
+        }
+        // Rear bulkhead with a bumper under it.
+        mesh.box(-TUB_HALF_WIDTH, FLOOR_TOP, -half, TUB_HALF_WIDTH, TUB_TOP - 0.06F, -half + 0.07F, body);
+        mesh.box(-TUB_HALF_WIDTH + 0.08F, FLOOR_BOTTOM - 0.02F, -half - 0.05F,
+            TUB_HALF_WIDTH - 0.08F, FLOOR_BOTTOM + 0.10F, -half + 0.01F, trim);
+
+        float[][] full = section(tubOuter(TUB_TOP) + 0.0F, FLOOR_BOTTOM, TUB_TOP);
+        if (lead) {
+            // The nose: narrowing and dropping in three stages to a rounded point.
+            float[][] mid = section(0.50F, FLOOR_BOTTOM, 0.52F);
+            float[][] tip = section(0.26F, FLOOR_BOTTOM + 0.04F, 0.32F);
+            mesh.loftZ(full, front, mid, half + 0.05F, body, false, false);
+            mesh.loftZ(mid, half + 0.05F, tip, half + 0.40F, body, false, true);
+            // A trim chevron over the nose, and a pair of lamps.
+            float[][] band = section(0.51F, 0.44F, 0.50F);
+            float[][] bandTip = section(0.28F, 0.28F, 0.33F);
+            mesh.loftZ(band, half + 0.052F, bandTip, half + 0.402F, trim, true, true);
+            mesh.box(-0.20F, 0.20F, half + 0.39F, -0.12F, 0.25F, half + 0.42F, LAMP);
+            mesh.box(0.12F, 0.20F, half + 0.39F, 0.20F, 0.25F, half + 0.42F, LAMP);
+        }
+        else {
+            // A short sloped cowl in front of the first row.
+            float[][] low = section(0.54F, FLOOR_BOTTOM, 0.44F);
+            mesh.loftZ(full, front, low, half, body, false, true);
+        }
     }
 
-    private static void quad(BufferBuilder buffer,
-                             float x1, float y1, float z1, float x2, float y2, float z2,
-                             float x3, float y3, float z3, float x4, float y4, float z4,
-                             float r, float g, float b, float shade) {
-        float sr = r * shade;
-        float sg = g * shade;
-        float sb = b * shade;
-        buffer.pos(x1, y1, z1).color(sr, sg, sb, 1.0F).endVertex();
-        buffer.pos(x2, y2, z2).color(sr, sg, sb, 1.0F).endVertex();
-        buffer.pos(x3, y3, z3).color(sr, sg, sb, 1.0F).endVertex();
-        buffer.pos(x4, y4, z4).color(sr, sg, sb, 1.0F).endVertex();
+    private static void woodenBody(CarMesh mesh, float half, boolean lead, float[] body, float[] trim) {
+        float top = 0.70F;
+        float front = half - (float) CoasterCarLayout.FRONT_CLEARANCE;
+        float[] plank = {body[0] * 0.78F, body[1] * 0.78F, body[2] * 0.78F};
+        for (float s : new float[] {1.0F, -1.0F}) {
+            box(mesh, s, TUB_HALF_WIDTH - TUB_WALL, TUB_HALF_WIDTH + 0.02F, FLOOR_BOTTOM, top, -half, front, body);
+            // Planking: darker seams along the side.
+            for (float y : new float[] {0.28F, 0.42F, 0.56F}) {
+                box(mesh, s, TUB_HALF_WIDTH + 0.02F, TUB_HALF_WIDTH + 0.03F, y, y + 0.02F, -half, front, plank);
+            }
+            // A capping rail along the top, wider than the side.
+            box(mesh, s, TUB_HALF_WIDTH - TUB_WALL - 0.02F, TUB_HALF_WIDTH + 0.05F, top, top + 0.05F,
+                -half - 0.02F, front + 0.02F, trim);
+        }
+        mesh.box(-TUB_HALF_WIDTH, FLOOR_TOP, -half, TUB_HALF_WIDTH, top, -half + 0.07F, body);
+        mesh.box(-TUB_HALF_WIDTH - 0.02F, top, -half - 0.02F, TUB_HALF_WIDTH + 0.05F, top + 0.05F, -half + 0.08F, trim);
+        if (lead) {
+            // A dashboard front sweeping up, with a single lamp.
+            float[][] base = section(TUB_HALF_WIDTH + 0.02F, FLOOR_BOTTOM, top);
+            float[][] dash = section(TUB_HALF_WIDTH - 0.02F, FLOOR_BOTTOM, 0.88F);
+            mesh.loftZ(base, front, dash, half + 0.10F, body, false, true);
+            mesh.box(-TUB_HALF_WIDTH + 0.02F, 0.86F, half + 0.02F, TUB_HALF_WIDTH - 0.02F, 0.92F, half + 0.14F, trim);
+            mesh.cylinderX(0.0F, 0.55F, half + 0.12F, 0.07F, 0.0F, 10, METAL);
+            mesh.box(-0.05F, 0.50F, half + 0.10F, 0.05F, 0.60F, half + 0.13F, LAMP);
+        }
+        else {
+            mesh.box(-TUB_HALF_WIDTH - 0.02F, FLOOR_BOTTOM, front, TUB_HALF_WIDTH + 0.02F, top - 0.08F, half, body);
+        }
+    }
+
+    /** A symmetric rectangle section of half-width {@code halfWidth} from {@code y0} to {@code y1}. */
+    private static float[][] section(float halfWidth, float y0, float y1) {
+        return new float[][] {{-halfWidth, y0}, {halfWidth, y0}, {halfWidth, y1}, {-halfWidth, y1}};
+    }
+
+    // --- Seats and restraints. ------------------------------------------------------------------
+
+    /** A bucket seat for one rider at {@code x}, hips at {@code centre}, back rising to {@code backTop}. */
+    private static void bucket(CarMesh mesh, float x, float centre, float backTop, float[] seats) {
+        float x0 = x - SEAT_HALF_WIDTH;
+        float x1 = x + SEAT_HALF_WIDTH;
+        mesh.box(x0, FLOOR_TOP, centre - SEAT_DEPTH_BACK, x1, SEAT_TOP, centre + SEAT_DEPTH_FRONT, seats);
+        // The back leans rearward as it rises.
+        float back = centre - SEAT_DEPTH_BACK;
+        // Built as a slanted bar through the middle of the back.
+        mesh.barYZ(x, FLOOR_TOP, back - BACK_THICKNESS * 0.5F, backTop, back - BACK_THICKNESS * 0.5F - 0.08F,
+            SEAT_HALF_WIDTH, BACK_THICKNESS * 0.5F, seats);
+        // Side bolsters.
+        mesh.box(x0, SEAT_TOP, centre - SEAT_DEPTH_BACK + 0.02F, x0 + 0.05F, SEAT_TOP + 0.06F,
+            centre + SEAT_DEPTH_FRONT - 0.04F, seats);
+        mesh.box(x1 - 0.05F, SEAT_TOP, centre - SEAT_DEPTH_BACK + 0.02F, x1, SEAT_TOP + 0.06F,
+            centre + SEAT_DEPTH_FRONT - 0.04F, seats);
+    }
+
+    private static void lapBarRow(CarMesh mesh, float centre, float[] seats) {
+        for (int i = 0; i < CoasterCarLayout.ABREAST; i++) {
+            bucket(mesh, (float) CoasterCarLayout.across(i), centre, 0.80F, seats);
+        }
+        // A T-bar from a post between the seats: the bar across both laps, padded.
+        float barZ = centre + SEAT_DEPTH_FRONT - 0.02F;
+        mesh.box(-0.04F, FLOOR_TOP, barZ - 0.03F, 0.04F, 0.50F, barZ + 0.03F, METAL);
+        mesh.box(-0.52F, 0.48F, barZ - 0.04F, 0.52F, 0.53F, barZ + 0.04F, METAL);
+        for (int i = 0; i < CoasterCarLayout.ABREAST; i++) {
+            float x = (float) CoasterCarLayout.across(i);
+            mesh.box(x - 0.16F, 0.47F, barZ - 0.06F, x + 0.16F, 0.55F, barZ + 0.05F, seats);
+        }
+    }
+
+    private static void shoulderRow(CarMesh mesh, float centre, float[] seats) {
+        for (int i = 0; i < CoasterCarLayout.ABREAST; i++) {
+            float x = (float) CoasterCarLayout.across(i);
+            bucket(mesh, x, centre, 1.02F, seats);
+            float back = centre - SEAT_DEPTH_BACK - 0.08F;
+            // Headrest with wings, above the seat back.
+            mesh.box(x - 0.15F, 1.00F, back - 0.10F, x + 0.15F, 1.16F, back + 0.02F, seats);
+            mesh.box(x - 0.17F, 0.98F, back - 0.08F, x - 0.13F, 1.14F, back + 0.10F, seats);
+            mesh.box(x + 0.13F, 0.98F, back - 0.08F, x + 0.17F, 1.14F, back + 0.10F, seats);
+            // The harness: over each shoulder from the seat back, down the chest to the lap.
+            for (float offset : new float[] {-0.13F, 0.13F}) {
+                float hx = x + offset;
+                mesh.barYZ(hx, 0.96F, back + 0.02F, 0.86F, centre - 0.06F, 0.03F, 0.03F, METAL);
+                mesh.barYZ(hx, 0.86F, centre - 0.06F, 0.58F, centre + 0.10F, 0.035F, 0.035F, seats);
+                mesh.barYZ(hx, 0.58F, centre + 0.10F, 0.40F, centre + 0.14F, 0.03F, 0.03F, METAL);
+            }
+            // The chest pad between the two rails.
+            mesh.box(x - 0.13F, 0.56F, centre + 0.06F, x + 0.13F, 0.74F, centre + 0.14F, seats);
+        }
+    }
+
+    private static void benchRow(CarMesh mesh, float centre, float[] seats, float[] trim) {
+        float inner = TUB_HALF_WIDTH - TUB_WALL;
+        mesh.box(-inner, FLOOR_TOP, centre - SEAT_DEPTH_BACK, inner, SEAT_TOP, centre + SEAT_DEPTH_FRONT, seats);
+        float back = centre - SEAT_DEPTH_BACK;
+        mesh.box(-inner, FLOOR_TOP, back - BACK_THICKNESS, inner, 0.62F, back, seats);
+        mesh.box(-inner, 0.62F, back - BACK_THICKNESS - 0.01F, inner, 0.66F, back + 0.01F, trim);
+        // One bar across the row, carried on the car's sides.
+        float barZ = centre + SEAT_DEPTH_FRONT - 0.02F;
+        mesh.box(-inner, 0.48F, barZ - 0.035F, inner, 0.53F, barZ + 0.035F, METAL);
+        mesh.box(-inner, 0.48F, barZ - 0.06F, -inner + 0.06F, 0.66F, barZ + 0.06F, METAL);
+        mesh.box(inner - 0.06F, 0.48F, barZ - 0.06F, inner, 0.66F, barZ + 0.06F, METAL);
     }
 }
