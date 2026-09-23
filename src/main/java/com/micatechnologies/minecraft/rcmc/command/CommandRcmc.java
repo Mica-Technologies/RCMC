@@ -1963,6 +1963,15 @@ public class CommandRcmc extends CommandBase {
         }
         RideElementSet elements = state.elements();
         if ("off".equalsIgnoreCase(args[2])) {
+            // A stored train is found through the link; unlinking under it would leave it on the
+            // storage track with nothing able to bring it back.
+            Integer stored = transfer.isLinked()
+                ? com.micatechnologies.minecraft.rcmc.physics.ride.Transfers.stored(transfer, state.trains().asMap())
+                : null;
+            if (stored != null) {
+                throw new CommandException("Train #" + stored + " is in storage. Retrieve it at the"
+                    + " operator panel before unlinking the transfer track.");
+            }
             if (transfer.isLinked()) {
                 removeBerths(elements, transfer.storageSectionId());
             }
@@ -1994,6 +2003,13 @@ public class CommandRcmc extends CommandBase {
                 + " it needs to be at least as long, level with it.");
         }
         // Only now, with the new storage checked: a mistyped id must not cost the old link its berth.
+        Integer stored = transfer.isLinked()
+            ? com.micatechnologies.minecraft.rcmc.physics.ride.Transfers.stored(transfer, state.trains().asMap())
+            : null;
+        if (stored != null && storageId != transfer.storageSectionId()) {
+            throw new CommandException("Train #" + stored + " is in storage. Retrieve it at the"
+                + " operator panel before moving the transfer track's storage.");
+        }
         if (transfer.isLinked()) {
             removeBerths(elements, transfer.storageSectionId());
         }
