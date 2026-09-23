@@ -115,6 +115,26 @@ class RideControllerTest {
     }
 
     @Test
+    @DisplayName("a ride runs one train fewer than it has blocks, and one with no blocks at all")
+    void trainCapacityFollowsTheBlocks() {
+        assertEquals(1, RideController.maxTrains(0), "nothing would keep a second train off the first");
+        assertEquals(1, RideController.maxTrains(1));
+        assertEquals(1, RideController.maxTrains(2));
+        assertEquals(3, RideController.maxTrains(4), "four trains on four blocks deadlock");
+    }
+
+    @Test
+    @DisplayName("cars per train stay within what a train can be")
+    void carsPerTrainAreBounded() {
+        RideController c = new RideController(1);
+        assertEquals(RideController.DEFAULT_CARS, c.carsPerTrain());
+        c.setCarsPerTrain(0);
+        assertEquals(RideController.MIN_CARS, c.carsPerTrain());
+        c.setCarsPerTrain(99);
+        assertEquals(RideController.MAX_CARS, c.carsPerTrain());
+    }
+
+    @Test
     @DisplayName("DISPATCH does nothing on an automatic, closed or stopped ride")
     void dispatchPressIsRefusedWhenMeaningless() {
         RideController c = new RideController(1);

@@ -55,13 +55,17 @@ public final class RcmcNetwork {
             nextId++, Side.CLIENT);
         CHANNEL.registerMessage(PacketStationAnnounce.Handler.class, PacketStationAnnounce.class,
             nextId++, Side.CLIENT);
+        CHANNEL.registerMessage(PacketRideView.Handler.class, PacketRideView.class,
+            nextId++, Side.CLIENT);
+        CHANNEL.registerMessage(PacketRideAction.Handler.class, PacketRideAction.class,
+            nextId++, Side.SERVER);
     }
 
     public static void sendTo(Object message, EntityPlayerMP player) {
         CHANNEL.sendTo((net.minecraftforge.fml.common.network.simpleimpl.IMessage) message, player);
     }
 
-    /** Client to server. The build tool's adjustments are the only traffic in this direction. */
+    /** Client to server: the build tool's adjustments and the ride operator panel's presses. */
     public static void sendToServer(Object message) {
         CHANNEL.sendToServer(
             (net.minecraftforge.fml.common.network.simpleimpl.IMessage) message);

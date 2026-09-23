@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": { "model": "rcmc:operator_panel" },
+    "facing=east":  { "model": "rcmc:operator_panel", "y": 90 },
+    "facing=south": { "model": "rcmc:operator_panel", "y": 180 },
+    "facing=west":  { "model": "rcmc:operator_panel", "y": 270 }
+  }
+}

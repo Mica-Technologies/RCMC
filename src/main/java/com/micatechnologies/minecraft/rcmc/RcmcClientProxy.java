@@ -89,6 +89,8 @@ public class RcmcClientProxy extends RcmcCommonProxy {
             com.micatechnologies.minecraft.rcmc.block.RcmcBlocks.arrivalBoard));
         bindModel(net.minecraft.item.Item.getItemFromBlock(
             com.micatechnologies.minecraft.rcmc.block.RcmcBlocks.stationSpeaker));
+        bindModel(net.minecraft.item.Item.getItemFromBlock(
+            com.micatechnologies.minecraft.rcmc.block.RcmcBlocks.operatorPanel));
     }
 
     private static void bindModel(net.minecraft.item.Item item) {
@@ -125,5 +127,21 @@ public class RcmcClientProxy extends RcmcCommonProxy {
     @Override
     public void warmUpTts() {
         com.micatechnologies.minecraft.rcmc.client.TtsBridge.warmUp();
+    }
+
+    @Override
+    public void showRideController(com.micatechnologies.minecraft.rcmc.net.RideView view) {
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getMinecraft();
+        mc.addScheduledTask(() -> {
+            if (mc.currentScreen instanceof com.micatechnologies.minecraft.rcmc.client.gui.GuiRideController
+                && ((com.micatechnologies.minecraft.rcmc.client.gui.GuiRideController) mc.currentScreen)
+                    .sectionId() == view.sectionId) {
+                ((com.micatechnologies.minecraft.rcmc.client.gui.GuiRideController) mc.currentScreen)
+                    .update(view);
+            }
+            else {
+                mc.displayGuiScreen(new com.micatechnologies.minecraft.rcmc.client.gui.GuiRideController(view));
+            }
+        });
     }
 }
