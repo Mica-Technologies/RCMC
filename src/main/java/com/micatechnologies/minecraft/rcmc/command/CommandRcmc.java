@@ -1513,8 +1513,16 @@ public class CommandRcmc extends CommandBase {
             RcmcConfig.gravity);
         // Simulate once and derive the rating from that, rather than calling rate() — the run is
         // what is expensive, and the statistics are wanted here in their own right.
-        RideStatistics stats = rater.simulate(state.network(), state.elements(),
-            new TrackRef(section.id(), 0.0D), TrainSpec.singleCar(), 0.0D);
+        // The ride's own train if it has one, the demo's five cars if not; run from its station
+        // through a copy of the hardware, so the ride that is running is not touched.
+        TrainSpec spec = new TrainSpec(5, 3.0D, 0.5D, 4);
+        for (Train running : state.trains().trains()) {
+            if (running.reference().sectionId() == section.id()) {
+                spec = running.spec();
+                break;
+            }
+        }
+        RideStatistics stats = rater.simulateRide(state.network(), state.elements(), section.id(), spec);
         RideRating rating = RideRating.from(stats);
 
         reply(sender, TextFormatting.GOLD, "Ride rating — section #" + section.id());

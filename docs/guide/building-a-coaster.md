@@ -202,8 +202,9 @@ Trains are painted by command, since a moving train is not something you point a
 /rcmc info                                      list sections and trains
 ```
 
-`/rcmc rate` simulates a lap **offline** — no entity is spawned, so it is safe on a circuit that
-already has a train running. It reports the safety verdict separately from the scores, and calls
+`/rcmc rate` simulates a lap **offline**: the ride's own train (or five cars if it has none), from
+rest at its station, through a copy of its hardware — no entity is spawned and the running ride is
+not touched, so it is safe on a circuit that already has a train running. It reports the safety verdict separately from the scores, and calls
 out an incomplete lap explicitly, so a coaster that stalls halfway cannot produce a
 plausible-looking rating.
 

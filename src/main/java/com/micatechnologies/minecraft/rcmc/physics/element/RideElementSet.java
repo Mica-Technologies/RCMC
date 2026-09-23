@@ -89,6 +89,23 @@ public final class RideElementSet implements TrainManager.ExternalAcceleration {
         return null;
     }
 
+    /**
+     * A copy of this set a simulation can run a train through without touching the park: stations,
+     * the one element with running state (which train it serves, where it is in its cycle), are
+     * rebuilt fresh; every other element holds only its settings and is shared. Same order.
+     *
+     * <p>Used by the ride rater. Running its test train through the live set made that train claim
+     * the real station out from under the real one.</p>
+     */
+    public RideElementSet freshCopy() {
+        RideElementSet copy = new RideElementSet();
+        for (RideElement element : elements) {
+            copy.add(element instanceof StationPlatform
+                ? ((StationPlatform) element).freshCopy() : element);
+        }
+        return copy;
+    }
+
     public List<RideElement> elements() {
         return Collections.unmodifiableList(elements);
     }
