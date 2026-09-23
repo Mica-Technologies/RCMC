@@ -2,6 +2,7 @@ package com.micatechnologies.minecraft.rcmc.track.storage;
 
 import com.micatechnologies.minecraft.rcmc.physics.ride.RideController;
 import com.micatechnologies.minecraft.rcmc.physics.ride.RideControllers;
+import java.util.Map;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
 
@@ -27,6 +28,41 @@ public final class RideCodec {
     private static final String KEY_TRANSFER = "TransferRequest";
     private static final String KEY_CAR_MODEL = "CarModel";
     private static final String KEY_CARS = "CarsPerTrain";
+    private static final String KEY_HOMES = "RideHomes";
+    private static final String KEY_MEMBER = "Member";
+    private static final String KEY_HOME = "Home";
+
+    /**
+     * Writes which sections belong to which ride. Authored state, unlike the rest of this codec: it
+     * says what the track IS — a split section is still one ride — so it goes into the undo snapshot
+     * with the track, and an undone merge gives each section its own ride back.
+     */
+    public static void writeHomes(RideControllers rides, NBTTagCompound root) {
+        NBTTagList list = new NBTTagList();
+        if (rides != null) {
+            for (Map.Entry<Integer, Integer> entry : rides.homes().entrySet()) {
+                NBTTagCompound tag = new NBTTagCompound();
+                tag.setInteger(KEY_MEMBER, entry.getKey());
+                tag.setInteger(KEY_HOME, entry.getValue());
+                list.appendTag(tag);
+            }
+        }
+        root.setTag(KEY_HOMES, list);
+    }
+
+    /** Reads what {@link #writeHomes} wrote; empty for a save from before rides could span sections. */
+    public static Map<Integer, Integer> readHomes(NBTTagCompound root) {
+        Map<Integer, Integer> homes = new java.util.LinkedHashMap<>();
+        if (root == null || !root.hasKey(KEY_HOMES)) {
+            return homes;
+        }
+        NBTTagList list = root.getTagList(KEY_HOMES, 10);
+        for (int i = 0; i < list.tagCount(); i++) {
+            NBTTagCompound tag = list.getCompoundTagAt(i);
+            homes.put(tag.getInteger(KEY_MEMBER), tag.getInteger(KEY_HOME));
+        }
+        return homes;
+    }
 
     private RideCodec() {
     }

@@ -227,6 +227,10 @@ every change can be undone with `/rcmc undo`.
 | **Reverse direction** | Turn the section round so trains run the other way |
 | **Style** | Cycle the section's track style: coaster, then each transit look |
 
+A split section is still one ride: the halves share one operator panel, one e-stop and one set of
+hardware settings, and a lift or brake cut in two by the split is still one row on the panel.
+Merging two sections joins their rides, keeping whichever had been operated.
+
 A section has one style, so to change style part-way along, split it there and restyle one half.
 Two sections of different styles won't merge; restyle one to match first.
 
