@@ -6,7 +6,11 @@ import com.micatechnologies.minecraft.rcmc.builder.TransitBuildSession;
 import com.micatechnologies.minecraft.rcmc.net.PacketTrackSync;
 import com.micatechnologies.minecraft.rcmc.net.PacketTransitSync;
 import com.micatechnologies.minecraft.rcmc.net.RcmcNetwork;
+import com.micatechnologies.minecraft.rcmc.physics.block.BlockSection;
+import com.micatechnologies.minecraft.rcmc.physics.transit.LineSignals;
+import com.micatechnologies.minecraft.rcmc.physics.transit.SignalLayout;
 import com.micatechnologies.minecraft.rcmc.physics.transit.TransitLine;
+import com.micatechnologies.minecraft.rcmc.physics.transit.TransitPlatform;
 import com.micatechnologies.minecraft.rcmc.physics.transit.TransitStation;
 import com.micatechnologies.minecraft.rcmc.physics.transit.TransitSystem;
 import com.micatechnologies.minecraft.rcmc.track.TrackNetwork;
@@ -38,7 +42,7 @@ import net.minecraftforge.fml.relauncher.SideOnly;
  *
  * <p>Controls:</p>
  * <ul>
- *   <li><b>G</b> — cycle mode: station → platform → line → switch → track style.</li>
+ *   <li><b>G</b> — cycle mode: station → platform → line → signal → switch → track style.</li>
  *   <li><b>Right-click track</b> — do this mode's thing at the point aimed at.</li>
  *   <li><b>C</b> — commit what is being assembled (create the line, throw in the switch).</li>
  *   <li><b>V</b> — in line mode, cycle loop / shuttle / turnback.</li>
@@ -153,6 +157,9 @@ public class ItemTransitTool extends Item {
                 return;
             case LINE:
                 pickStop(player, state, session, hit);
+                return;
+            case SIGNAL:
+                signal(player, world, state, hit);
                 return;
             case SWITCH:
                 pickSwitchEnd(player, state, session, hit);
@@ -397,6 +404,128 @@ public class ItemTransitTool extends Item {
             + " stops, " + session.kind().label() + ".");
         say(player, TextFormatting.DARK_GRAY, "  Run it: /rcmc train <section> 3 0 metro,"
             + " then /rcmc line start " + name + " <trainId>");
+        int issues = com.micatechnologies.minecraft.rcmc.physics.transit.MetroCheck.check(state.network(), transit,
+            java.util.Collections.singletonList(transit.line(name))).size();
+        if (issues > 0) {
+            say(player, TextFormatting.GOLD, "  " + issues + " thing(s) worth a look on its track — marked on it while"
+                + " you hold this tool, or listed by /rcmc line check " + name);
+        }
+    }
+
+    // --- Signal mode. --------------------------------------------------------------------------
+
+    /** How close to a signal a sneak-click must land to remove it, in blocks. */
+    private static final double SIGNAL_PICK_RADIUS = 6.0D;
+
+    /** A signal nearer a station's stop point than this is inside its platform. */
+    private static final double PLATFORM_REACH = 30.0D;
+
+    /**
+     * Places a signal where the track was clicked, or takes the nearest one out: for every line
+     * that stops on this track, since the blocks a train is held by belong to the line it runs.
+     */
+    private static void signal(EntityPlayer player, World world, RcmcWorldState state,
+                               TrackPicker.Hit hit) {
+        TransitSystem transit = state.transit();
+        int sectionId = hit.ref.sectionId();
+        List<TransitLine> lines = linesOn(transit, sectionId);
+        if (lines.isEmpty()) {
+            say(player, TextFormatting.GRAY, "No line stops on this track. Signals belong to a line: "
+                + "make one in line mode first.");
+            return;
+        }
+        TrackSection section = state.network().section(sectionId);
+        boolean removing = player.isSneaking();
+        List<String> changed = new ArrayList<>();
+        double shortest = Double.POSITIVE_INFINITY;
+        for (TransitLine line : lines) {
+            LineSignals now = transit.signalsFor(line.name());
+            List<BlockSection> blocks = now == null ? new ArrayList<>() : now.blocks();
+            List<BlockSection> next = removing
+                ? SignalLayout.withoutSignal(blocks, sectionId, hit.ref.distance(), SIGNAL_PICK_RADIUS)
+                : SignalLayout.withSignal(blocks, sectionId, section.totalLength(), hit.ref.distance());
+            if (next == null) {
+                continue;
+            }
+            transit.setSignals(line.name(), next.isEmpty() ? null
+                : new LineSignals(next, LineSignals.DEFAULT_MARGIN, LineSignals.DEFAULT_HORIZON));
+            changed.add(line.name());
+            shortest = Math.min(shortest, SignalLayout.shortestBlock(next, sectionId));
+        }
+        if (changed.isEmpty()) {
+            say(player, TextFormatting.GRAY, removing
+                ? "No signal within " + (int) SIGNAL_PICK_RADIUS + " blocks of there."
+                : "Too close to a signal or the end of the track: a block must be at least "
+                    + (int) SignalLayout.MIN_BLOCK + " blocks long.");
+            return;
+        }
+        syncTransit(world, state);
+        LineSignals first = transit.signalsFor(changed.get(0));
+        int count = first == null ? 0 : SignalLayout.signals(first.blocks(), sectionId).size();
+        say(player, TextFormatting.GREEN, (removing ? "Signal removed" : "Signal placed") + " on "
+            + String.join(", ", changed) + ". This track has " + count + " signal"
+            + (count == 1 ? "" : "s") + (count == 0 ? " and is unsignalled." : "."));
+        if (!removing) {
+            double longest = longestTrainOn(state, changed);
+            if (shortest < longest) {
+                say(player, TextFormatting.YELLOW, "  A block here is " + (int) shortest
+                    + " blocks long, shorter than the " + (int) longest + "-block train running on it."
+                    + " A train can be in two blocks at once, and hold both.");
+            }
+            TransitStation inside = stationAround(transit, lines, hit.ref);
+            if (inside != null) {
+                say(player, TextFormatting.YELLOW, "  That is inside " + inside.name() + "'s platform:"
+                    + " a train held at it stands half in the station. Signals usually go just before one.");
+            }
+        }
+    }
+
+    /** Every line with a berth on {@code sectionId}. */
+    private static List<TransitLine> linesOn(TransitSystem transit, int sectionId) {
+        List<TransitLine> out = new ArrayList<>();
+        for (TransitLine line : transit.lines()) {
+            boolean on = false;
+            for (TransitStation station : line.stations()) {
+                TransitStation live = transit.station(station.name());
+                for (TransitPlatform platform : (live == null ? station : live).platforms()) {
+                    on |= platform.stopPoint().sectionId() == sectionId;
+                }
+            }
+            if (on) {
+                out.add(line);
+            }
+        }
+        return out;
+    }
+
+    /** The station whose platform {@code ref} falls inside, on these lines, or {@code null}. */
+    private static TransitStation stationAround(TransitSystem transit, List<TransitLine> lines, TrackRef ref) {
+        for (TransitLine line : lines) {
+            for (TransitStation station : line.stations()) {
+                TransitStation live = transit.station(station.name());
+                TransitStation current = live == null ? station : live;
+                for (TransitPlatform platform : current.platforms()) {
+                    if (platform.stopPoint().sectionId() == ref.sectionId()
+                        && Math.abs(platform.stopPoint().distance() - ref.distance()) < PLATFORM_REACH) {
+                        return current;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    /** The longest train in service on any of these lines, in blocks; 0 if none is running. */
+    private static double longestTrainOn(RcmcWorldState state, List<String> lineNames) {
+        double longest = 0.0D;
+        for (java.util.Map.Entry<Integer, com.micatechnologies.minecraft.rcmc.physics.transit.LineService> entry
+            : state.transit().services().entrySet()) {
+            com.micatechnologies.minecraft.rcmc.physics.Train train = state.trains().train(entry.getKey());
+            if (train != null && lineNames.contains(entry.getValue().line().name())) {
+                longest = Math.max(longest, train.spec().totalLength());
+            }
+        }
+        return longest;
     }
 
     // --- Switch mode. --------------------------------------------------------------------------
@@ -518,6 +647,7 @@ public class ItemTransitTool extends Item {
                 return;
             case STATION:
             case PLATFORM:
+            case SIGNAL:
             case STYLE:
             default:
                 say(player, TextFormatting.GRAY, session.mode().label()
@@ -588,7 +718,7 @@ public class ItemTransitTool extends Item {
     @Override
     @SideOnly(Side.CLIENT)
     public void addInformation(ItemStack stack, World world, List<String> tooltip, ITooltipFlag flag) {
-        tooltip.add(TextFormatting.GRAY + "G: mode — station, platform, line, switch, track style");
+        tooltip.add(TextFormatting.GRAY + "G: mode — station, platform, line, signal, switch, track style");
         tooltip.add(TextFormatting.GRAY + "Right-click track: apply the current mode");
         tooltip.add(TextFormatting.GRAY + "C: create the line / switch being assembled");
         tooltip.add(TextFormatting.GRAY + "V: loop / shuttle / turnback (line mode)");

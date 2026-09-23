@@ -50,6 +50,13 @@ public final class LineSignals {
     /** How far short of an occupied block's boundary the authority ends, blocks. */
     public static final double DEFAULT_MARGIN = 0.5D;
 
+    /**
+     * How far ahead a line's trains look for occupied blocks, in blocks. Generous on purpose: it
+     * need only comfortably exceed the longest braking distance on the line, which at metro speeds
+     * and the service brake is under 200.
+     */
+    public static final double DEFAULT_HORIZON = 500.0D;
+
     private final List<BlockSection> blocks;
     private final double margin;
     private final double horizon;

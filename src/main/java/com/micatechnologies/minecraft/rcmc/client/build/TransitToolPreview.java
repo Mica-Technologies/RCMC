@@ -78,6 +78,11 @@ public final class TransitToolPreview {
             }
         }
 
+        // Every signal already placed, so a block's extent is visible while laying the next one.
+        if (current == TransitBuildSession.Mode.SIGNAL) {
+            drawSignals(state, network, player);
+        }
+
         net.minecraft.util.math.Vec3d eyes = player.getPositionEyes(event.getPartialTicks());
         net.minecraft.util.math.Vec3d look = player.getLook(event.getPartialTicks());
         TrackPicker.Hit hit = TrackPicker.pickAlongRay(network, new Vec3(eyes.x, eyes.y, eyes.z),
@@ -117,6 +122,9 @@ public final class TransitToolPreview {
                 }
                 break;
             }
+            case SIGNAL:
+                what = player.isSneaking() ? "Remove the nearest signal" : "Place a signal here";
+                break;
             case SWITCH:
                 what = "Pick this track's nearest end";
                 break;
@@ -138,11 +146,41 @@ public final class TransitToolPreview {
                 return new float[] {1.0F, 0.85F, 0.2F};
             case LINE:
                 return new float[] {0.3F, 0.8F, 1.0F};
+            case SIGNAL:
+                return new float[] {1.0F, 0.25F, 0.2F};
             case SWITCH:
                 return new float[] {1.0F, 0.45F, 0.35F};
             case STYLE:
             default:
                 return new float[] {0.85F, 0.6F, 1.0F};
+        }
+    }
+
+    /** A red post at every signal within sight — each inner block boundary, once however many lines share it. */
+    private static void drawSignals(RcmcWorldState state, TrackNetwork network, EntityPlayer player) {
+        java.util.Set<String> drawn = new java.util.HashSet<>();
+        Vec3 eye = new Vec3(player.posX, player.posY, player.posZ);
+        for (com.micatechnologies.minecraft.rcmc.physics.transit.LineSignals signals
+            : state.transit().signals().values()) {
+            java.util.Set<Integer> sections = new java.util.HashSet<>();
+            for (com.micatechnologies.minecraft.rcmc.physics.block.BlockSection block : signals.blocks()) {
+                sections.add(block.sectionId());
+            }
+            for (int sectionId : sections) {
+                if (!network.hasSection(sectionId)) {
+                    continue;
+                }
+                for (double d : com.micatechnologies.minecraft.rcmc.physics.transit.SignalLayout.signals(
+                    signals.blocks(), sectionId)) {
+                    if (!drawn.add(sectionId + "@" + Math.round(d * 10.0D))) {
+                        continue;
+                    }
+                    Vec3 at = network.frameAt(new com.micatechnologies.minecraft.rcmc.track.TrackRef(sectionId, d)).position;
+                    if (at.distanceTo(eye) < 160.0D) {
+                        post(at, 1.0F, 0.25F, 0.2F);
+                    }
+                }
+            }
         }
     }
 

@@ -43,6 +43,7 @@ public final class TransitBuildSession {
         STATION("Station", "Click track to place a stop; sneak+click a stop to remove it"),
         PLATFORM("Platform", "Click the other track at a station to add a berth; sneak+click to remove"),
         LINE("Line", "Click each stop in order, then press C to create the line"),
+        SIGNAL("Signal", "Click track to place a signal there, splitting its block; sneak+click to remove one"),
         SWITCH("Switch", "Click the throat end, then each branch end, then press C"),
         STYLE("Track style", "Click track to cycle its style through the transit looks");
 

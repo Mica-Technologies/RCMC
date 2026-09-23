@@ -22,7 +22,15 @@ public final class RideWarning {
         /** Thrown forward or back harder than is safe: a launch or brake too sharp. */
         LONGITUDINAL_G,
         /** The train cannot get past here: a hill it cannot climb, or hardware that stops it. */
-        STALL
+        STALL,
+        /** Metro: a curve that makes trains slow right down. Peak: the speed limit there, blocks/s. */
+        TIGHT_CURVE,
+        /** Metro: a grade steep enough to matter. Peak: the grade, percent, signed along +s. */
+        STEEP_GRADE,
+        /** Metro: a platform that is not level. Peak: its steepest grade, percent. */
+        PLATFORM_GRADE,
+        /** Metro: a platform on a curve. Peak: its tightest radius, blocks. */
+        PLATFORM_CURVE
     }
 
     /** How bad. */
@@ -63,6 +71,18 @@ public final class RideWarning {
             case LONGITUDINAL_G:
                 return String.format(Locale.ROOT, "%.1f g %s: too sharp", Math.abs(peak),
                     peak > 0 ? "forwards" : "backwards");
+            case TIGHT_CURVE:
+                return String.format(Locale.ROOT, "Tight curve: trains slow to %.0f blocks/s here", peak);
+            case STEEP_GRADE:
+                return String.format(Locale.ROOT, "%.0f%% grade: %s", Math.abs(peak),
+                    severity == Severity.DANGER ? "a train stopped on it can barely start again"
+                        : "slow to climb and hard on the brakes");
+            case PLATFORM_GRADE:
+                return String.format(Locale.ROOT, "Platform on a %.1f%% grade: platforms should be level",
+                    Math.abs(peak));
+            case PLATFORM_CURVE:
+                return String.format(Locale.ROOT,
+                    "Platform on a %.0f-block curve: a gap opens between the doors and the edge", peak);
             case STALL:
             default:
                 return "The train cannot get past here";
@@ -79,6 +99,14 @@ public final class RideWarning {
                 return String.format(Locale.ROOT, "%.1f g sideways", Math.abs(peak));
             case LONGITUDINAL_G:
                 return String.format(Locale.ROOT, "%.1f g %s", Math.abs(peak), peak > 0 ? "forward" : "back");
+            case TIGHT_CURVE:
+                return String.format(Locale.ROOT, "curve: %.0f blocks/s", peak);
+            case STEEP_GRADE:
+                return String.format(Locale.ROOT, "%.0f%% grade", Math.abs(peak));
+            case PLATFORM_GRADE:
+                return String.format(Locale.ROOT, "platform %.1f%% grade", Math.abs(peak));
+            case PLATFORM_CURVE:
+                return "curved platform";
             case STALL:
             default:
                 return "Stalls here";

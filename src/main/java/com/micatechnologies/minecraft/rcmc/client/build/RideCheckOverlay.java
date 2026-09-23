@@ -31,6 +31,10 @@ import org.lwjgl.opengl.GL11;
  * <p>Drawn while the track editor is held — including behind its screen, which leaves the track in
  * view for exactly this — so a builder sees where the trouble is while fixing it, and sees it go when
  * it is fixed.</p>
+ *
+ * <p>While the transit tool is held it shows the metro checks instead ({@code MetroCheck}): slow
+ * curves, steep grades, platforms that are not level or not straight. Those are read off the track
+ * alone, so this client works them out itself and keeps them current as the track changes.</p>
  */
 @SideOnly(Side.CLIENT)
 public final class RideCheckOverlay {
@@ -59,12 +63,24 @@ public final class RideCheckOverlay {
     public void onRenderWorldLast(RenderWorldLastEvent event) {
         Minecraft mc = Minecraft.getMinecraft();
         EntityPlayer player = mc.player;
-        List<RideWarning> shown = warnings;
-        if (player == null || shown.isEmpty() || !holdingEditor(player)) {
+        if (player == null) {
             return;
         }
         RcmcWorldState state = RcmcWorldState.of(mc.world);
         if (state == null) {
+            return;
+        }
+        List<RideWarning> shown;
+        if (holdingEditor(player)) {
+            shown = warnings;
+        }
+        else if (holdingTransitTool(player)) {
+            shown = metroWarnings(state);
+        }
+        else {
+            return;
+        }
+        if (shown.isEmpty()) {
             return;
         }
         for (RideWarning warning : shown) {
@@ -153,6 +169,39 @@ public final class RideCheckOverlay {
             (float) (at.x - manager.viewerPosX), (float) (at.y - manager.viewerPosY + 1.6D),
             (float) (at.z - manager.viewerPosZ), 0, manager.playerViewY, manager.playerViewX,
             mc.gameSettings.thirdPersonView == 2, false);
+    }
+
+    /** The metro checks, as last computed, and what they were computed from. */
+    private static List<RideWarning> metro = Collections.emptyList();
+    private static long metroKey = Long.MIN_VALUE;
+
+    /**
+     * The metro building checks for this client's copy of the network and lines — worked out again
+     * only when either has changed, since the track and stations are replaced, never edited in
+     * place, whenever the server syncs them.
+     */
+    private static List<RideWarning> metroWarnings(RcmcWorldState state) {
+        long key = 17L;
+        for (TrackSection section : state.network().sections()) {
+            key = key * 31L + System.identityHashCode(section);
+        }
+        for (com.micatechnologies.minecraft.rcmc.physics.transit.TransitStation station : state.transit().stations()) {
+            key = key * 31L + System.identityHashCode(station);
+        }
+        for (com.micatechnologies.minecraft.rcmc.physics.transit.TransitLine line : state.transit().lines()) {
+            key = key * 31L + System.identityHashCode(line);
+        }
+        if (key != metroKey) {
+            metroKey = key;
+            metro = com.micatechnologies.minecraft.rcmc.physics.transit.MetroCheck.check(
+                state.network(), state.transit());
+        }
+        return metro;
+    }
+
+    private static boolean holdingTransitTool(EntityPlayer player) {
+        return player.getHeldItemMainhand().getItem() instanceof com.micatechnologies.minecraft.rcmc.item.ItemTransitTool
+            || player.getHeldItemOffhand().getItem() instanceof com.micatechnologies.minecraft.rcmc.item.ItemTransitTool;
     }
 
     private static boolean holdingEditor(EntityPlayer player) {
