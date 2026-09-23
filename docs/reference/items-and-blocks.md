@@ -58,7 +58,8 @@ change one thing.
 Edits act on **spans** — the stretch between two placed nodes — not on a point.
 
 The editor screen moves, banks, adds and deletes nodes, sets the type of the span leaving the node,
-paints, and deletes the section. See
+paints, and deletes the section. Its section tools split, join, close, reverse and restyle the
+section. See
 [The editor screen](../guide/building-a-coaster.md#the-editor-screen).
 
 ### Transit tool

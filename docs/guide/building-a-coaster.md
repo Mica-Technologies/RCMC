@@ -216,6 +216,36 @@ Everything on the track goes with an edit. Moving, adding or removing a node kee
 hardware, station, block section and train in the same place between the same two nodes, and
 every change can be undone with `/rcmc undo`.
 
+#### Section tools
+
+**Section tools >** at the bottom of the type list swaps it for edits to the whole section:
+
+| Control | Effect |
+| --- | --- |
+| **Split here** | Split the section at this node into two sections that stay joined, so trains still run straight through. On a circuit, this opens it at the node into one run whose ends are joined |
+| **Join** | At an end node: merge with the nearest other section end within 3 blocks into one continuous section, or close the section into a circuit if its own other end is closest. The button says which: *Join to #7* or *Close circuit* |
+| **Reverse direction** | Turn the section round so trains run the other way |
+| **Style** | Cycle the section's track style: coaster, then each transit look |
+
+A section has one style, so to change style part-way along, split it there and restyle one half.
+Two sections of different styles won't merge; restyle one to match first.
+
+Hardware, stations and trains go with the track. Split cuts any hardware running across the node
+into two pieces, one either side. Reversing keeps hardware on the same stretch of track, working in
+the new direction, and a station keeps its stop point the same distance from the platform's exit.
+
+Some edits are refused, with the reason shown:
+
+- **Reversing with trains or metro platforms on the section.** Take them off first: they would
+  end up facing backwards.
+- **Any edit that touches a transfer table or its storage track.** Unlink it with
+  `/rcmc transfer <id> off` first.
+- **Any edit to track under a metro line's signals.** Clear the signals first.
+- **Merging an end that belongs to a switch.** Remove the switch first.
+
+Block sections on the edited track are cleared, and the message says so; lay them out again with
+[`/rcmc block <id> auto`](../reference/commands.md#rcmc-block).
+
 Mistakes are recoverable: **`/rcmc undo`** and **`/rcmc redo`** step through track edits
 server-side.
 

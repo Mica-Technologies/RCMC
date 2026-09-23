@@ -15,7 +15,7 @@ import net.minecraftforge.fml.relauncher.SideOnly;
 /**
  * The track editor: one node of a committed section, and everything that can be done to it —
  * move it, re-bank it, add or remove nodes, set what the span from it is laid as, paint the
- * section, or delete it.
+ * section, or delete it — and, on the section tools page, split, join, reverse or restyle it.
  *
  * <p>Keybind cycling was the only way to edit track before, one type per press through a list
  * that had grown to nine. Here every type is a button, every nudge is a click, and the node being
@@ -40,6 +40,11 @@ public class GuiTrackEditor extends GuiScreen {
     private static final int ID_DELETE_SECTION = 7;
     private static final int ID_PAINT_PART = 8;
     private static final int ID_COLOUR = 9;
+    private static final int ID_PAGE = 10;
+    private static final int ID_SPLIT = 11;
+    private static final int ID_JOIN = 12;
+    private static final int ID_REVERSE = 13;
+    private static final int ID_STYLE = 14;
     /** Move buttons: 20 + 2·axis for minus, 21 + 2·axis for plus. */
     private static final int ID_MOVE_BASE = 20;
     /** Span type buttons from here, one per type. */
@@ -55,6 +60,8 @@ public class GuiTrackEditor extends GuiScreen {
     private TrackEditView view;
     private int step = 0;
     private boolean confirmingDelete;
+    /** Which page the right-hand column shows: span types, or the section tools. */
+    private boolean toolsPage;
     private String message = "";
     private int messageTicks;
 
@@ -122,14 +129,30 @@ public class GuiTrackEditor extends GuiScreen {
             ? TextFormatting.RED + "" + TextFormatting.BOLD + "Really delete?"
             : TextFormatting.RED + "Delete section"));
 
-        // Span types, one column down the right-hand side: every type a click away.
-        TrackBuildSession.SegmentType[] types = TrackBuildSession.SegmentType.values();
-        for (int i = 0; i < types.length; i++) {
-            GuiButton type = new GuiButton(ID_TYPE_BASE + i, l + 146, t + 36 + i * 17, 148, 16,
-                (i == view.spanType ? TextFormatting.GREEN + "> " : "") + types[i].label());
-            type.enabled = view.spanType >= 0 && i != view.spanType;
-            buttonList.add(type);
+        if (toolsPage) {
+            // Whole-section edits. Each one's label says what it would do here, or why it cannot.
+            GuiButton split = new GuiButton(ID_SPLIT, l + 146, t + 36, 148, 16, "Split here");
+            split.enabled = view.canSplit;
+            buttonList.add(split);
+            GuiButton join = new GuiButton(ID_JOIN, l + 146, t + 56, 148, 16,
+                view.joinLabel.isEmpty() ? "No end in reach to join" : view.joinLabel);
+            join.enabled = !view.joinLabel.isEmpty();
+            buttonList.add(join);
+            buttonList.add(new GuiButton(ID_REVERSE, l + 146, t + 76, 148, 16, "Reverse direction"));
+            buttonList.add(new GuiButton(ID_STYLE, l + 146, t + 96, 148, 16, "Style: " + view.style));
         }
+        else {
+            // Span types, one column down the right-hand side: every type a click away.
+            TrackBuildSession.SegmentType[] types = TrackBuildSession.SegmentType.values();
+            for (int i = 0; i < types.length; i++) {
+                GuiButton type = new GuiButton(ID_TYPE_BASE + i, l + 146, t + 36 + i * 16, 148, 15,
+                    (i == view.spanType ? TextFormatting.GREEN + "> " : "") + types[i].label());
+                type.enabled = view.spanType >= 0 && i != view.spanType;
+                buttonList.add(type);
+            }
+        }
+        buttonList.add(new GuiButton(ID_PAGE, l + 146, t + 184, 148, 16,
+            toolsPage ? "< Span types" : "Section tools >"));
     }
 
     @Override
@@ -174,6 +197,22 @@ public class GuiTrackEditor extends GuiScreen {
         else if (id == ID_COLOUR) {
             press(Action.CYCLE_COLOUR, 0.0D);
         }
+        else if (id == ID_PAGE) {
+            toolsPage = !toolsPage;
+            initGui();
+        }
+        else if (id == ID_SPLIT) {
+            press(Action.SPLIT, 0.0D);
+        }
+        else if (id == ID_JOIN) {
+            press(Action.JOIN, 0.0D);
+        }
+        else if (id == ID_REVERSE) {
+            press(Action.REVERSE, 0.0D);
+        }
+        else if (id == ID_STYLE) {
+            press(Action.CYCLE_STYLE, 0.0D);
+        }
         else if (id >= ID_TYPE_BASE) {
             press(Action.SET_SPAN_TYPE, id - ID_TYPE_BASE);
         }
@@ -217,14 +256,29 @@ public class GuiTrackEditor extends GuiScreen {
         }
         drawString(fontRenderer, "Bank  " + format(view.bank) + "°", l + 6, t + 118, 0xFFFFAA);
 
-        String span = view.spanType >= 0
+        String heading = toolsPage ? "Section tools" : view.spanType >= 0
             ? "Span " + (view.nodeIndex + 1) + " → " + (view.nodeIndex + 2 > view.nodeCount ? 1 : view.nodeIndex + 2)
             : "No span from the last node";
-        drawString(fontRenderer, TextFormatting.WHITE + span, l + WIDTH - 6 - fontRenderer.getStringWidth(span),
+        drawString(fontRenderer, TextFormatting.WHITE + heading, l + WIDTH - 6 - fontRenderer.getStringWidth(heading),
             t + 22, 0xFFFFFF);
+        if (toolsPage) {
+            String help = "To give part of a track another style, split it there and restyle one half. "
+                + "Join works at an end node, with another end close by.";
+            int y = t + 120;
+            for (String line : fontRenderer.listFormattedStringToWidth(help, 146)) {
+                drawString(fontRenderer, line, l + 147, y, 0x9099A4);
+                y += 10;
+            }
+        }
 
         if (!message.isEmpty()) {
-            drawCenteredString(fontRenderer, message, width / 2, t - 12, 0x9FE0A0);
+            // Wrapped and stacked upward from the panel: a refusal says why, and that takes a sentence.
+            java.util.List<String> lines = fontRenderer.listFormattedStringToWidth(message, Math.min(width - 16, 360));
+            int y = t - 4 - lines.size() * 10;
+            for (String line : lines) {
+                drawCenteredString(fontRenderer, line, width / 2, y, 0x9FE0A0);
+                y += 10;
+            }
         }
         super.drawScreen(mouseX, mouseY, partialTicks);
     }
