@@ -1274,6 +1274,12 @@ public class CommandRcmc extends CommandBase {
                         + service.line().name() + ", first stop "
                         + service.line().station(service.currentStopIndex()).name()
                         + " at " + fmt(cruise) + " blocks/s.");
+                    int opposing = transit.headOnWith(trainId, state.trains(), state.network());
+                    if (opposing >= 0) {
+                        reply(sender, TextFormatting.RED, "Train #" + trainId + " is running at train #"
+                            + opposing + " on the same track. They will stop short of each other and stay "
+                            + "there: turn one round, or take it out of service with /rcmc line stop.");
+                    }
                 }
                 catch (IllegalArgumentException e) {
                     throw new CommandException(e.getMessage());
@@ -1386,10 +1392,15 @@ public class CommandRcmc extends CommandBase {
                     doing = "at " + next + ", doors closing";
                     break;
             }
-            reply(sender, TextFormatting.AQUA, "#" + entry.getKey() + " " + line.name() + " "
+            int opposing = transit.headOnWith(entry.getKey(), state.trains(), state.network());
+            int ahead = transit.stoppingFor(entry.getKey());
+            String why = opposing >= 0 ? ", HEAD-ON with train #" + opposing + " on the same track"
+                : ahead >= 0 ? ", stopping for train #" + ahead + " ahead" : "";
+            reply(sender, opposing >= 0 ? TextFormatting.RED : TextFormatting.AQUA,
+                "#" + entry.getKey() + " " + line.name() + " "
                 + (service.serviceDirection() > 0 ? line.outboundLabel() : line.inboundLabel())
                 + ": " + doing + (train == null ? "" : ", " + fmt(Math.abs(train.velocity()))
-                    + " blocks/s"));
+                    + " blocks/s") + why);
             shown++;
         }
         if (shown == 0) {
@@ -1410,10 +1421,9 @@ public class CommandRcmc extends CommandBase {
      * {@code /rcmc line signals <name> <count|off>} — installs (or clears) block signalling on a
      * line, dividing every section the line's stations sit on into {@code count} equal blocks.
      *
-     * <p>This is what makes a second train on a metro line safe. Without it a service runs with
-     * unlimited movement authority and will happily drive into the back of the train ahead: the
-     * ATO driver brakes for stations and for its authority, and with no signals installed its
-     * authority is {@code NO_STOP}. With signals, a train's permission ends short of any block
+     * <p>This is what spaces trains on a metro line. Without it a service drives on sight
+     * ({@code TrainSight}): it stops short of the train ahead, but only once it is there, and bunches
+     * up behind it. With signals, a train's permission ends short of any block
      * another train occupies, and being held at a red is simply a berth with the doors shut — the
      * same braking law, no second mechanism.</p>
      *

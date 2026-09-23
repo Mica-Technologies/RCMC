@@ -235,6 +235,15 @@ driver is given a **distance it is authorised to run** — the nearest boundary 
 by another train, walked in the train's own facing, so it is safe on bidirectional single track. It
 brakes to that limit the same way it brakes to a station.
 
+**Without signals a metro train drives on sight.** It stops 5 blocks short of any train ahead of
+it — on its line or not, in service or parked — and goes on when the way clears. That keeps trains
+from running into each other, but not apart: a follower closes right up behind the train in front,
+and waits behind it at every stop. Signals are what space them out.
+
+Two trains running *at each other* on the same track stop short of each other and stay there.
+`/rcmc line start` warns when it puts a train into that position, and `/rcmc line trains` flags the
+pair in red — turn one round, or take it out with `/rcmc line stop`.
+
 ## Failure modes and recovery
 
 | Symptom | What it is | Fix |
@@ -244,6 +253,8 @@ brakes to that limit the same way it brakes to a station.
 | A coaster stopped with "trains collided — emergency stop" | Two trains on the ride overlapped | Remove a train at the operator panel, reset the emergency stop, and open the ride. Add block sections to run several trains |
 | A coaster stopped with "a train rolled back on the lift" | A train failed to clear something after the lift, fell back over the crest, and the lift's anti-rollback caught it — it is held where it was caught | Reset the emergency stop to send it up again; if it fails the same hill every time, give it more energy: a taller lift or a lower hill after it |
 | A train did not come back after a restart | Its track was deleted while the world was closed, so it has nowhere to be | Rebuild the section, then `/rcmc train` |
+| Two metro trains stand nose to nose and never move | They are running at each other on one track: `/rcmc line trains` shows them as HEAD-ON | `/rcmc line stop` one of them, and put it back on the track facing the other way |
+| A metro train waits out on the line for no reason | It is stopping for a train ahead — `/rcmc line trains` says which. Often a train left parked on the track | Remove the parked train, or put it into service |
 | A service did not resume, but its train did | The line it worked was deleted or renamed, or the train can no longer reach any of its stations | `/rcmc line start <name> <trainId>` |
 | Track "ignores" a height you placed | Was the vertical-overshoot sag; now fixed by clamped node tangents. If you still see it, report it | — |
 

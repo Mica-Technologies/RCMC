@@ -61,6 +61,15 @@ public final class TransitSystem {
     /** Network reference for the tick in flight — set by {@link #beginTick}, read by the control. */
     private TrackNetwork tickNetwork;
 
+    /** Every train on the network this tick, which a service must not run into. */
+    private TrainManager tickTrains;
+
+    /** Trains just taken out of service → the service brake they stop on. */
+    private final Map<Integer, Double> withdrawing = new LinkedHashMap<>();
+
+    /** Service train id → the train it is stopping short of, for as long as it is. */
+    private final Map<Integer, Integer> stoppingFor = new LinkedHashMap<>();
+
     private static String key(String name) {
         return name.toLowerCase(Locale.ROOT);
     }
@@ -103,7 +112,13 @@ public final class TransitSystem {
             signalsByLine.remove(key(name));
             operationsByLine.remove(key(name));
             timingsByLine.remove(key(name));
-            services.values().removeIf(service -> service.line() == removed);
+            for (Iterator<Map.Entry<Integer, LineService>> it = services.entrySet().iterator(); it.hasNext(); ) {
+                Map.Entry<Integer, LineService> entry = it.next();
+                if (entry.getValue().line() == removed) {
+                    bringToAStand(entry.getKey(), entry.getValue());
+                    it.remove();
+                }
+            }
         }
         return removed;
     }
@@ -289,6 +304,41 @@ public final class TransitSystem {
         return current == null ? berth : current;
     }
 
+    /** Speed below which a withdrawn train is stood, and let go. */
+    private static final double STANDING = 0.05D;
+
+    /** Within this many blocks of the train ahead, a service counts as stopping for it. */
+    private static final double STOPPING_FOR_WITHIN = 30.0D;
+
+    /**
+     * The train service {@code trainId} is stopping short of — on its line or not, in service or
+     * parked — or {@code -1} when nothing is in its way.
+     */
+    public int stoppingFor(int trainId) {
+        Integer ahead = stoppingFor.get(trainId);
+        return ahead == null ? -1 : ahead;
+    }
+
+    /**
+     * Another service running at {@code trainId} along the same rail, or {@code -1}. Two such
+     * trains stop short of each other and stay there: see {@link TrainSight#headOn}.
+     */
+    public int headOnWith(int trainId, TrainManager trains, TrackNetwork network) {
+        LineService service = services.get(trainId);
+        Train train = trains.train(trainId);
+        if (service == null || train == null) {
+            return -1;
+        }
+        for (Map.Entry<Integer, LineService> entry : services.entrySet()) {
+            Train other = trains.train(entry.getKey());
+            if (entry.getKey() != trainId && other != null
+                && TrainSight.headOn(network, train, service.facing(), other, entry.getValue().facing())) {
+                return entry.getKey();
+            }
+        }
+        return -1;
+    }
+
     // --- Services. -----------------------------------------------------------------------------
 
     /**
@@ -336,7 +386,7 @@ public final class TransitSystem {
             }
         }
         LineService service = enterFacing(trainId, train, network, line, controller,
-            candidateFacings(train));
+            facingsWithTheFlow(trainId, train, network));
         if (service == null) {
             throw new IllegalArgumentException("train " + trainId
                 + " cannot reach any station of line " + line.name() + " — is it on this line's track?");
@@ -380,6 +430,60 @@ public final class TransitSystem {
         // the recovery: setHeld(true) both marks the intent and clears the stall, per Train.
         train.setHeld(true);
         return service;
+    }
+
+    /** Below this speed a train entering service may be stood and turned round. */
+    private static final double TURNABLE_SPEED = 1.0D;
+
+    /**
+     * The facings to choose among for a service, leaving out any that would run the train at a
+     * service already on its track.
+     *
+     * <p>Left to "nearest station either way", a train started beside a turnback circuit went
+     * round it the wrong way — in play, a Circle Line train ran backwards against the rest of the
+     * line until it met one nose to nose. And a train merely drifting the wrong way (withdrawn
+     * without brakes, say) had its facing fixed by the drift: below {@link #TURNABLE_SPEED} it is
+     * stood still and turned instead, which is nothing at that speed. When every way is head-on
+     * with something, or the other trains are not known yet (no tick has run), the choice is left
+     * as it was.</p>
+     */
+    private double[] facingsWithTheFlow(int trainId, Train train, TrackNetwork network) {
+        double[] facings = candidateFacings(train);
+        if (tickTrains == null) {
+            return facings;
+        }
+        boolean crawling = Math.abs(train.velocity()) < TURNABLE_SPEED;
+        double[] options = crawling ? new double[] {1.0D, -1.0D} : facings;
+        java.util.List<Double> clear = new java.util.ArrayList<>();
+        for (double facing : options) {
+            if (!headOnWithAny(trainId, train, network, facing)) {
+                clear.add(facing);
+            }
+        }
+        if (clear.isEmpty()) {
+            return facings;
+        }
+        if (facings.length == 1 && clear.contains(-facings[0])) {
+            // Turning a crawling train round: stand it first, or the service reads its facing
+            // straight back off the drift on its first tick.
+            train.setState(train.reference(), 0.0D);
+        }
+        double[] out = new double[clear.size()];
+        for (int i = 0; i < out.length; i++) {
+            out[i] = clear.get(i);
+        }
+        return out;
+    }
+
+    private boolean headOnWithAny(int trainId, Train train, TrackNetwork network, double facing) {
+        for (Map.Entry<Integer, LineService> entry : services.entrySet()) {
+            Train other = tickTrains.train(entry.getKey());
+            if (entry.getKey() != trainId && other != null
+                && TrainSight.headOn(network, train, facing, other, entry.getValue().facing())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -481,7 +585,22 @@ public final class TransitSystem {
     /** Takes a train out of service. The train keeps rolling under whatever else controls it. */
     public LineService exitService(int trainId) {
         arrivals.remove(trainId);
-        return services.remove(trainId);
+        LineService service = services.remove(trainId);
+        bringToAStand(trainId, service);
+        return service;
+    }
+
+    /**
+     * A train taken out of service stops, on its service brake, where it is.
+     *
+     * <p>It used to be simply let go — and coasted on at line speed with nobody driving it, through
+     * stations and, before {@link TrainSight}, through other trains. Found in game: withdrawn at
+     * 5 blocks/s, a Subway train rolled 150 blocks before friction stopped it.</p>
+     */
+    private void bringToAStand(int trainId, LineService service) {
+        if (service != null) {
+            withdrawing.put(trainId, service.controller().serviceBrakeDeceleration());
+        }
     }
 
     public LineService serviceFor(int trainId) {
@@ -553,6 +672,8 @@ public final class TransitSystem {
         lastDepartures.clear();
         timingsByLine.clear();
         arrivals.clear();
+        withdrawing.clear();
+        stoppingFor.clear();
     }
 
     // --- Operations: dwell and headway. ---------------------------------------------------------
@@ -636,6 +757,7 @@ public final class TransitSystem {
     /** Once per tick, before {@link #composedWith}'s result is used — see the class javadoc. */
     public void beginTick(TrainManager trains, TrackNetwork network) {
         this.tickNetwork = network;
+        this.tickTrains = trains;
         tick++;
         // A service whose train was removed must not linger and grab a recycled train id later.
         for (Iterator<Integer> it = services.keySet().iterator(); it.hasNext(); ) {
@@ -644,6 +766,8 @@ public final class TransitSystem {
             }
         }
         arrivals.keySet().retainAll(services.keySet());
+        stoppingFor.keySet().retainAll(services.keySet());
+        withdrawing.keySet().removeIf(id -> trains.train(id) == null || services.containsKey(id));
         for (LineSignals signals : signalsByLine.values()) {
             signals.updateOccupancy(trains);
         }
@@ -660,12 +784,34 @@ public final class TransitSystem {
             public double forTrain(int trainId, Train train) {
                 LineService service = services.get(trainId);
                 if (service == null) {
+                    Double brake = withdrawing.get(trainId);
+                    if (brake != null) {
+                        double speed = Math.abs(train.velocity());
+                        if (speed <= STANDING) {
+                            withdrawing.remove(trainId);
+                            return 0.0D;
+                        }
+                        // Never more than it takes to stop this tick, so it stops rather than reversing.
+                        return -Math.signum(train.velocity()) * Math.min(brake, speed / TICK_SECONDS);
+                    }
                     return fallback == null ? 0.0D : fallback.forTrain(trainId, train);
                 }
                 LineSignals signals = signalsByLine.get(key(service.line().name()));
                 double authority = signals == null
                     ? TrainDriver.NO_STOP
                     : signals.authorityFor(trainId, train, tickNetwork, service.facing());
+                if (tickTrains != null) {
+                    // Signalled or not, never into another train: see TrainSight.
+                    TrainSight.View sight = TrainSight.look(trainId, train, tickTrains, tickNetwork,
+                        service.facing());
+                    if (sight.authority < authority && sight.authority < STOPPING_FOR_WITHIN) {
+                        stoppingFor.put(trainId, sight.ahead);
+                    }
+                    else {
+                        stoppingFor.remove(trainId);
+                    }
+                    authority = Math.min(authority, sight.authority);
+                }
                 double acceleration = service.tick(train, tickNetwork, authority);
                 observeArrival(trainId, service);
                 return acceleration;
@@ -675,7 +821,9 @@ public final class TransitSystem {
             public boolean isHolding(int trainId, Train train) {
                 LineService service = services.get(trainId);
                 if (service == null) {
-                    return fallback != null && fallback.isHolding(trainId, train);
+                    // A withdrawn train braking to a stand is being driven, not stalling.
+                    return withdrawing.containsKey(trainId)
+                        || (fallback != null && fallback.isHolding(trainId, train));
                 }
                 return service.isHolding(train);
             }
