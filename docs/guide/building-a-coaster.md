@@ -23,7 +23,8 @@ Item: **`rcmc:track_tool`**.
 | Sneak + right-click a block | Place a node **and commit** the section |
 | Right-click air | Commit the section as it stands |
 | Sneak + right-click air | Undo the last node (does nothing once none are left — see `/rcmc build cancel` below) |
-| ++g++ | Cycle the segment type of nodes placed from now on |
+| ++g++ | Open the segment picker: choose the type of nodes placed from now on |
+| Sneak + ++g++ | Step to the next segment type without opening the picker |
 | ++r++ | Reset height/bank adjustments |
 | Shift + scroll | Adjust the pending node's height (0.5 blocks per notch) |
 | ++ctrl++ + scroll | Adjust bank (5° per notch) |
@@ -50,8 +51,11 @@ circuit. A short key legend sits underneath. It hides while the ++f3++ debug scr
 
 ### Segment types
 
-++g++ cycles what the span from the current node onward *is*. Pick the type before placing the
-nodes it should cover:
+++g++ opens a picker listing every segment type, with the current one marked; click one and the
+screen closes. It sets what the span from the current node onward *is*, so pick the type before
+placing the nodes it should cover. Sneak + ++g++ steps to the next type without the screen.
+
+The types are:
 
 | Type | What it becomes on commit |
 | --- | --- |
@@ -180,7 +184,7 @@ Item: **`rcmc:track_editor`**.
 
 | Action | Effect |
 | --- | --- |
-| Right-click near track | Select it and report what is there |
+| Right-click near track | Select it, report what is there, and open the **editor screen** on the nearest node |
 | ++g++ with a selection | Cycle the segment type of the selected span |
 | ++c++ | Cycle the colour |
 | ++v++ | Cycle which part the colour applies to |
@@ -189,6 +193,28 @@ Item: **`rcmc:track_editor`**.
 Edits work on **spans** — the stretch between two placed nodes — rather than at a point. Retyping
 "this bit of track" means the piece you can see, and a span is the smallest thing with a length for
 an element to occupy.
+
+### The editor screen
+
+Right-clicking track opens a panel along the bottom of the screen, so the track stays in view
+while you edit it. A yellow post marks the node being edited, drawn through terrain so it is never
+hidden.
+
+| Control | Effect |
+| --- | --- |
+| **< Prev** / **Next >** | Step to the previous or next node of the section |
+| **X / Y / Z  − +** | Move the node along that axis by the step size |
+| **Step** | Change the step size: 0.5, 1 or 4 blocks |
+| **Bank − +** | Bank the track at this node by 5° |
+| **Part** / **colour** | Choose which part to paint, then cycle its colour |
+| **Add node** | Add a node halfway along the span to the next node (or beyond the end of open track) |
+| **Delete node** | Remove this node. A section keeps at least two nodes, or three for a circuit |
+| **Delete section** | Delete the whole section. Press it twice to confirm |
+| Segment type list | Set what the span from this node to the next *is*: plain track, a lift, a launch, a brake and so on. The span's current type is highlighted |
+
+Everything on the track goes with an edit. Moving, adding or removing a node keeps each piece of
+hardware, station, block section and train in the same place between the same two nodes, and
+every change can be undone with `/rcmc undo`.
 
 Mistakes are recoverable: **`/rcmc undo`** and **`/rcmc redo`** step through track edits
 server-side.

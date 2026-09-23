@@ -126,6 +126,17 @@ public final class SegmentElements {
     }
 
     /**
+     * The element {@code type} makes for exactly {@code from}..{@code to} on {@code sectionId}, or
+     * {@code null} for plain track — for editing one span of committed track, where the span is
+     * known and {@link #build}'s node tags would have to be arranged to say it.
+     */
+    public static RideElement forSpan(TrackBuildSession.SegmentType type, int sectionId,
+                                      double from, double to) {
+        return type == TrackBuildSession.SegmentType.PLAIN || to <= from
+            ? null : create(type, sectionId, from, to, RcmcConstants.SECONDS_PER_TICK);
+    }
+
+    /**
      * Conservative defaults per type. Tuning a specific lift's speed or a brake's target belongs in
      * the ride-controller UI, not in a placement gesture — a builder tagging track is saying what
      * it <em>is</em>, not how it is configured.

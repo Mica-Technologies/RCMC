@@ -30,6 +30,8 @@ public class PacketBuildAdjust implements IMessage {
         /** Switch which part of the track colour changes apply to. */
         CYCLE_PAINT_PART,
         CYCLE_TYPE,
+        /** Track tool: lay segment type {@code value} (its ordinal) from the next node on. */
+        SET_TYPE,
         ADJUST_HEIGHT,
         ADJUST_BANK,
         RESET,
@@ -121,6 +123,17 @@ public class PacketBuildAdjust implements IMessage {
                     com.micatechnologies.minecraft.rcmc.item.ItemTrackEditor
                         .cycleSelectedType(player, player.world);
                     return;
+                case SET_TYPE: {
+                    com.micatechnologies.minecraft.rcmc.builder.TrackBuildSession.SegmentType[] types =
+                        com.micatechnologies.minecraft.rcmc.builder.TrackBuildSession.SegmentType.values();
+                    int ordinal = (int) Math.round(message.value);
+                    if (ordinal >= 0 && ordinal < types.length) {
+                        session.setCurrentType(types[ordinal]);
+                        player.sendStatusMessage(new TextComponentString(
+                            TextFormatting.AQUA + "Segment: " + types[ordinal].label()), true);
+                    }
+                    break;
+                }
                 case CYCLE_TYPE:
                     player.sendStatusMessage(new TextComponentString(
                         TextFormatting.AQUA + "Segment: " + session.cycleType().label()), true);

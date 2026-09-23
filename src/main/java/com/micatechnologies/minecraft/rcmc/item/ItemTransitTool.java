@@ -286,7 +286,8 @@ public class ItemTransitTool extends Item {
     }
 
     /** The station physically nearest a clicked track point, or {@code null} if none is close. */
-    private static TransitStation nearestStationInWorld(RcmcWorldState state, TrackRef ref) {
+    /** The station a platform click near {@code ref} adds to. Public for the tool's preview. */
+    public static TransitStation nearestStationInWorld(RcmcWorldState state, TrackRef ref) {
         TransitStation best = null;
         double bestDistance = Double.POSITIVE_INFINITY;
         for (TransitStation station : state.transit().stations()) {
@@ -328,7 +329,8 @@ public class ItemTransitTool extends Item {
     }
 
     /** The authored station nearest a clicked point, on the same section, or {@code null}. */
-    private static TransitStation nearestStation(TransitSystem transit, TrackRef ref) {
+    /** The station a station or line click at {@code ref} means. Public for the tool's preview. */
+    public static TransitStation nearestStation(TransitSystem transit, TrackRef ref) {
         TransitStation best = null;
         double bestDistance = Double.POSITIVE_INFINITY;
         for (TransitStation station : transit.stations()) {
@@ -359,6 +361,7 @@ public class ItemTransitTool extends Item {
             say(player, TextFormatting.GRAY, station.name() + " is already the last stop picked.");
             return;
         }
+        pushTool(player, session);
         say(player, TextFormatting.AQUA, "Stop " + session.lineStops().size() + ": " + station.name());
         say(player, TextFormatting.DARK_GRAY, "  " + session.pendingSummary()
             + "   C to create, V for loop/shuttle/turnback.");
@@ -380,6 +383,7 @@ public class ItemTransitTool extends Item {
                 say(player, TextFormatting.RED, "Station " + name
                     + " was removed while you were building. Start the line again.");
                 session.clearPending();
+                pushTool(player, session);
                 return;
             }
             stops.add(station);
@@ -387,6 +391,7 @@ public class ItemTransitTool extends Item {
         String name = chosenName(player, "Line", transit.lines().size() + 1);
         transit.addLine(TransitLine.of(name, stops, session.kind()));
         session.clearPending();
+        pushTool(player, session);
         syncTransit(world, state);
         say(player, TextFormatting.GREEN, "Line " + name + " created — " + stops.size()
             + " stops, " + session.kind().label() + ".");
@@ -495,6 +500,7 @@ public class ItemTransitTool extends Item {
     public static void cycleMode(EntityPlayer player) {
         TransitBuildSession session = TransitBuildSession.of(player.getUniqueID());
         TransitBuildSession.Mode mode = session.cycleMode();
+        pushTool(player, session);
         say(player, TextFormatting.AQUA, "Transit tool: " + mode.label());
         say(player, TextFormatting.DARK_GRAY, "  " + mode.help());
     }
@@ -553,6 +559,15 @@ public class ItemTransitTool extends Item {
         return TrackPicker.pickAlongRay(state.network(),
             new Vec3(eyes.x, eyes.y, eyes.z), new Vec3(look.x, look.y, look.z),
             LOOK_RANGE, AIM_RADIUS);
+    }
+
+    /** Tells the player's client which mode the tool is in and the stops picked, for its preview. */
+    static void pushTool(EntityPlayer player, TransitBuildSession session) {
+        if (player instanceof net.minecraft.entity.player.EntityPlayerMP) {
+            RcmcNetwork.sendTo(new com.micatechnologies.minecraft.rcmc.net.PacketTransitToolSync(
+                session.mode().ordinal(), session.lineStops()),
+                (net.minecraft.entity.player.EntityPlayerMP) player);
+        }
     }
 
     private static void syncTransit(World world, RcmcWorldState state) {

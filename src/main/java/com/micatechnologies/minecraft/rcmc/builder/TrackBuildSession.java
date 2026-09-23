@@ -140,6 +140,13 @@ public final class TrackBuildSession {
     }
 
     /** Advances to the next segment type and returns it, for the tool to report. */
+    /** Lays {@code type} from the next node placed on — the track tool's type picker. */
+    public void setCurrentType(SegmentType type) {
+        if (type != null) {
+            currentType = type;
+        }
+    }
+
     public SegmentType cycleType() {
         currentType = currentType.next();
         return currentType;

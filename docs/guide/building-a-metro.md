@@ -26,7 +26,8 @@ What differs is how you shape it. Transit alignments want:
 !!! warning "The tool does not enforce any of this yet"
 
     Transit-specific validation — gentler curve limits, level-platform checks, gradient limits at
-    stations — is not implemented. The transit tool gives text feedback only, and the coaster
+    stations — is not implemented. The transit tool previews where a click lands, not whether the
+    track there is suitable, and the coaster
     validator's limits are coaster limits. For now, this is on you.
 
 ### Give it the transit look
@@ -63,6 +64,11 @@ Item: **`rcmc:transit_tool`**.
 | ++v++ | In line mode, cycle the line kind: loop / shuttle / turnback |
 | Sneak + right-click track | The mode's destructive counterpart — e.g. remove the nearest stop |
 | Sneak + right-click air | Abandon what is being assembled |
+
+While you hold the tool, a coloured post stands on the track under the crosshair, with a label
+saying what a click will do there: *New station*, *Add a platform to Central*, *Stop 3: Harbour*.
+Aim until the label says what you mean, then click. In line mode the stops already picked are
+marked along the track with their numbers, so you can see the order you are building.
 
 In **station** mode, right-click the track where a train should stop. That point on the spline is
 the station; a train berths with its **lead car** stopped there, so leave the platform running back
