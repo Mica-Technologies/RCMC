@@ -261,7 +261,11 @@ public class GuiRideController extends GuiScreen {
 
     private String badge() {
         if (view.emergencyStopped) {
-            return TextFormatting.RED + "" + TextFormatting.BOLD + "E-STOP";
+            // Say what tripped it: a rollback wants the train on the lift looked at, a collision
+            // wants a train taken off, and the two call for different next moves.
+            String cause = "OPERATOR".equals(view.stopCause) || view.stopCause.isEmpty()
+                ? "" : ": " + view.stopCause;
+            return TextFormatting.RED + "" + TextFormatting.BOLD + "E-STOP" + cause;
         }
         switch (stateOf(view)) {
             case OPEN:
