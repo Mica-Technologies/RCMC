@@ -34,7 +34,9 @@ download.
 
 - **City Super Mod (CSM).** If it is installed, metro announcements are spoken aloud with its
   text-to-speech voice. Without it, they appear as on-screen subtitles. RCMC detects it on its own;
-  nothing to configure.
+  nothing to configure. Its **Transit** module also has the fare gates, ticket machines and
+  validators for a station's paid area. See
+  [Fare gates and ticket machines](../guide/building-a-metro.md#fare-gates-and-ticket-machines).
 - **JEI** and **The One Probe** work alongside RCMC as normal.
 
 ## Where to find everything in game
