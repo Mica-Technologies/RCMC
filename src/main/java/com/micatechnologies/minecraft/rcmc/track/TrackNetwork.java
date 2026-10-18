@@ -164,6 +164,13 @@ public final class TrackNetwork {
 
     private int nextSectionId = 1;
 
+    /**
+     * Union of every section's {@link TrackSection#extent()}, or {@code null} until next asked.
+     * Built lazily and dropped on any section change: it is read on every entity movement query
+     * and changes only when track is built or edited.
+     */
+    private TrackSection.Extent extent;
+
     /** Allocates an id no existing section uses. */
     public int allocateSectionId() {
         while (sections.containsKey(nextSectionId)) {
@@ -177,6 +184,7 @@ public final class TrackNetwork {
             throw new IllegalArgumentException("section must not be null");
         }
         sections.put(section.id(), section);
+        extent = null;
         if (section.id() >= nextSectionId) {
             nextSectionId = section.id() + 1;
         }
@@ -188,12 +196,14 @@ public final class TrackNetwork {
             throw new IllegalArgumentException("No section with id " + section.id());
         }
         sections.put(section.id(), section);
+        extent = null;
     }
 
     /** Removes a section and every join and switch touching it. */
     public TrackSection removeSection(int sectionId) {
         TrackSection removed = sections.remove(sectionId);
         if (removed != null) {
+            extent = null;
             disconnect(new SectionEnd(sectionId, End.START));
             disconnect(new SectionEnd(sectionId, End.END));
             // A switch missing any of its ends is no longer a meaningful choice; drop it whole
@@ -242,6 +252,18 @@ public final class TrackNetwork {
 
     public int sectionCount() {
         return sections.size();
+    }
+
+    /** The box around every section's nodes, or {@code null} for an empty network. */
+    public TrackSection.Extent extent() {
+        if (extent == null && !sections.isEmpty()) {
+            TrackSection.Extent union = null;
+            for (TrackSection section : sections.values()) {
+                union = union == null ? section.extent() : union.union(section.extent());
+            }
+            extent = union;
+        }
+        return extent;
     }
 
     /**
@@ -534,6 +556,7 @@ public final class TrackNetwork {
      */
     public void clear() {
         sections.clear();
+        extent = null;
         joins.clear();
         switches.clear();
         branchToThroat.clear();

@@ -69,6 +69,9 @@ public final class TrackSection {
     private final Vec3 leadOut;
     private final Vec3 startUp;
 
+    /** Box around the node positions, for broadphase rejects. See {@link Extent}. */
+    private final Extent extent;
+
     public TrackSection(int id, List<TrackNode> nodes, boolean closed, String styleId) {
         this(id, nodes, closed, styleId, TrackPalette.DEFAULT);
     }
@@ -103,6 +106,7 @@ public final class TrackSection {
         for (TrackNode node : this.nodes) {
             positions.add(node.position());
         }
+        this.extent = Extent.around(positions);
         CatmullRomSpline spline = closed
             ? CatmullRomSpline.closed(positions)
             : CatmullRomSpline.withEndHandles(positions, this.leadIn, this.leadOut);
@@ -359,6 +363,11 @@ public final class TrackSection {
         return palette;
     }
 
+    /** The box around this section's node positions, built once with the rest of the geometry. */
+    public Extent extent() {
+        return extent;
+    }
+
     /** A copy painted differently. Geometry is rebuilt, which is wasteful but keeps sections
      *  genuinely immutable; recolouring is rare next to anything that reads them. */
     public TrackSection withPalette(TrackPalette newPalette) {
@@ -458,5 +467,71 @@ public final class TrackSection {
     public String toString() {
         return "TrackSection{id=" + id + ", nodes=" + nodes.size() + ", closed=" + closed
             + ", length=" + String.format("%.2f", totalLength()) + '}';
+    }
+
+    /**
+     * An axis-aligned box around a set of node positions: a broadphase for "could this track be
+     * anywhere near here?" questions that are asked far more often than track changes.
+     *
+     * <p>It bounds the <em>nodes</em>, not the curve. A Catmull-Rom curve bulges a little past its
+     * control points, so callers test with some slack rather than trusting the box to the block.</p>
+     */
+    public static final class Extent {
+
+        public final double minX;
+        public final double minY;
+        public final double minZ;
+        public final double maxX;
+        public final double maxY;
+        public final double maxZ;
+
+        public Extent(double minX, double minY, double minZ, double maxX, double maxY, double maxZ) {
+            this.minX = minX;
+            this.minY = minY;
+            this.minZ = minZ;
+            this.maxX = maxX;
+            this.maxY = maxY;
+            this.maxZ = maxZ;
+        }
+
+        static Extent around(List<Vec3> points) {
+            double minX = Double.MAX_VALUE;
+            double minY = Double.MAX_VALUE;
+            double minZ = Double.MAX_VALUE;
+            double maxX = -Double.MAX_VALUE;
+            double maxY = -Double.MAX_VALUE;
+            double maxZ = -Double.MAX_VALUE;
+            for (Vec3 p : points) {
+                minX = Math.min(minX, p.x);
+                minY = Math.min(minY, p.y);
+                minZ = Math.min(minZ, p.z);
+                maxX = Math.max(maxX, p.x);
+                maxY = Math.max(maxY, p.y);
+                maxZ = Math.max(maxZ, p.z);
+            }
+            return new Extent(minX, minY, minZ, maxX, maxY, maxZ);
+        }
+
+        /** The smallest box holding both. */
+        public Extent union(Extent other) {
+            return new Extent(Math.min(minX, other.minX), Math.min(minY, other.minY),
+                Math.min(minZ, other.minZ), Math.max(maxX, other.maxX),
+                Math.max(maxY, other.maxY), Math.max(maxZ, other.maxZ));
+        }
+
+        /**
+         * Whether a query box comes within {@code slack} of this one horizontally and vertically,
+         * with the bottom extended a further {@code below} blocks.
+         *
+         * <p>{@code below} is for things that hang off track down to the ground, such as support
+         * columns: they reach well under the lowest node.</p>
+         */
+        public boolean near(double qMinX, double qMinY, double qMinZ,
+                            double qMaxX, double qMaxY, double qMaxZ,
+                            double slack, double below) {
+            return qMaxX >= minX - slack && qMinX <= maxX + slack
+                && qMaxZ >= minZ - slack && qMinZ <= maxZ + slack
+                && qMinY <= maxY + slack && qMaxY >= minY - slack - below;
+        }
     }
 }
