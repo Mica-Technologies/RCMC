@@ -2,6 +2,7 @@ package com.micatechnologies.minecraft.rcmc.client;
 
 import com.micatechnologies.minecraft.rcmc.Rcmc;
 import com.micatechnologies.minecraft.rcmc.RcmcConstants;
+import com.micatechnologies.minecraft.rcmc.physics.PredictedControl;
 import com.micatechnologies.minecraft.rcmc.world.RcmcWorldState;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.World;
@@ -29,6 +30,13 @@ import net.minecraftforge.fml.relauncher.SideOnly;
 @SideOnly(Side.CLIENT)
 public final class ClientTrainTicker {
 
+    /**
+     * Share of a server correction applied per tick. A quarter per tick works off three quarters
+     * of it before the next correction arrives five ticks later: quick enough that the two sides
+     * never drift apart, slow enough that each step is far below a visible jump.
+     */
+    private static final double CORRECTION_EASE_PER_TICK = 0.25D;
+
     @SubscribeEvent
     public void onClientTick(TickEvent.ClientTickEvent event) {
         if (event.phase != TickEvent.Phase.END) {
@@ -47,8 +55,10 @@ public final class ClientTrainTicker {
             return;
         }
         try {
-            state.trains().tick(state.network(), null,
+            state.trains().tick(state.network(),
+                new PredictedControl(state.network(), RcmcConstants.SECONDS_PER_TICK),
                 ClientPhysics.current().subSteps, RcmcConstants.SECONDS_PER_TICK);
+            state.trains().easeCorrections(state.network(), CORRECTION_EASE_PER_TICK);
         }
         catch (RuntimeException e) {
             // A client-side prediction fault must never take the game down: the server's next

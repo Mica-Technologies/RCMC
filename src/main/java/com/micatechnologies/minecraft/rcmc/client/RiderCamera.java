@@ -5,6 +5,7 @@ import com.micatechnologies.minecraft.rcmc.entity.EntityCoasterCar;
 import com.micatechnologies.minecraft.rcmc.track.math.TrackFrame;
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.Entity;
+import net.minecraft.util.math.MathHelper;
 import net.minecraftforge.client.event.EntityViewRenderEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.relauncher.Side;
@@ -73,7 +74,11 @@ public final class RiderCamera {
             wasRiding = true;
         }
         else {
-            smoothedRoll += (target - smoothedRoll) * SMOOTHING;
+            // The short way round. Roll runs -180..180, and an inversion crosses from one end to
+            // the other: chasing the raw difference there turns the view almost a full circle the
+            // wrong way, where the car itself has only rolled a degree or two.
+            smoothedRoll = MathHelper.wrapDegrees(
+                smoothedRoll + MathHelper.wrapDegrees(target - smoothedRoll) * SMOOTHING);
         }
 
         event.setRoll(smoothedRoll);

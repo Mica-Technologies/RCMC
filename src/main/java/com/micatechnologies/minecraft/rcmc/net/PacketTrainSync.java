@@ -20,11 +20,12 @@ import net.minecraftforge.fml.relauncher.SideOnly;
  * integrator over the same geometry, so it can rebuild every car itself — which is what makes
  * smooth motion possible at coaster speeds where vanilla position tracking cannot keep up.</p>
  *
- * <p>The correction is applied as a hard set rather than eased toward. That is a knowingly
- * temporary choice: at this stage the client has only just received the train and has nothing
- * better to blend from, and a visible snap is more diagnostic than a silent smoothing that hides
- * how far the two sides had drifted. Easing belongs with the reconciliation work in Phase 4.4,
- * where the divergence can first be measured.</p>
+ * <p>A correction is eased in rather than set ({@link Train#correctToward}): the two sides tick on
+ * their own clocks, and at coaster speed one tick of difference is a block of track, which a hard
+ * set showed as the train and the rider's view jumping four times a second. The packet also
+ * carries what ride hardware is doing to the train, so the client predicts lifts, brakes and
+ * launches between corrections instead of letting the train coast through them
+ * ({@code PredictedControl}).</p>
  */
 public class PacketTrainSync implements IMessage {
 
@@ -41,6 +42,9 @@ public class PacketTrainSync implements IMessage {
     private int sectionId;
     private double distance;
     private double velocity;
+    /** What ride hardware is doing to the train, for the client to predict with until the next one. */
+    private double externalAcceleration;
+    private boolean held;
 
     /** Required by the network system's reflective instantiation. */
     public PacketTrainSync() {
@@ -61,6 +65,8 @@ public class PacketTrainSync implements IMessage {
         this.sectionId = train.reference().sectionId();
         this.distance = train.reference().distance();
         this.velocity = train.velocity();
+        this.externalAcceleration = train.externalAcceleration();
+        this.held = train.isHeld();
     }
 
     @Override
@@ -80,6 +86,8 @@ public class PacketTrainSync implements IMessage {
         // rounding here would inject a position error on every correction rather than removing one.
         distance = buf.readDouble();
         velocity = buf.readDouble();
+        externalAcceleration = buf.readDouble();
+        held = buf.readBoolean();
     }
 
     @Override
@@ -97,6 +105,8 @@ public class PacketTrainSync implements IMessage {
         buf.writeInt(sectionId);
         buf.writeDouble(distance);
         buf.writeDouble(velocity);
+        buf.writeDouble(externalAcceleration);
+        buf.writeBoolean(held);
     }
 
     public static class Handler implements IMessageHandler<PacketTrainSync, IMessage> {
@@ -129,13 +139,15 @@ public class PacketTrainSync implements IMessage {
                 // only updating its position kept every watching player on the old paint.
                 // The server's physics constants, sent on join — prediction with any others
                 // diverges between corrections.
-                manager.add(message.trainId, new Train(spec,
+                existing = new Train(spec,
                     com.micatechnologies.minecraft.rcmc.client.ClientPhysics.current().integrator(),
-                    ref, message.velocity));
+                    ref, message.velocity);
+                manager.add(message.trainId, existing);
             }
             else {
-                existing.setState(ref, message.velocity);
+                existing.correctToward(state.network(), ref, message.velocity);
             }
+            existing.setSyncedControl(message.externalAcceleration, message.held);
         }
     }
 }

@@ -459,7 +459,11 @@ public class EntityCoasterCar extends Entity {
                 + frame.right.z * acrossOffset + frame.forward.z * alongOffset);
         passenger.setPosition(seat.x, seat.y, seat.z);
 
-        float yawDelta = this.rotationYaw - this.prevRotationYaw;
+        // Wrapped: the car's yaw comes from atan2 and jumps from +180 to -180 when the train heads
+        // through north. Unwrapped, that tick's delta is a whole turn, which vanilla then
+        // interpolates across the frame as the rider's view spinning once around.
+        float yawDelta = net.minecraft.util.math.MathHelper.wrapDegrees(
+            this.rotationYaw - this.prevRotationYaw);
         passenger.rotationYaw += yawDelta;
         passenger.setRotationYawHead(passenger.getRotationYawHead() + yawDelta);
     }
