@@ -17,6 +17,12 @@ on:
     types:
       - completed
 
+# Deleting a pre-release, and its tag, is a write, so this needs the same grant as the release
+# workflow: repos created since 2023 default GITHUB_TOKEN to read-only. Without it the job still
+# goes green while nothing is old enough to delete, then fails the first time something is.
+permissions:
+  contents: write
+
 jobs:
   cleanup_pre_release:
     name: Cleanup Old/Outdated Mod Pre-Release(s)
