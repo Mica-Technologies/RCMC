@@ -43,7 +43,9 @@ public final class ServiceStatus {
         String doing;
         switch (controller.phase()) {
             case APPROACHING:
-                doing = "to " + next + ", " + whole(Math.max(0.0D, service.distanceToNextStop())) + " blocks";
+                // Not yet measured on the tick a stop is left; see LineService.distanceToNextStop.
+                doing = Double.isInfinite(service.distanceToNextStop()) ? "to " + next
+                    : "to " + next + ", " + whole(Math.max(0.0D, service.distanceToNextStop())) + " blocks";
                 break;
             case BOARDING:
                 if (controller.phaseTicksRemaining() == 0) {
