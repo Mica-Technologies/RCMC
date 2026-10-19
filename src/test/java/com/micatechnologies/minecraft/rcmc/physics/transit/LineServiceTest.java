@@ -71,6 +71,30 @@ class LineServiceTest {
     }
 
     @Test
+    @DisplayName("on the tick a stop is served, the next stop is not reported as already reached")
+    void distanceToNextStopIsNotStaleOnTheDepartureTick() {
+        TrackNetwork flat = flatNetwork(1000.0D);
+        TransitLine line = new TransitLine("Test Line", Arrays.asList(
+            new TransitStation("Alpha", new TrackRef(1, 200.0D)),
+            new TransitStation("Beta", new TrackRef(1, 700.0D))), false);
+        LineService service = new LineService(line, quickController(), 0, 1, 1.0D);
+        Train train = new Train(TrainSpec.singleCar(), realistic(), new TrackRef(1, 100.0D), 0.0D);
+
+        assertTrue(runUntilServed(train, flat, service, 1, 20000) < 20000,
+            "expected the first station served");
+        // The tick that served Alpha has made Beta the target. Its distance, measured to Alpha,
+        // is about zero; read as Beta's, an "Entering Beta" call and Beta's "now approaching"
+        // went out the moment the train left Alpha.
+        assertEquals(1, service.currentStopIndex(), "next target should be Beta");
+        assertTrue(service.distanceToNextStop() > 400.0D,
+            "Beta reported " + service.distanceToNextStop() + " blocks away on the departure tick");
+
+        tickInService(train, flat, service, TrainDriver.NO_STOP);
+        assertEquals(500.0D, service.distanceToNextStop(), 2.0D,
+            "after a tick the distance to Beta should be measured");
+    }
+
+    @Test
     @DisplayName("after the track under a stop is edited, a train mid-leg runs to where the stop is now")
     void refreshedBerthFollowsAnEditedStop() {
         TrackNetwork flat = flatNetwork(1000.0D);

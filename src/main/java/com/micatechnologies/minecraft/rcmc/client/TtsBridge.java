@@ -1,5 +1,6 @@
 package com.micatechnologies.minecraft.rcmc.client;
 
+import com.micatechnologies.minecraft.rcmc.sound.TtsTrace;
 import java.lang.reflect.Method;
 import net.minecraft.client.Minecraft;
 import net.minecraftforge.fml.common.Loader;
@@ -32,6 +33,8 @@ public final class TtsBridge {
     private static Method sayMethod;
     private static Method defaultVoiceMethod;
     private static Method startInitMethod;
+    private static Method isReadyMethod;
+    private static Method hasEngineMethod;
     private static boolean warmedUp;
 
     /**
@@ -83,14 +86,40 @@ public final class TtsBridge {
         if (resolveCsm()) {
             try {
                 String chosen = voice == null || voice.isEmpty() ? defaultVoice() : voice;
+                TtsTrace.stage("HANDOFF", "client", "backend=csm engine=" + csmEngineState()
+                    + " voice=" + chosen, text);
                 sayMethod.invoke(null, text, chosen);
                 return;
             }
-            catch (Throwable ignored) {
+            catch (Throwable t) {
                 // CSM present but its TTS refused — show the words instead of nothing.
+                TtsTrace.stage("HANDOFF", "client", "backend=subtitle csm-failed=" + t, text);
+                subtitle(text);
+                return;
             }
         }
+        TtsTrace.stage("HANDOFF", "client", "backend=subtitle", text);
         subtitle(text);
+    }
+
+    /**
+     * What CSM's engine is doing, for the trace: {@code ready}, {@code loading}, or
+     * {@code narrator} when it has no engine or the engine failed and speech goes to the system
+     * narrator. {@code unknown} on a CSM too old to say.
+     */
+    private static String csmEngineState() {
+        try {
+            if (isReadyMethod == null || hasEngineMethod == null) {
+                return "unknown";
+            }
+            if (Boolean.TRUE.equals(isReadyMethod.invoke(null))) {
+                return "ready";
+            }
+            return Boolean.TRUE.equals(hasEngineMethod.invoke(null)) ? "loading-or-failed" : "narrator";
+        }
+        catch (Throwable t) {
+            return "unknown";
+        }
     }
 
     /** Resolves and caches CSM's {@code CsmTts.say} handle, or records its absence. */
@@ -111,6 +140,13 @@ public final class TtsBridge {
             }
             catch (NoSuchMethodException ignored) {
                 defaultVoiceMethod = null;
+            }
+            try {
+                isReadyMethod = csmTts.getMethod("isReady");
+                hasEngineMethod = csmTts.getMethod("hasEngine");
+            }
+            catch (NoSuchMethodException ignored) {
+                // Only the trace uses these; an older CSM just reports its state as unknown.
             }
             try {
                 startInitMethod = csmTts.getMethod("startInit");

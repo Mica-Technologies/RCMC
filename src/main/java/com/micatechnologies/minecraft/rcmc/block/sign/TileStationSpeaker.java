@@ -1,5 +1,6 @@
 package com.micatechnologies.minecraft.rcmc.block.sign;
 
+import com.micatechnologies.minecraft.rcmc.entity.EntityCoasterCar;
 import com.micatechnologies.minecraft.rcmc.net.PacketStationAnnounce;
 import com.micatechnologies.minecraft.rcmc.net.RcmcNetwork;
 import com.micatechnologies.minecraft.rcmc.physics.Train;
@@ -9,6 +10,7 @@ import com.micatechnologies.minecraft.rcmc.physics.transit.ServiceSnapshot;
 import com.micatechnologies.minecraft.rcmc.physics.transit.TransitLine;
 import com.micatechnologies.minecraft.rcmc.physics.transit.TransitSignText;
 import com.micatechnologies.minecraft.rcmc.sound.RcmcSounds;
+import com.micatechnologies.minecraft.rcmc.sound.TtsTrace;
 import com.micatechnologies.minecraft.rcmc.world.RcmcWorldState;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -19,6 +21,7 @@ import java.util.Map;
 import java.util.Set;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.network.play.server.SPacketSoundEffect;
 import net.minecraft.util.SoundCategory;
 
 /**
@@ -87,6 +90,9 @@ public class TileStationSpeaker extends TileTransitSignBase {
     private static final int CHIME_TO_SPEECH_TICKS = 20;
 
     private static final float CHIME_VOLUME = 0.8F;
+
+    /** How far the chime carries: vanilla's range for a sound no louder than 1. */
+    private static final double CHIME_RANGE = 16.0D;
 
     /**
      * A phase below zero for a train berthing here, so "now arriving" is a step nearer than "now
@@ -169,7 +175,7 @@ public class TileStationSpeaker extends TileTransitSignBase {
                         raw, snapshot.atPlatform(), raw == 0 && hasSeveralPlatforms(state)
                             ? snapshot.platformLabel() : "");
                     if (text != null) {
-                        announce(text);
+                        announce(text, snapshot.trainId());
                     }
                 }
             }
@@ -231,11 +237,35 @@ public class TileStationSpeaker extends TileTransitSignBase {
      * Chimes now and queues the words to follow once the ding has rung out. The chime is a
      * positional sound every client in range attenuates for itself; the words go out as text a
      * short while later, so a listener hears "ding … <announcement>" rather than both at once.
+     *
+     * <p>Riders of the train being announced hear neither. The car makes its own call at the same
+     * moment ("This is …" as it berths here, "Entering …" as it approaches), and a speech engine
+     * says one thing at a time: the two used to reach a rider a tenth of a second apart, and the
+     * second was lost behind the first, leaving two dings and one sentence. The call is for the
+     * people waiting on the platform.</p>
      */
-    private void announce(String text) {
-        world.playSound(null, pos.getX() + 0.5D, pos.getY() + 0.5D, pos.getZ() + 0.5D,
-            RcmcSounds.METRO_STATION_CHIME, SoundCategory.NEUTRAL, CHIME_VOLUME, 1.0F);
-        pending.add(new Pending(text, CHIME_TO_SPEECH_TICKS));
+    private void announce(String text, int trainId) {
+        double x = pos.getX() + 0.5D;
+        double y = pos.getY() + 0.5D;
+        double z = pos.getZ() + 0.5D;
+        // Sent per player rather than through world.playSound, which can leave out only one, over
+        // the same 16 blocks vanilla sends a sound at this volume.
+        SPacketSoundEffect chime = new SPacketSoundEffect(RcmcSounds.METRO_STATION_CHIME,
+            SoundCategory.NEUTRAL, x, y, z, CHIME_VOLUME, 1.0F);
+        for (EntityPlayer player : world.playerEntities) {
+            if (player instanceof EntityPlayerMP && !isRiding(player, trainId)
+                && player.getDistanceSq(x, y, z) <= CHIME_RANGE * CHIME_RANGE) {
+                ((EntityPlayerMP) player).connection.sendPacket(chime);
+            }
+        }
+        TtsTrace.stage("CHIME", traceSource(), "train#" + trainId, text);
+        pending.add(new Pending(text, trainId, CHIME_TO_SPEECH_TICKS));
+    }
+
+    /** Whether {@code player} is aboard train {@code trainId}. */
+    private static boolean isRiding(EntityPlayer player, int trainId) {
+        return player.getRidingEntity() instanceof EntityCoasterCar
+            && ((EntityCoasterCar) player.getRidingEntity()).trainId() == trainId;
     }
 
     /** Counts down queued announcements and sends each once its chime has finished. */
@@ -249,12 +279,15 @@ public class TileStationSpeaker extends TileTransitSignBase {
                 continue;
             }
             it.remove();
-            broadcast(p.text);
+            broadcast(p.text, p.trainId);
         }
     }
 
-    /** Sends the announcement text to every player within earshot of this speaker. */
-    private void broadcast(String text) {
+    /**
+     * Sends the announcement text to every player within earshot of this speaker, except riders of
+     * the train it is about (see {@link #announce}).
+     */
+    private void broadcast(String text, int trainId) {
         double rangeSq = AUDIBLE_RANGE * AUDIBLE_RANGE;
         for (EntityPlayer player : world.playerEntities) {
             if (!(player instanceof EntityPlayerMP)) {
@@ -264,20 +297,31 @@ public class TileStationSpeaker extends TileTransitSignBase {
             double dy = player.posY - (pos.getY() + 0.5D);
             double dz = player.posZ - (pos.getZ() + 0.5D);
             if (dx * dx + dy * dy + dz * dz <= rangeSq) {
+                if (isRiding(player, trainId)) {
+                    TtsTrace.stage("SKIP", traceSource(), "rider=" + player.getName(), text);
+                    continue;
+                }
                 // Empty voice: the client uses the TTS engine's default. Announcements are one
                 // voice for now; a per-line voice could ride the packet later.
                 RcmcNetwork.sendTo(new PacketStationAnnounce(text, ""), (EntityPlayerMP) player);
+                TtsTrace.stage("SEND", traceSource(), "to=" + player.getName(), text);
             }
         }
+    }
+
+    private String traceSource() {
+        return "speaker@" + pos.getX() + "," + pos.getY() + "," + pos.getZ();
     }
 
     /** A station announcement whose chime has played and whose words are waiting on a short timer. */
     private static final class Pending {
         final String text;
+        final int trainId;
         int ticks;
 
-        Pending(String text, int ticks) {
+        Pending(String text, int trainId, int ticks) {
             this.text = text;
+            this.trainId = trainId;
             this.ticks = ticks;
         }
     }

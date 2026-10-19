@@ -92,20 +92,19 @@ jobs:
           git tag "${{ env.PRE_TAG }}" "${{ github.sha }}"
           git push origin "${{ env.PRE_TAG }}"
 
-      # FIX 1 (dev-configurations minecraft-mod-workflows, "the UTC-midnight tag bug").
+      # The mod version is STATED here rather than inferred by the build.
       #
-      # The version the jar is stamped with comes from `git describe --abbrev=0 --tags`
-      # (build.gradle's getLastTag), which asks "some tag on this commit" and not "the tag being
-      # published". A dispatched release and a pushed pre-release of the same commit leave BOTH
-      # tags on it, and which one describe answers with depends on how they sort: after UTC
-      # midnight the pre-release tag wins, and a full release ships a jar stamped as a
-      # pre-release, with `mcmod.info` inside it saying so too. This bit MCMCP on 2026-09-09 and
-      # was latent in CSM.
+      # Left alone, build.gradle's getLastTag takes the version from `git describe --abbrev=0
+      # --tags`, which answers "some tag on this commit", not "the tag being published". A
+      # dispatched release and an earlier pushed pre-release of the same commit leave BOTH tags on
+      # it, and after UTC midnight the pre-release tag sorts first: the full release then ships a
+      # jar, and a mcmod.info inside it, stamped as a pre-release. (MCMCP shipped exactly that on
+      # 2026-09-09.)
       #
-      # So the version is STATED rather than inferred: buildscript.properties' modVersion is
-      # empty, and build.gradle only falls back to git when it is. `-PmodVersion` does not work
-      # for this — loadProjectProperties copies buildscript.properties over it. This edit is
-      # CI-only and never committed.
+      # buildscript.properties' modVersion is empty, and build.gradle only asks git when it is, so
+      # writing the tag into it here decides the version. `-PmodVersion` cannot do this:
+      # loadProjectProperties copies buildscript.properties over it. The edit is CI-only and never
+      # committed.
       - name: Pin the mod version to the tag being published
         run: |
           set -euo pipefail
@@ -174,10 +173,9 @@ jobs:
           minecraftVersion=$(${{github.workspace}}/gradlew -q printMinecraftVersion | tail -n 1 | xargs)
           echo "MINECRAFT_VERSION=$minecraftVersion" >> $GITHUB_ENV
 
-      # RELEASE_FILES is the list the upload step walks and RELEASE_FILE_COUNT is what the verify
-      # step checks against. A repo that ships more than one jar replaces this step with the
-      # list-driven one described in the README's multi-jar variant; the steps below it already
-      # handle any number of files.
+      # RELEASE_FILES is the list, one file per line, that the upload step uploads and verifies.
+      # A repo that ships more than one jar replaces this step with the list-driven one described
+      # in the README's multi-jar variant; the upload step already handles any number of files.
       - name: Copy Assembled Mod Jar to GitHub Actions Workspace
         run: |
           set -euo pipefail
@@ -192,7 +190,6 @@ jobs:
             echo "RELEASE_FILES<<MOD_RELEASE_EOF"
             echo "$jar"
             echo "MOD_RELEASE_EOF"
-            echo "RELEASE_FILE_COUNT=1"
           } >> "$GITHUB_ENV"
 
       - name: Calculate Hashes for the Jar
@@ -207,7 +204,9 @@ jobs:
           echo "SHA256_HASH=$sha256" >> $GITHUB_ENV
           echo "CRC32_HASH=$crc32" >> $GITHUB_ENV
 
-      # FIX 3, part 1: the entry is created as an EMPTY DRAFT. See the upload step for why.
+      # Publishing is three steps: create the release as an EMPTY DRAFT here, upload and verify
+      # every file, then publish. The action only creates the entry; it is given no `files:`, for
+      # the reason on the upload step.
       - name: Create Release Entry
         if: ${{ github.event.inputs.release == 'true' && github.event.inputs.release }}
         uses: softprops/action-gh-release@v3
@@ -226,8 +225,6 @@ jobs:
             SHA-256: `${{ env.SHA256_HASH }}`
             MD5: `${{ env.MD5_HASH }}`
             CRC-32: `${{ env.CRC32_HASH }}`
-          # Created as a draft with no files attached: the action's own uploader is what loses
-          # assets (see the upload step below). It is filled and published from there instead.
           draft: true
           prerelease: false
           generate_release_notes: true
@@ -255,71 +252,34 @@ jobs:
             guaranteed to be stable or permanently available for download/usage.
             Pre-release versions of ${{ env.MOD_NAME }} may be removed or unavailable after
             90 days from their initial release.
-          # As above: a draft with nothing attached, filled by the upload step and published
-          # once every file is verified to be there.
+          # A draft with nothing attached, as above.
           draft: true
           prerelease: true
           generate_release_notes: true
 
-      # FIX 3, part 2 — WHY THE ASSETS ARE NOT ATTACHED BY THE ACTION ABOVE
+      # Files are uploaded by upload-release-assets.sh, not by the action: one at a time with
+      # retries, so a failure fails the step, then read back from the API, failing unless every
+      # file is on the release as an uploaded asset. It runs while the release is still a draft,
+      # so a short release is never visible to anyone.
       #
-      # softprops/action-gh-release uploads assets in parallel and was seen to lose some of them
-      # in CSM on 2026-09-17 — `Error creating asset temp dir`, a different subset missing on
-      # each of three runs, on v2 and v3 alike — while leaving the release a draft and the run
-      # looking like a build failure. Moving to v3 alone does NOT fix it. A release missing a jar
-      # is worse than no release: launcher manifests point straight at these file names. So the
-      # files go up one at a time here, where a failure is a failure and a retry is possible.
-      - name: Upload the release assets
+      # The action's own uploader works in parallel and loses files: CSM's releases on 2026-09-17
+      # came out missing a different subset of jars on each of three runs, on v2 and v3 alike.
+      # A release missing a jar is worse than no release, because launcher manifests point
+      # straight at these file names.
+      - name: Upload and verify the release assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          tag="${{ env.CHOSEN_TAG }}"
+          # $RELEASE_FILES is read from the environment rather than pasted in as an Actions
+          # expression, so a file name can never be interpreted as shell. (Never write the
+          # expression syntax itself in a comment here: Actions expands it inside run: blocks,
+          # comments included, and an empty one makes the whole workflow file invalid.)
+          mapfile -t files < <(printf '%s\n' "$RELEASE_FILES" | sed '/^$/d')
+          bash .github/scripts/upload-release-assets.sh "$CHOSEN_TAG" "${files[@]}"
 
-          while IFS= read -r file; do
-            [ -n "$file" ] || continue
-            if [ ! -f "$file" ]; then
-              echo "::error::$file was listed for upload but is not there"
-              exit 1
-            fi
-            for attempt in 1 2 3; do
-              echo "==> uploading $file (attempt $attempt)"
-              if gh release upload "$tag" "$file" --repo "${{ github.repository }}" --clobber; then
-                break
-              fi
-              if [ "$attempt" -eq 3 ]; then
-                echo "::error::giving up on $file after 3 attempts"
-                exit 1
-              fi
-              sleep $(( attempt * 5 ))
-            done
-          done <<< "${{ env.RELEASE_FILES }}"
-
-      # FIX 3, part 3: the release is read back from the API rather than trusted. This runs
-      # before the release is published, so a short release is never visible to anyone. Only
-      # assets whose state is `uploaded` count: a failed or in-flight upload is listed with a
-      # different state, and a bare `.assets | length` would pass a broken release.
-      - name: Verify the release has every asset
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          tag="${{ env.CHOSEN_TAG }}"
-
-          repo="${{ github.repository }}"
-          attached=$(gh release view "$tag" --repo "$repo" --json assets \
-            --jq '[.assets[] | select(.state == "uploaded")] | length')
-
-          echo "==> $tag has $attached of ${{ env.RELEASE_FILE_COUNT }} assets"
-          gh release view "$tag" --repo "$repo" --json assets \
-            --jq '.assets[] | "    \(.name) \(.size) \(.state)"'
-
-          if [ "$attached" -ne "${{ env.RELEASE_FILE_COUNT }}" ]; then
-            echo "::error::$tag has $attached uploaded assets, expected ${{ env.RELEASE_FILE_COUNT }}"
-            exit 1
-          fi
-
-      # FIX 3, part 4: publish only now, and confirm it actually left draft state.
+      # Every file is confirmed present, so publish, and check the release really left draft
+      # state: a release nobody can download is not a release.
       - name: Publish the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

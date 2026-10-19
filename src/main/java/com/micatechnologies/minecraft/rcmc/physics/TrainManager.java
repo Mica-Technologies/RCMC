@@ -103,6 +103,16 @@ public final class TrainManager {
         }
     }
 
+    /**
+     * Works off part of every train's outstanding server correction. Client only; see
+     * {@link Train#correctToward}.
+     */
+    public void easeCorrections(TrackNetwork network, double fraction) {
+        for (Train train : trains.values()) {
+            train.easeCorrection(network, fraction);
+        }
+    }
+
     /** Supplies the along-track acceleration acting on a train from ride hardware. */
     public interface ExternalAcceleration {
 

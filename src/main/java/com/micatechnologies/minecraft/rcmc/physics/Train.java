@@ -2,6 +2,7 @@ package com.micatechnologies.minecraft.rcmc.physics;
 
 import com.micatechnologies.minecraft.rcmc.track.TrackNetwork;
 import com.micatechnologies.minecraft.rcmc.track.TrackRef;
+import com.micatechnologies.minecraft.rcmc.track.TrackSection;
 import com.micatechnologies.minecraft.rcmc.track.math.TrackFrame;
 import java.util.ArrayList;
 import java.util.List;
@@ -67,6 +68,26 @@ public final class Train {
     /** True while a ride element is deliberately holding this train stationary. */
     private boolean held;
 
+    /**
+     * The along-track acceleration ride hardware applied on the last tick, in blocks/s². Sent to
+     * clients with each correction, so they predict a lift, a brake or a launch rather than a train
+     * coasting through it.
+     */
+    private double externalAcceleration;
+
+    /**
+     * On a client: the server's {@link #externalAcceleration} and {@link #held} from the last
+     * correction, which {@link PredictedControl} applies until the next one. Unused on the server.
+     */
+    private double syncedExternalAcceleration;
+    private boolean syncedHeld;
+
+    /**
+     * On a client: blocks along the track still to be applied from the last correction. See
+     * {@link #correctToward}. Always zero on the server.
+     */
+    private double correction;
+
     public Train(TrainSpec spec, PhysicsIntegrator integrator, TrackRef start, double initialVelocity) {
         if (spec == null || integrator == null || start == null) {
             throw new IllegalArgumentException("spec, integrator and start are all required");
@@ -94,6 +115,7 @@ public final class Train {
         if (subSteps < 1) {
             throw new IllegalArgumentException("subSteps must be >= 1, got " + subSteps);
         }
+        this.externalAcceleration = externalAcceleration;
         double dt = tickSeconds / subSteps;
         for (int i = 0; i < subSteps && status == Status.RUNNING; i++) {
             step(network, externalAcceleration, dt);
@@ -287,6 +309,109 @@ public final class Train {
         this.reference = newReference;
         this.velocity = newVelocity;
         this.status = Status.RUNNING;
+        this.correction = 0.0D;
+    }
+
+    /** The along-track acceleration ride hardware applied on the last tick. */
+    public double externalAcceleration() {
+        return externalAcceleration;
+    }
+
+    /** Records the server's control values from a correction; see {@link PredictedControl}. */
+    public void setSyncedControl(double acceleration, boolean holding) {
+        this.syncedExternalAcceleration = acceleration;
+        this.syncedHeld = holding;
+    }
+
+    public double syncedExternalAcceleration() {
+        return syncedExternalAcceleration;
+    }
+
+    public boolean syncedHeld() {
+        return syncedHeld;
+    }
+
+    /**
+     * Furthest a correction is eased rather than applied at once, in blocks.
+     *
+     * <p>Ordinary prediction error is well under this: a tick of phase difference between the two
+     * sides, or a few ticks of a lift the client mispredicted. An error bigger than this means the
+     * two sides disagree about what happened, not about timing, and easing across it would show a
+     * train sliding along the track for no reason.</p>
+     */
+    static final double MAX_EASED_CORRECTION = 8.0D;
+
+    /**
+     * Applies a server correction gradually, so a rider's view does not jump.
+     *
+     * <p>The two sides tick on their own clocks, so a correction regularly lands a tick early or
+     * late relative to the client's prediction. At coaster speeds a tick is a block of track, and
+     * setting the position outright jumps the train and the rider's camera by that much four times
+     * a second. Instead the velocity is taken at once, since it is the input the client's own
+     * prediction continues from and changing it moves nothing, and the position error is kept and
+     * worked off over the next few ticks by {@link #easeCorrection}.</p>
+     *
+     * <p>Falls back to {@link #setState} when the error cannot be measured along one section, or
+     * is too large to be timing (see {@link #MAX_EASED_CORRECTION}).</p>
+     *
+     * @return whether the correction is being eased rather than applied outright
+     */
+    public boolean correctToward(TrackNetwork network, TrackRef target, double targetVelocity) {
+        double error = alongTrackError(network, reference, target);
+        if (Double.isNaN(error) || Math.abs(error) > MAX_EASED_CORRECTION) {
+            setState(target, targetVelocity);
+            return false;
+        }
+        this.velocity = targetVelocity;
+        this.status = Status.RUNNING;
+        this.correction = error;
+        return true;
+    }
+
+    /**
+     * Works off part of the remaining correction: {@code fraction} of it, or all of it once it is
+     * too small to see.
+     */
+    public void easeCorrection(TrackNetwork network, double fraction) {
+        if (correction == 0.0D || !network.hasSection(reference.sectionId())) {
+            return;
+        }
+        double step = Math.abs(correction) < 1.0e-3D ? correction : correction * fraction;
+        TrackNetwork.Traversal traversal = network.advance(reference, step);
+        reference = traversal.ref;
+        correction -= step;
+        if (traversal.reversed) {
+            // As in step(): an END-to-END join flips the axis, so what is left of the correction
+            // and the velocity are both now measured the other way.
+            velocity = -velocity;
+            correction = -correction;
+        }
+        if (traversal.hitDeadEnd) {
+            correction = 0.0D;
+        }
+    }
+
+    /** What is left of the last correction, in blocks along the track. */
+    public double pendingCorrection() {
+        return correction;
+    }
+
+    /**
+     * Signed distance along the track from {@code from} to {@code to}, or NaN when they are on
+     * different sections. A circuit is measured the short way round, so a correction across the
+     * start line is a small step rather than nearly a lap backwards.
+     */
+    static double alongTrackError(TrackNetwork network, TrackRef from, TrackRef to) {
+        if (from.sectionId() != to.sectionId() || !network.hasSection(to.sectionId())) {
+            return Double.NaN;
+        }
+        double error = to.distance() - from.distance();
+        TrackSection section = network.section(to.sectionId());
+        if (section.isClosed()) {
+            double lap = section.totalLength();
+            error -= lap * Math.rint(error / lap);
+        }
+        return error;
     }
 
     @Override

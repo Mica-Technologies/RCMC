@@ -212,6 +212,11 @@ public final class LineService {
         if (controller.stopsServed() != servedSeen) {
             servedSeen = controller.stopsServed();
             advanceToNextStop();
+            // The distance above was measured to the stop just served. Left in place it reads as
+            // the new target's for the rest of this tick: about zero, so an "Entering <next>" call
+            // and the next station's "now approaching" went out as the train left. Not measured
+            // yet is the honest answer; the next tick measures it.
+            this.stationRemaining = Double.POSITIVE_INFINITY;
         }
         return acceleration;
     }
@@ -346,6 +351,9 @@ public final class LineService {
      * Remaining track distance to the current target station as of the last tick — what a station
      * speaker uses to hold the "now approaching" call until the train is genuinely close, rather
      * than firing it the moment the station becomes the next stop.
+     *
+     * <p>Infinite until first measured: before the first tick, and on the tick a stop is served,
+     * when the target has just moved on and its distance has not been walked yet.</p>
      */
     public double distanceToNextStop() {
         return stationRemaining;
