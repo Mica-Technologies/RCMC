@@ -50,6 +50,7 @@ public class PacketStationAnnounce implements IMessage {
         @Override
         @SideOnly(Side.CLIENT)
         public IMessage onMessage(PacketStationAnnounce message, MessageContext ctx) {
+            com.micatechnologies.minecraft.rcmc.sound.TtsTrace.stage("RECV", "client", "", message.text);
             // Off the network thread and onto the client thread — TTS init and any GUI touch must
             // not run here. The proxy is the only sanctioned door into client-only code.
             net.minecraft.client.Minecraft.getMinecraft().addScheduledTask(

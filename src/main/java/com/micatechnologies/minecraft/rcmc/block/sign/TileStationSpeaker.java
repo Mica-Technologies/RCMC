@@ -9,6 +9,7 @@ import com.micatechnologies.minecraft.rcmc.physics.transit.ServiceSnapshot;
 import com.micatechnologies.minecraft.rcmc.physics.transit.TransitLine;
 import com.micatechnologies.minecraft.rcmc.physics.transit.TransitSignText;
 import com.micatechnologies.minecraft.rcmc.sound.RcmcSounds;
+import com.micatechnologies.minecraft.rcmc.sound.TtsTrace;
 import com.micatechnologies.minecraft.rcmc.world.RcmcWorldState;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -235,6 +236,7 @@ public class TileStationSpeaker extends TileTransitSignBase {
     private void announce(String text) {
         world.playSound(null, pos.getX() + 0.5D, pos.getY() + 0.5D, pos.getZ() + 0.5D,
             RcmcSounds.METRO_STATION_CHIME, SoundCategory.NEUTRAL, CHIME_VOLUME, 1.0F);
+        TtsTrace.stage("CHIME", traceSource(), "", text);
         pending.add(new Pending(text, CHIME_TO_SPEECH_TICKS));
     }
 
@@ -267,8 +269,13 @@ public class TileStationSpeaker extends TileTransitSignBase {
                 // Empty voice: the client uses the TTS engine's default. Announcements are one
                 // voice for now; a per-line voice could ride the packet later.
                 RcmcNetwork.sendTo(new PacketStationAnnounce(text, ""), (EntityPlayerMP) player);
+                TtsTrace.stage("SEND", traceSource(), "to=" + player.getName(), text);
             }
         }
+    }
+
+    private String traceSource() {
+        return "speaker@" + pos.getX() + "," + pos.getY() + "," + pos.getZ();
     }
 
     /** A station announcement whose chime has played and whose words are waiting on a short timer. */

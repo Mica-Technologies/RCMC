@@ -147,9 +147,10 @@ public final class TransitSounds {
                 // Arrived: the doors are starting to open. Ding now, then say "This is <here>".
                 // currentStopIndex is still the station being berthed at.
                 play(world, train, network, RcmcSounds.METRO_ANNOUNCE_CHIME);
-                pending.add(new PendingAnnouncement(trainId, CHIME_TO_SPEECH_TICKS,
-                    TransitSignText.arrivalAnnouncement(stopName(service, service.currentStopIndex())),
-                    false));
+                String arrival =
+                    TransitSignText.arrivalAnnouncement(stopName(service, service.currentStopIndex()));
+                TtsTrace.stage("CHIME", "train#" + trainId, "", arrival);
+                pending.add(new PendingAnnouncement(trainId, CHIME_TO_SPEECH_TICKS, arrival, false));
             }
             if (phase == TransitStopController.Phase.DOORS_CLOSING) {
                 play(world, train, network, RcmcSounds.METRO_DOOR_CLOSE);
@@ -214,8 +215,9 @@ public final class TransitSounds {
         enteringAnnounced.put(trainId, stopIndex);
         DoorSide side = transit.doorSideFor(service).asSeenFrom(service.facing());
         play(world, train, network, RcmcSounds.METRO_ANNOUNCE_CHIME);
-        pending.add(new PendingAnnouncement(trainId, CHIME_TO_SPEECH_TICKS,
-            TransitSignText.enteringAnnouncement(stopName(service, stopIndex), side), false));
+        String entering = TransitSignText.enteringAnnouncement(stopName(service, stopIndex), side);
+        TtsTrace.stage("CHIME", "train#" + trainId, "", entering);
+        pending.add(new PendingAnnouncement(trainId, CHIME_TO_SPEECH_TICKS, entering, false));
     }
 
     private void firePending(World world, TrainManager trains, TrackNetwork network) {
@@ -236,12 +238,13 @@ public final class TransitSounds {
             if (p.chimeFirst) {
                 // The delay has elapsed: ding now, then speak once the ding has rung out.
                 play(world, train, network, RcmcSounds.METRO_ANNOUNCE_CHIME);
+                TtsTrace.stage("CHIME", "train#" + p.trainId, "", p.text);
                 if (reschedule == null) {
                     reschedule = new ArrayList<>();
                 }
                 reschedule.add(new PendingAnnouncement(p.trainId, CHIME_TO_SPEECH_TICKS, p.text, false));
             } else {
-                announce(world, train, network, p.text);
+                announce(world, train, network, p.trainId, p.text);
             }
         }
         if (reschedule != null) {
@@ -260,7 +263,8 @@ public final class TransitSounds {
     }
 
     /** Sends an in-car announcement to every player riding or near the train. */
-    private static void announce(World world, Train train, TrackNetwork network, String text) {
+    private static void announce(World world, Train train, TrackNetwork network, int trainId,
+                                 String text) {
         TrackFrame frame = train.frameOfCar(network, 0);
         if (frame == null) {
             return;
@@ -276,6 +280,7 @@ public final class TransitSounds {
             if (dx * dx + dy * dy + dz * dz <= rangeSq) {
                 // Empty voice: the client uses the TTS engine's default, as the platform speaker does.
                 RcmcNetwork.sendTo(new PacketStationAnnounce(text, ""), (EntityPlayerMP) player);
+                TtsTrace.stage("SEND", "train#" + trainId, "to=" + player.getName(), text);
             }
         }
     }
