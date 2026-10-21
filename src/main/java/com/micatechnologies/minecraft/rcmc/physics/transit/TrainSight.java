@@ -62,6 +62,27 @@ public final class TrainSight {
 
     /** As {@link #authority}, naming the train in the way. */
     public static View look(int trainId, Train train, TrainManager trains, TrackNetwork network, double facing) {
+        return look(trainId, train, trains, network, facing, null);
+    }
+
+    /**
+     * Slack on the straight-line broad phase, in blocks: positions are taken at the start of the
+     * tick and trains move up to a block or so during it, both of them.
+     */
+    private static final double POSITION_SLACK = 4.0D;
+
+    /**
+     * As above, with each train's lead position at the start of the tick, by id, for a broad phase.
+     *
+     * <p>Every train in the world is a candidate, and each costs two moves along the track and two
+     * walks of up to {@link #HORIZON}; with every serviced train looking every tick that is
+     * quadratic in the fleet. But track within {@code HORIZON} along it is within {@code HORIZON} in
+     * a straight line — no chord is longer than its arc — so a train further than that plus both
+     * trains' lengths cannot be in sight, and is ruled out on one subtraction. {@code null} skips the
+     * broad phase.</p>
+     */
+    public static View look(int trainId, Train train, TrainManager trains, TrackNetwork network, double facing,
+                            Map<Integer, com.micatechnologies.minecraft.rcmc.track.math.Vec3> positions) {
         if (train == null || train.reference() == null || network == null) {
             return new View(Double.POSITIVE_INFINITY, -1);
         }
@@ -73,6 +94,7 @@ public final class TrainSight {
             : spec.offsetOfCar(spec.carCount() - 1) + spec.carLength() * 0.5D;
         double nearest = Double.POSITIVE_INFINITY;
         int ahead = -1;
+        com.micatechnologies.minecraft.rcmc.track.math.Vec3 here = positions == null ? null : positions.get(trainId);
         for (Map.Entry<Integer, Train> entry : trains.asMap().entrySet()) {
             if (entry.getKey() == trainId) {
                 continue;
@@ -82,6 +104,13 @@ public final class TrainSight {
                 continue;
             }
             TrainSpec otherSpec = other.spec();
+            com.micatechnologies.minecraft.rcmc.track.math.Vec3 there = here == null ? null : positions.get(entry.getKey());
+            if (there != null) {
+                double reach = HORIZON + spec.totalLength() + otherSpec.totalLength() + POSITION_SLACK;
+                if (here.subtract(there).lengthSquared() > reach * reach) {
+                    continue;
+                }
+            }
             TrackRef front = network.advance(other.reference(), otherSpec.carLength() * 0.5D).ref;
             TrackRef back = network.advance(other.reference(),
                 -(otherSpec.offsetOfCar(otherSpec.carCount() - 1) + otherSpec.carLength() * 0.5D)).ref;

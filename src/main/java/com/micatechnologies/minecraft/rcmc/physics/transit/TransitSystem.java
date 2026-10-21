@@ -64,6 +64,9 @@ public final class TransitSystem {
     /** Every train on the network this tick, which a service must not run into. */
     private TrainManager tickTrains;
 
+    /** Each train's lead position this tick, for {@link TrainSight}'s broad phase; built on first use. */
+    private Map<Integer, com.micatechnologies.minecraft.rcmc.track.math.Vec3> tickPositions;
+
     /** Trains an operator is holding at their next platform, doors open. */
     private final java.util.Set<Integer> held = new java.util.HashSet<>();
 
@@ -488,6 +491,20 @@ public final class TransitSystem {
         return Math.signum(sum);
     }
 
+    /** Every train's lead position as of this tick, worked out once and shared by every service. */
+    private Map<Integer, com.micatechnologies.minecraft.rcmc.track.math.Vec3> tickPositions() {
+        if (tickPositions == null && tickTrains != null && tickNetwork != null) {
+            tickPositions = new java.util.HashMap<>();
+            for (Map.Entry<Integer, Train> entry : tickTrains.asMap().entrySet()) {
+                TrackRef at = entry.getValue().reference();
+                if (at != null && tickNetwork.section(at.sectionId()) != null) {
+                    tickPositions.put(entry.getKey(), tickNetwork.frameAt(at).position);
+                }
+            }
+        }
+        return tickPositions;
+    }
+
     /** Below this speed a train entering service may be stood and turned round. */
     private static final double TURNABLE_SPEED = 1.0D;
 
@@ -841,6 +858,7 @@ public final class TransitSystem {
     public void beginTick(TrainManager trains, TrackNetwork network) {
         this.tickNetwork = network;
         this.tickTrains = trains;
+        this.tickPositions = null;
         tick++;
         // A service whose train was removed must not linger and grab a recycled train id later.
         for (Iterator<Integer> it = services.keySet().iterator(); it.hasNext(); ) {
@@ -887,7 +905,7 @@ public final class TransitSystem {
                 if (tickTrains != null) {
                     // Signalled or not, never into another train: see TrainSight.
                     TrainSight.View sight = TrainSight.look(trainId, train, tickTrains, tickNetwork,
-                        service.facing());
+                        service.facing(), tickPositions());
                     if (sight.authority < authority && sight.authority < STOPPING_FOR_WITHIN) {
                         stoppingFor.put(trainId, sight.ahead);
                     }

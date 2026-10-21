@@ -194,4 +194,44 @@ class TrainSightTest {
         assertTrue(fastest > 5.0D && backwards > -0.5D,
             "and it runs that way: from " + backwards + " to " + fastest + " blocks/s");
     }
+
+    @Test
+    @DisplayName("the straight-line broad phase sees exactly what scanning every train sees")
+    void broadPhaseMatchesTheFullScan() {
+        // A 4 km loop, wider than the horizon, crowded with trains at random places and speeds.
+        List<TrackNode> nodes = new ArrayList<>();
+        double side = 1000.0D;
+        for (double[] p : new double[][] {{0, 0}, {side, 0}, {side, side}, {0, side}}) {
+            nodes.add(new TrackNode(new Vec3(p[0], 64.0D, p[1])));
+        }
+        TrackNetwork big = new TrackNetwork();
+        big.addSection(new TrackSection(1, nodes, true, null));
+        double loop = big.section(1).totalLength();
+
+        java.util.Random random = new java.util.Random(12);
+        TrainManager fleet = new TrainManager();
+        java.util.Map<Integer, Vec3> positions = new java.util.HashMap<>();
+        for (int id = 1; id <= 60; id++) {
+            Train t = new Train(TrainSpec.metroTrain(1 + random.nextInt(6)),
+                new PhysicsIntegrator(9.81D, 0.01D, 0.0015D, 60.0D),
+                new TrackRef(1, random.nextDouble() * loop), (random.nextDouble() - 0.5D) * 30.0D);
+            fleet.add(id, t);
+            positions.put(id, big.frameAt(t.reference()).position);
+        }
+        int limited = 0;
+        for (int id = 1; id <= 60; id++) {
+            for (double facing : new double[] {1.0D, -1.0D}) {
+                Train t = fleet.train(id);
+                TrainSight.View full = TrainSight.look(id, t, fleet, big, facing);
+                TrainSight.View fast = TrainSight.look(id, t, fleet, big, facing, positions);
+                org.junit.jupiter.api.Assertions.assertEquals(full.authority, fast.authority, 1e-9,
+                    "train " + id + " facing " + facing);
+                org.junit.jupiter.api.Assertions.assertEquals(full.ahead, fast.ahead, "train " + id + " facing " + facing);
+                if (full.ahead >= 0) {
+                    limited++;
+                }
+            }
+        }
+        assertTrue(limited > 20, "too few trains had another in sight to prove anything: " + limited);
+    }
 }
