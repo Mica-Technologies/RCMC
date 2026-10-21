@@ -88,16 +88,9 @@ public final class TrackPreviewRenderer {
         boolean closing = ClientBuildSession.isClosing() || snapping;
         // Below the minimum a section needs there is no curve to preview yet. The node marker
         // still draws, so the first click is not invisible feedback.
-        TrackSection preview = null;
+        Preview preview = null;
         if (nodes.size() >= (closing ? 3 : 2)) {
-            try {
-                preview = new TrackSection(PREVIEW_SECTION_ID, nodes, closing, null);
-            }
-            catch (IllegalArgumentException e) {
-                // Degenerate placement — coincident nodes, most likely. Fall through to drawing
-                // just the markers rather than showing nothing, so the builder can see why.
-                preview = null;
-            }
+            preview = previewFor(nodes, closing, mc.world);
         }
 
         double camX = interpolate(mc.getRenderViewEntity().prevPosX,
@@ -223,40 +216,89 @@ public final class TrackPreviewRenderer {
         tessellator.draw();
     }
 
+    /** The provisional section and everything worked out from it, kept while the nodes hold still. */
+    private static final class Preview {
+        final TrackSection section;
+        final List<TrackIssue> issues;
+        final TrackMesh mesh;
+
+        Preview(TrackSection section, List<TrackIssue> issues, TrackMesh mesh) {
+            this.section = section;
+            this.issues = issues;
+            this.mesh = mesh;
+        }
+    }
+
+    private static List<TrackNode> previewNodes;
+    private static boolean previewClosing;
+    private static Preview previewCache;
+
+    /**
+     * The provisional section for {@code nodes}, built only when the nodes or the closing mode
+     * change.
+     *
+     * <p>Building it means a spline, an arc-length table, frames, the whole validator, support
+     * placement and a tessellation. That ran every frame the track tool was held, cursor still or
+     * not, so a long run of pending nodes cost the builder their frame rate for as long as they
+     * looked at it. The cursor moves a node a few times a second at most; frames come far faster.</p>
+     *
+     * @return {@code null} for a degenerate placement (coincident nodes, most likely); the node
+     *     markers still draw, so the builder can see why there is no curve
+     */
+    private static Preview previewFor(List<TrackNode> nodes, boolean closing, net.minecraft.world.World world) {
+        if (previewCache != null && closing == previewClosing && nodes.equals(previewNodes)) {
+            return previewCache;
+        }
+        previewNodes = new java.util.ArrayList<>(nodes);
+        previewClosing = closing;
+        previewCache = null;
+        TrackSection section;
+        try {
+            section = new TrackSection(PREVIEW_SECTION_ID, nodes, closing, null);
+        }
+        catch (IllegalArgumentException e) {
+            return null;
+        }
+        // Problems are marked where they are, not by turning the whole run red: a builder laying a
+        // long chain needs to know which bend is wrong.
+        List<TrackIssue> issues = new java.util.ArrayList<>();
+        for (TrackIssue issue : new TrackValidator(ValidationLimits.DEFAULT).validate(section)) {
+            if (issue.severity() != TrackIssue.Severity.INFO) {
+                issues.add(issue);
+            }
+        }
+        // Supports are previewed too. Without them, raising the placement height showed track
+        // floating with no indication of what would hold it up — which is most of what a builder is
+        // judging when they lift a node clear of the ground.
+        java.util.List<double[]> columns = new java.util.ArrayList<>();
+        for (com.micatechnologies.minecraft.rcmc.world.TrackSupports.Column column
+            : com.micatechnologies.minecraft.rcmc.world.TrackSupports.computeUncached(section, world)) {
+            columns.add(new double[] { column.x, column.z, column.bottomY, column.topY, column.attachX,
+                column.attachZ });
+        }
+        TrackMesh mesh = TrackMeshBuilder.build(section,
+            java.util.Collections.<com.micatechnologies.minecraft.rcmc.track.ElementSpan>emptyList(),
+            columns);
+        previewCache = new Preview(section, issues, mesh);
+        return previewCache;
+    }
+
     /**
      * Draws the provisional track, with anything the validator objects to marked where it is.
      *
      * <p>Running the validator here is the RCT loop in miniature: the game tells you what you are
      * about to build while you can still move the cursor, rather than after you have committed.</p>
      */
-    private static void drawPreview(TrackSection preview, double camX, double camY, double camZ) {
-        // Problems are marked where they are, not by turning the whole run red: a builder laying a
-        // long chain needs to know which bend is wrong.
-        List<TrackIssue> issues = new java.util.ArrayList<>();
-        for (TrackIssue issue : new TrackValidator(ValidationLimits.DEFAULT).validate(preview)) {
-            if (issue.severity() != TrackIssue.Severity.INFO) {
-                issues.add(issue);
-            }
-        }
+    private static void drawPreview(Preview cached, double camX, double camY, double camZ) {
+        TrackSection preview = cached.section;
+        List<TrackIssue> issues = cached.issues;
+        TrackMesh mesh = cached.mesh;
         // A steep placement is flagged even when the validator is content: an abrupt climb between
         // two adjacent nodes is the single most surprising thing the height offset does, and it is
         // geometry the builder chose rather than a fault in the curve.
         BuildCursor.Segment segment = BuildCursor.pendingSegment(net.minecraft.client.Minecraft.getMinecraft());
         float[] tint = segment != null && segment.isSteep() ? WARNING_COLOR : VALID_COLOR;
 
-        // Supports are previewed too. Without them, raising the placement height showed track
-        // floating with no indication of what would hold it up — which is most of what a builder is
-        // judging when they lift a node clear of the ground.
-        java.util.List<double[]> columns = new java.util.ArrayList<>();
-        for (com.micatechnologies.minecraft.rcmc.world.TrackSupports.Column column
-            : com.micatechnologies.minecraft.rcmc.world.TrackSupports.computeUncached(
-                preview, net.minecraft.client.Minecraft.getMinecraft().world)) {
-            columns.add(new double[] { column.x, column.z, column.bottomY, column.topY, column.attachX,
-                column.attachZ });
-        }
-        TrackMesh mesh = TrackMeshBuilder.build(preview,
-            java.util.Collections.<com.micatechnologies.minecraft.rcmc.track.ElementSpan>emptyList(),
-            columns);
         Tessellator tessellator = Tessellator.getInstance();
         BufferBuilder buffer = tessellator.getBuffer();
         buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_COLOR);

@@ -95,7 +95,10 @@ public final class RideCheckOverlay {
                     to = mid + POINT_HALF_LENGTH;
                 }
                 drawBand(section, from, to, colour);
-                label(section.frameAtDistance((warning.from + warning.to) * 0.5D).position, warning.label());
+                double middle = (warning.from + warning.to) * 0.5D;
+                if (!farFromCamera(section, middle, Minecraft.getMinecraft().getRenderManager(), 0.0D)) {
+                    label(section.frameAtDistance(middle).position, warning.label());
+                }
             }
         }
     }
@@ -129,7 +132,20 @@ public final class RideCheckOverlay {
         BufferBuilder buffer = tessellator.getBuffer();
         buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_COLOR);
         double step = 1.0D;
+        double windowEnd = Double.NEGATIVE_INFINITY;
         for (double s = from; s < to; s += step) {
+            if (s >= windowEnd) {
+                // Only the band near the camera is drawn. A metro check on a city line can mark
+                // kilometres of track, and this was every block of all of it, twice through the
+                // frame lookup, every frame. No point of a window is further from its middle than
+                // half its length, so a far middle rules the whole window out.
+                windowEnd = Math.min(to, s + BAND_WINDOW);
+                if (farFromCamera(section, wrap((s + windowEnd) * 0.5D, total, section.isClosed()),
+                    manager, BAND_WINDOW * 0.5D)) {
+                    s = windowEnd - step;
+                    continue;
+                }
+            }
             double e = Math.min(to, s + step);
             Vec3[] a = edges(section, wrap(s, total, section.isClosed()));
             Vec3[] b = edges(section, wrap(e, total, section.isClosed()));
@@ -145,6 +161,22 @@ public final class RideCheckOverlay {
         GlStateManager.enableCull();
         GlStateManager.enableTexture2D();
         GlStateManager.popMatrix();
+    }
+
+    /** Bands and labels further than this from the camera are not drawn. */
+    private static final double BAND_DRAW_DISTANCE = 256.0D;
+
+    /** Arc length of band ruled in or out at a time. */
+    private static final double BAND_WINDOW = 16.0D;
+
+    /** Whether everything within {@code slack} of the point at {@code s} is past the draw distance. */
+    private static boolean farFromCamera(TrackSection section, double s, RenderManager manager, double slack) {
+        Vec3 at = section.positionAtDistance(s);
+        double dx = at.x - manager.viewerPosX;
+        double dy = at.y - manager.viewerPosY;
+        double dz = at.z - manager.viewerPosZ;
+        double limit = BAND_DRAW_DISTANCE + slack;
+        return dx * dx + dy * dy + dz * dz > limit * limit;
     }
 
     private static double wrap(double s, double total, boolean closed) {

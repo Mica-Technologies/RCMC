@@ -147,4 +147,100 @@ class TrackPickerTest {
         // Past the end clamps rather than running off the node list.
         assertTrue(TrackPicker.spanIndexAt(section, section.totalLength() + 50.0D) < 2);
     }
+
+    /** The ray pick as it was before its broad phase: every block of every section. */
+    private static TrackPicker.Hit pickAlongRayReference(TrackNetwork network, Vec3 origin, Vec3 direction,
+                                                         double maxRange, double radius) {
+        Vec3 unit = direction.normalize();
+        double bestAlong = Double.MAX_VALUE;
+        TrackRef bestRef = null;
+        for (TrackSection section : network.sections()) {
+            double total = section.totalLength();
+            for (double s = 0.0D; s <= total; s += 1.0D) {
+                double off = offRay(origin, unit, section.positionAtDistance(s), maxRange);
+                if (off > radius + 1.0D) {
+                    continue;
+                }
+                double at = s;
+                double window = 1.0D;
+                for (int pass = 0; pass < 3; pass++) {
+                    double from = Math.max(0.0D, at - window);
+                    double to = Math.min(total, at + window);
+                    double step = (to - from) / 10.0D;
+                    if (step <= 0.0D) {
+                        break;
+                    }
+                    for (double t = from; t <= to; t += step) {
+                        double d = offRay(origin, unit, section.positionAtDistance(t), maxRange);
+                        if (d < off) {
+                            off = d;
+                            at = t;
+                        }
+                    }
+                    window = step;
+                }
+                if (off > radius) {
+                    continue;
+                }
+                double along = section.positionAtDistance(at).subtract(origin).dot(unit);
+                if (along >= 0.0D && along <= maxRange && along < bestAlong) {
+                    bestAlong = along;
+                    bestRef = new TrackRef(section.id(), at);
+                }
+            }
+        }
+        return bestRef == null ? null : new TrackPicker.Hit(bestRef, 0.0D);
+    }
+
+    private static double offRay(Vec3 origin, Vec3 unit, Vec3 point, double maxRange) {
+        Vec3 relative = point.subtract(origin);
+        double along = relative.dot(unit);
+        if (along < 0.0D || along > maxRange) {
+            return Double.MAX_VALUE;
+        }
+        return relative.subtract(unit.scale(along)).length();
+    }
+
+    @Test
+    @DisplayName("the ray pick's broad phase picks exactly what walking every block picked")
+    void rayPickBroadPhaseMatchesTheFullWalk() {
+        // A wiggly circuit and a long straight crossing it, so rays hit, miss, graze and choose
+        // between sections.
+        TrackNetwork network = new TrackNetwork();
+        List<TrackNode> ring = new ArrayList<>();
+        for (int i = 0; i < 24; i++) {
+            double a = 2.0D * Math.PI * i / 24;
+            ring.add(new TrackNode(new Vec3(Math.cos(a) * 120.0D, 64.0D + 6.0D * Math.sin(3 * a),
+                Math.sin(a) * 120.0D), 0.0D, null));
+        }
+        network.addSection(new TrackSection(1, ring, true, null));
+        network.addSection(new TrackSection(2, Arrays.asList(
+            new TrackNode(new Vec3(-300, 66, 5), 0.0D, null), new TrackNode(new Vec3(0, 66, 0), 0.0D, null),
+            new TrackNode(new Vec3(300, 66, -5), 0.0D, null)), false, null));
+
+        java.util.Random random = new java.util.Random(8);
+        int hits = 0;
+        for (int i = 0; i < 400; i++) {
+            Vec3 origin = new Vec3(random.nextDouble() * 400 - 200, 60 + random.nextDouble() * 30,
+                random.nextDouble() * 400 - 200);
+            // Aim at a point on the track, jittered, so most rays come close and many hit.
+            TrackSection target = network.section(1 + random.nextInt(2));
+            Vec3 aim = target.positionAtDistance(random.nextDouble() * target.totalLength())
+                .add(new Vec3(random.nextGaussian() * 2, random.nextGaussian() * 2, random.nextGaussian() * 2));
+            Vec3 direction = aim.subtract(origin);
+            double range = 64.0D + random.nextDouble() * 400.0D;
+
+            TrackPicker.Hit expected = pickAlongRayReference(network, origin, direction, range, 1.5D);
+            TrackPicker.Hit actual = TrackPicker.pickAlongRay(network, origin, direction, range, 1.5D);
+            if (expected == null) {
+                assertNull(actual, "ray " + i + " picked track the full walk did not");
+                continue;
+            }
+            hits++;
+            assertNotNull(actual, "ray " + i + " missed track the full walk picked");
+            assertEquals(expected.ref.sectionId(), actual.ref.sectionId(), "ray " + i + " section");
+            assertEquals(expected.ref.distance(), actual.ref.distance(), 1e-9, "ray " + i + " distance");
+        }
+        assertTrue(hits > 50, "too few rays hit to prove anything: " + hits);
+    }
 }

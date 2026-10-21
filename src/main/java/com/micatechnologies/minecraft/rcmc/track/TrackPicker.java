@@ -86,7 +86,24 @@ public final class TrackPicker {
             if (total <= 0.0D) {
                 continue;
             }
+            double windowEnd = -1.0D;
             for (double s = 0.0D; s <= total; s += COARSE_STEP) {
+                if (s > windowEnd) {
+                    // Broad phase. Every point of the next RAY_WINDOW of track lies within half of
+                    // it of the window's middle, since no chord is longer than its arc. If that
+                    // middle is further from the ray segment than half the window plus anything
+                    // that could count as a hit, nothing in the window can, and the whole window
+                    // is skipped on one evaluation instead of one per block. This runs every
+                    // frame the transit tool is held, over every section: a city line was 23,000
+                    // evaluations a frame.
+                    double middle = Math.min(total, s + RAY_WINDOW * 0.5D);
+                    double reach = radius + COARSE_STEP + RAY_WINDOW * 0.5D;
+                    if (distanceToSegment(origin, unit, maxRange, section.positionAtDistance(middle)) > reach) {
+                        s += RAY_WINDOW - COARSE_STEP;
+                        continue;
+                    }
+                    windowEnd = s + RAY_WINDOW;
+                }
                 // A coarse sample may sit up to half a step from where the track actually passes
                 // closest to the ray, so the shortlist is widened by that before refining.
                 double off = offRay(origin, unit, section.positionAtDistance(s), maxRange);
@@ -122,6 +139,16 @@ public final class TrackPicker {
             }
         }
         return best;
+    }
+
+    /** Arc length the ray pick rules out at a time when the track is nowhere near the ray. */
+    private static final double RAY_WINDOW = 32.0D;
+
+    /** Distance from {@code point} to the ray's segment from the origin out to {@code maxRange}. */
+    private static double distanceToSegment(Vec3 origin, Vec3 unit, double maxRange, Vec3 point) {
+        Vec3 relative = point.subtract(origin);
+        double along = Math.max(0.0D, Math.min(maxRange, relative.dot(unit)));
+        return relative.subtract(unit.scale(along)).length();
     }
 
     /**
