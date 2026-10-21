@@ -242,4 +242,28 @@ class TrackCodecTest {
         TrackCodec.applyDelta(delta, client);
         assertSameNetwork(server, client);
     }
+
+    @Test
+    @DisplayName("successive writes share the tags of unchanged sections, so undo snapshots do not copy them")
+    void writesShareUnchangedSectionTags() {
+        TrackNetwork network = sampleNetwork();
+        NBTTagCompound before = TrackCodec.writeNetwork(network);
+        network.replaceSection(network.section(2).withNode(0, node(31.0D, 65.0D, 0.0D, 0.0D, null)));
+        NBTTagCompound after = TrackCodec.writeNetwork(network);
+
+        java.util.Map<Integer, net.minecraft.nbt.NBTBase> beforeById = new java.util.HashMap<>();
+        net.minecraft.nbt.NBTTagList beforeList = before.getTagList("Sections", 10);
+        for (int i = 0; i < beforeList.tagCount(); i++) {
+            beforeById.put(beforeList.getCompoundTagAt(i).getInteger("Id"), beforeList.get(i));
+        }
+        net.minecraft.nbt.NBTTagList afterList = after.getTagList("Sections", 10);
+        for (int i = 0; i < afterList.tagCount(); i++) {
+            int id = afterList.getCompoundTagAt(i).getInteger("Id");
+            boolean same = afterList.get(i) == beforeById.get(id);
+            assertEquals(id != 2, same, "section " + id + (id == 2 ? " was edited and needs a new tag"
+                : " was not edited and should share its tag"));
+        }
+        // And a write is still a faithful round trip.
+        assertEquals(network.section(2).nodes(), TrackCodec.readNetwork(after).section(2).nodes());
+    }
 }

@@ -302,7 +302,33 @@ public final class TrackCodec {
 
     }
 
+    /**
+     * Section tags already written, by section instance. Weak, so a section dropped from the network
+     * takes its tag with it; synchronized, because in singleplayer the client compares synced
+     * sections through here while the integrated server saves.
+     */
+    private static final Map<TrackSection, NBTTagCompound> WRITTEN =
+        java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+
+    /**
+     * {@code section} as NBT. <b>The tag is shared: never modify it.</b>
+     *
+     * <p>A section is immutable, so its tag is too, and is written once per instance. That matters
+     * for undo: every edit records a snapshot of the whole authored world and keeps 40 of them, and
+     * with a city line in the park each one re-serialised and held another copy of every section.
+     * Now a snapshot serialises only the sections the edit changed, and all of them share the tags
+     * of the rest. Saves and syncs get the same saving.</p>
+     */
     public static NBTTagCompound writeSection(TrackSection section) {
+        NBTTagCompound written = WRITTEN.get(section);
+        if (written == null) {
+            written = buildSectionTag(section);
+            WRITTEN.put(section, written);
+        }
+        return written;
+    }
+
+    private static NBTTagCompound buildSectionTag(TrackSection section) {
         NBTTagCompound tag = new NBTTagCompound();
         tag.setInteger(KEY_ID, section.id());
         tag.setBoolean(KEY_CLOSED, section.isClosed());
