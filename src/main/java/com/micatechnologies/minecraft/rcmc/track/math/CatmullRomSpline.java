@@ -44,6 +44,7 @@ public final class CatmullRomSpline {
     private static final double MIN_KNOT_DELTA = 1.0e-9D;
 
     private final List<Vec3> points;
+    private final Segment[] segments;
 
     /**
      * @param controlPoints at least 4 points. The first and last act as tangent handles for
@@ -59,6 +60,13 @@ public final class CatmullRomSpline {
                     + (controlPoints == null ? 0 : controlPoints.size()));
         }
         this.points = Collections.unmodifiableList(new ArrayList<>(controlPoints));
+        // Built once: every position and tangent lookup needs its segment, and rebuilding it per
+        // call (three square roots, two tangents, two clamps and their Vec3s) was the single
+        // hottest frame of a busy metro line's train tick.
+        this.segments = new Segment[this.points.size() - 3];
+        for (int i = 0; i < segments.length; i++) {
+            segments[i] = buildSegment(i);
+        }
     }
 
     /**
@@ -301,6 +309,10 @@ public final class CatmullRomSpline {
     }
 
     private Segment segmentAt(int i) {
+        return segments[i];
+    }
+
+    private Segment buildSegment(int i) {
         Vec3 p0 = points.get(i);
         Vec3 p1 = points.get(i + 1);
         Vec3 p2 = points.get(i + 2);
