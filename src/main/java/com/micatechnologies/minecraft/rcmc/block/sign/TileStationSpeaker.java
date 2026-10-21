@@ -130,7 +130,7 @@ public class TileStationSpeaker extends TileTransitSignBase {
         if (serving.isEmpty()) {
             return;
         }
-        List<ServiceSnapshot> snapshots = state.transit().serviceSnapshots();
+        List<ServiceSnapshot> snapshots = state.transit().serviceSnapshotsThisTick();
         Set<Integer> present = new HashSet<>();
 
         for (TransitLine line : serving) {

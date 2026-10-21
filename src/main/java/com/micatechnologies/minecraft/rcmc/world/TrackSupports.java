@@ -92,7 +92,22 @@ public final class TrackSupports {
             this.topY = topY;
             this.attachX = attachX;
             this.attachZ = attachZ;
+            this.bounds = new AxisAlignedBB(x - HALF_WIDTH, bottomY, z - HALF_WIDTH,
+                x + HALF_WIDTH, topY, z + HALF_WIDTH);
+            this.arm = hasArm() ? new AxisAlignedBB(
+                Math.min(x, attachX) - HALF_WIDTH, topY - HALF_WIDTH,
+                Math.min(z, attachZ) - HALF_WIDTH,
+                Math.max(x, attachX) + HALF_WIDTH, topY + HALF_WIDTH,
+                Math.max(z, attachZ) + HALF_WIDTH) : null;
         }
+
+        /**
+         * Built once with the column rather than per call. Collision asks for these for every
+         * entity moving near track, every tick, and an allocation per column per query adds up to
+         * millions a tick on a long line.
+         */
+        private final AxisAlignedBB bounds;
+        private final AxisAlignedBB arm;
 
         /** True when this column stands off to the side and needs an arm to reach the track. */
         public boolean hasArm() {
@@ -102,34 +117,66 @@ public final class TrackSupports {
         }
 
         public AxisAlignedBB toBounds() {
-            return new AxisAlignedBB(x - HALF_WIDTH, bottomY, z - HALF_WIDTH,
-                x + HALF_WIDTH, topY, z + HALF_WIDTH);
+            return bounds;
         }
 
         /** The horizontal arm in to the track, or {@code null} when there is none. */
         public AxisAlignedBB armBounds() {
-            if (!hasArm()) {
-                return null;
-            }
-            return new AxisAlignedBB(
-                Math.min(x, attachX) - HALF_WIDTH, topY - HALF_WIDTH,
-                Math.min(z, attachZ) - HALF_WIDTH,
-                Math.max(x, attachX) + HALF_WIDTH, topY + HALF_WIDTH,
-                Math.max(z, attachZ) + HALF_WIDTH);
+            return arm;
         }
     }
+
+    /** Grid cell edge for {@link #columnsNear}, in blocks: one chunk. */
+    private static final int GRID = 16;
+
+    /**
+     * How long a section whose columns could not all be placed waits before trying again, in
+     * milliseconds. Columns over chunks that were not loaded are skipped rather than guessed; this
+     * fills them in once the chunk arrives. Keyed on the section alone, as the cache used to be,
+     * they were never filled in: a long line only had supports, and collision, where chunks
+     * happened to be loaded when it was first asked about.
+     */
+    private static final long RETRY_INCOMPLETE_MS = 5000L;
 
     private static final class Cached {
         final TrackSection section;
         final List<Column> columns;
+        /** Columns by the {@link #GRID} cells their post or arm covers. */
+        final Map<Long, List<Column>> grid = new HashMap<>();
+        /** Some sample points fell on unloaded chunks and were skipped. */
+        final boolean incomplete;
+        final long computedAt = System.currentTimeMillis();
+        /** Kept for the retry, so it does not re-sample the whole section to fill in a few columns. */
+        final com.micatechnologies.minecraft.rcmc.track.TrackClearance.Index clearance;
 
-        Cached(TrackSection section, List<Column> columns) {
+        Cached(TrackSection section, List<Column> columns, Pass pass) {
             this.section = section;
             this.columns = columns;
+            this.incomplete = pass.incomplete;
+            this.clearance = pass.clearance;
+            for (Column column : columns) {
+                AxisAlignedBB reach = column.arm != null ? column.bounds.union(column.arm) : column.bounds;
+                for (int cx = cellOf(reach.minX); cx <= cellOf(reach.maxX); cx++) {
+                    for (int cz = cellOf(reach.minZ); cz <= cellOf(reach.maxZ); cz++) {
+                        grid.computeIfAbsent(key(cx, cz), k -> new ArrayList<>()).add(column);
+                    }
+                }
+            }
+        }
+
+        boolean dueForRetry() {
+            return incomplete && System.currentTimeMillis() - computedAt > RETRY_INCOMPLETE_MS;
         }
     }
 
-    private static final Map<World, Map<Integer, Cached>> CACHE = new WeakHashMap<>();
+    /**
+     * Synchronized because in singleplayer the integrated server and the client both ask, from
+     * their own threads, and an unsynchronized {@code WeakHashMap} can corrupt itself into a hang.
+     * Only the lookup is locked; columns are computed outside it, so two threads racing on one
+     * section at worst both compute it.
+     */
+    private static final Map<World, Map<Integer, Cached>> CACHE =
+        java.util.Collections.synchronizedMap(new WeakHashMap<>());
 
     private TrackSupports() {
         throw new AssertionError("No instances.");
@@ -137,14 +184,78 @@ public final class TrackSupports {
 
     /** Columns under {@code section}, computing and caching them on first use. */
     public static List<Column> columnsFor(TrackSection section, World world) {
-        Map<Integer, Cached> perWorld = CACHE.computeIfAbsent(world, w -> new HashMap<>());
-        Cached cached = perWorld.get(section.id());
-        if (cached != null && cached.section == section) {
-            return cached.columns;
+        return cachedFor(section, world).columns;
+    }
+
+    /**
+     * Columns under {@code section} whose post or arm may meet {@code query}: a superset, read from
+     * the chunk-sized cells the query overlaps rather than by walking every column of the section.
+     */
+    public static List<Column> columnsNear(TrackSection section, World world, AxisAlignedBB query) {
+        Cached cached = cachedFor(section, world);
+        int minX = cellOf(query.minX);
+        int maxX = cellOf(query.maxX);
+        int minZ = cellOf(query.minZ);
+        int maxZ = cellOf(query.maxZ);
+        if (minX == maxX && minZ == maxZ) {
+            List<Column> only = cached.grid.get(key(minX, minZ));
+            return only == null ? java.util.Collections.<Column>emptyList() : only;
         }
-        List<Column> columns = compute(section, world);
-        perWorld.put(section.id(), new Cached(section, columns));
-        return columns;
+        // A column spanning two cells is listed in both; the set keeps it from being added twice.
+        java.util.Set<Column> near = new java.util.LinkedHashSet<>();
+        for (int cx = minX; cx <= maxX; cx++) {
+            for (int cz = minZ; cz <= maxZ; cz++) {
+                List<Column> cell = cached.grid.get(key(cx, cz));
+                if (cell != null) {
+                    near.addAll(cell);
+                }
+            }
+        }
+        return new ArrayList<>(near);
+    }
+
+    private static Cached cachedFor(TrackSection section, World world) {
+        Map<Integer, Cached> perWorld;
+        synchronized (CACHE) {
+            perWorld = CACHE.computeIfAbsent(world, w -> new java.util.concurrent.ConcurrentHashMap<>());
+        }
+        Cached cached = perWorld.get(section.id());
+        if (cached != null && cached.section == section && !cached.dueForRetry()) {
+            return cached;
+        }
+        boolean retry = cached != null && cached.section == section;
+        Pass pass = new Pass(retry ? cached.clearance : null);
+        List<Column> columns = compute(section, world, pass);
+        if (retry && sameColumns(cached.columns, columns)) {
+            // Nothing new came into range. Keep the old list, whose identity the renderer uses to
+            // decide whether to rebuild the mesh, and just restart the retry clock.
+            columns = cached.columns;
+        }
+        Cached next = new Cached(section, columns, pass);
+        perWorld.put(section.id(), next);
+        return next;
+    }
+
+    private static boolean sameColumns(List<Column> a, List<Column> b) {
+        if (a.size() != b.size()) {
+            return false;
+        }
+        for (int i = 0; i < a.size(); i++) {
+            Column p = a.get(i);
+            Column q = b.get(i);
+            if (p.x != q.x || p.z != q.z || p.bottomY != q.bottomY || p.topY != q.topY) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static int cellOf(double coordinate) {
+        return (int) Math.floor(coordinate / GRID);
+    }
+
+    private static long key(int cx, int cz) {
+        return ((long) cx << 32) | (cz & 0xFFFFFFFFL);
     }
 
     /** Every column on every section of {@code network}. */
@@ -168,7 +279,18 @@ public final class TrackSupports {
      * paying the bookkeeping for none of the benefit.</p>
      */
     public static List<Column> computeUncached(TrackSection section, World world) {
-        return compute(section, world);
+        return compute(section, world, new Pass(null));
+    }
+
+    /** One computation's by-products: whether it was complete, and the index it built, if any. */
+    private static final class Pass {
+        boolean incomplete;
+        com.micatechnologies.minecraft.rcmc.track.TrackClearance.Index clearance;
+
+        /** @param clearance an index of the same section from an earlier pass, or {@code null} */
+        Pass(com.micatechnologies.minecraft.rcmc.track.TrackClearance.Index clearance) {
+            this.clearance = clearance;
+        }
     }
 
     /**
@@ -190,7 +312,7 @@ public final class TrackSupports {
      * all; real loops are not supported from directly beneath their crown either, but by the
      * structure around them. Leaving that gap is honest. Drawing a column through the track is not.</p>
      */
-    private static List<Column> compute(TrackSection section, World world) {
+    private static List<Column> compute(TrackSection section, World world, Pass pass) {
         List<Column> columns = new ArrayList<>();
         double total = section.totalLength();
         for (double s = 0.0D; s < total; s += SPACING) {
@@ -214,6 +336,7 @@ public final class TrackSupports {
             if (!world.isBlockLoaded(probe)) {
                 // No terrain to stand on yet. Skipping beats guessing a height and leaving a column
                 // ending in mid-air — or worse, an invisible collider there — once the chunk loads.
+                pass.incomplete = true;
                 continue;
             }
             double groundY = world.getHeight(probe.getX(), probe.getZ());
@@ -221,8 +344,12 @@ public final class TrackSupports {
             if (topY - groundY < MIN_HEIGHT) {
                 continue;
             }
-            if (com.micatechnologies.minecraft.rcmc.track.TrackClearance.columnWouldClash(
-                section, x, z, groundY, topY, s,
+            if (pass.clearance == null) {
+                // Built on first need: a buried line never reaches this test, so it never pays to
+                // sample itself.
+                pass.clearance = com.micatechnologies.minecraft.rcmc.track.TrackClearance.Index.of(section);
+            }
+            if (pass.clearance.columnWouldClash(x, z, groundY, topY, s,
                 com.micatechnologies.minecraft.rcmc.track.TrackClearance.COLUMN_CLEARANCE,
                 com.micatechnologies.minecraft.rcmc.track.TrackClearance.ATTACH_EXCLUSION)) {
                 continue;

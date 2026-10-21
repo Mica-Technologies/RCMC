@@ -141,6 +141,21 @@ public final class TrackCodec {
     }
 
     public static TrackNetwork readNetwork(NBTTagCompound root) {
+        return readNetwork(root, null);
+    }
+
+    /**
+     * As {@link #readNetwork(NBTTagCompound)}, keeping {@code previous}'s instance of every section
+     * whose stored form is unchanged.
+     *
+     * <p>A whole network arrives on every edit and every undo. Rebuilding every section from it
+     * redoes each one's spline, arc-length table and frames, and — because everything downstream
+     * caches by section identity — its mesh, supports and speed profile too. With a city line in
+     * the park, editing one coaster cost every client a 23 km rebuild. Comparing a section's tag
+     * with a fresh write of the one already held is exact, since NBT round-trips doubles bit for
+     * bit, and costs a serialisation rather than a construction.</p>
+     */
+    public static TrackNetwork readNetwork(NBTTagCompound root, TrackNetwork previous) {
         TrackNetwork network = new TrackNetwork();
         if (root == null || !root.hasKey(KEY_VERSION)) {
             return network;
@@ -159,7 +174,10 @@ public final class TrackCodec {
 
         NBTTagList sectionList = root.getTagList(KEY_SECTIONS, 10);
         for (int i = 0; i < sectionList.tagCount(); i++) {
-            network.addSection(readSection(sectionList.getCompoundTagAt(i)));
+            NBTTagCompound sectionTag = sectionList.getCompoundTagAt(i);
+            TrackSection held = previous == null ? null : previous.section(sectionTag.getInteger(KEY_ID));
+            network.addSection(held != null && writeSection(held).equals(sectionTag)
+                ? held : readSection(sectionTag));
         }
 
         NBTTagList joinList = root.getTagList(KEY_JOINS, 10);

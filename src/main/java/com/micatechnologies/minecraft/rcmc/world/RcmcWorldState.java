@@ -229,6 +229,10 @@ public final class RcmcWorldState {
      * <p>Separate from {@link #elements} because the two sides need different things: the server
      * needs behaviour, the client needs only enough to draw a lift hill with a chain down it.</p>
      */
+    /** Server sync cadence for this world; see {@code Hooks.onWorldTick}. */
+    private int syncTickCounter;
+    private long syncCycles;
+
     private java.util.List<com.micatechnologies.minecraft.rcmc.track.ElementSpan> elementSpans =
         new java.util.ArrayList<>();
 
@@ -350,7 +354,8 @@ public final class RcmcWorldState {
         history.beginRestore();
         try {
             TrackNetwork restoredNetwork =
-                com.micatechnologies.minecraft.rcmc.track.storage.TrackCodec.readNetwork(snapshot);
+                com.micatechnologies.minecraft.rcmc.track.storage.TrackCodec.readNetwork(snapshot,
+                    this.network);
             com.micatechnologies.minecraft.rcmc.physics.element.RideElementSet restoredElements =
                 com.micatechnologies.minecraft.rcmc.track.storage.ElementCodec.read(snapshot);
             com.micatechnologies.minecraft.rcmc.physics.transit.TransitSystem restoredTransit =
@@ -399,7 +404,42 @@ public final class RcmcWorldState {
          */
         private static final int SYNC_INTERVAL_TICKS = 5;
 
-        private int tickCounter;
+        /**
+         * Sync cycles between corrections for a player far from a train: every fifth second
+         * rather than four times a second.
+         *
+         * <p>Clients predict every train, so a far one still has to be corrected now and then or
+         * it drifts and snaps when its player arrives. But nobody can see it, and at four packets
+         * a second per train per player a busy server with a hundred trains and fifty players
+         * was sending twenty thousand of them a second, nearly all to players nowhere near.</p>
+         */
+        private static final int FAR_SYNC_EVERY = 20;
+
+        /** Within this of a train's lead, a player gets every correction. Past the 160-block
+         *  entity tracking range plus the longest train, so a visible car is never on the slow
+         *  cadence. */
+        private static final double NEAR_SYNC_DISTANCE = 448.0D;
+
+        private static void syncTrain(World world, RcmcWorldState state, int trainId,
+                                      com.micatechnologies.minecraft.rcmc.physics.Train train,
+                                      boolean farCycle) {
+            PacketTrainSync packet = new PacketTrainSync(trainId, train);
+            if (farCycle) {
+                RcmcNetwork.sendToAllIn(packet, world.provider.getDimension());
+                return;
+            }
+            if (train.reference() == null || !state.network.hasSection(train.reference().sectionId())) {
+                return;
+            }
+            com.micatechnologies.minecraft.rcmc.track.math.Vec3 at =
+                state.network.frameAt(train.reference()).position;
+            for (net.minecraft.entity.player.EntityPlayer player : world.playerEntities) {
+                if (player instanceof net.minecraft.entity.player.EntityPlayerMP
+                    && player.getDistanceSq(at.x, at.y, at.z) <= NEAR_SYNC_DISTANCE * NEAR_SYNC_DISTANCE) {
+                    RcmcNetwork.sendTo(packet, (net.minecraft.entity.player.EntityPlayerMP) player);
+                }
+            }
+        }
 
         /**
          * Emergency-stops any coaster whose trains have run into each other, and says so. Two trains
@@ -668,13 +708,15 @@ public final class RcmcWorldState {
             }
 
             // Both sides simulate; the server periodically corrects.
-            if (!event.world.isRemote && ++tickCounter >= SYNC_INTERVAL_TICKS) {
-                tickCounter = 0;
+            // Counted per world: one shared counter made every dimension's cadence depend on how
+            // many other dimensions were ticking.
+            if (!event.world.isRemote && ++state.syncTickCounter >= SYNC_INTERVAL_TICKS) {
+                state.syncTickCounter = 0;
+                boolean farCycle = ++state.syncCycles % FAR_SYNC_EVERY == 0;
                 int dimension = event.world.provider.getDimension();
                 for (Map.Entry<Integer, com.micatechnologies.minecraft.rcmc.physics.Train> entry
                     : state.trains.asMap().entrySet()) {
-                    RcmcNetwork.sendToAllIn(new PacketTrainSync(entry.getKey(), entry.getValue()),
-                        dimension);
+                    syncTrain(event.world, state, entry.getKey(), entry.getValue(), farCycle);
                 }
                 // Arrival-board data rides the same cadence: a snapshot only changes when a
                 // service passes a stop or cycles its doors, so this is already generous. Sent

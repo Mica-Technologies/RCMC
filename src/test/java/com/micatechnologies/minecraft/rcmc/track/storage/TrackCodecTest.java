@@ -186,4 +186,22 @@ class TrackCodecTest {
         assertTrue(restored.joins().isEmpty(), "dangling join should have been skipped");
         assertNotNull(restored.section(1), "surviving sections must still load");
     }
+
+    @Test
+    @DisplayName("reading against the network already held keeps unchanged sections and rebuilds edited ones")
+    void readReusesUnchangedSections() {
+        TrackNetwork held = sampleNetwork();
+
+        // The server's next sync after section 2 was moved: 1 and 3 are untouched.
+        TrackNetwork edited = sampleNetwork();
+        TrackSection ring = edited.section(2);
+        edited.replaceSection(ring.withNode(0, node(31.0D, 65.0D, 0.0D, 0.0D, null)));
+
+        TrackNetwork received = TrackCodec.readNetwork(TrackCodec.writeNetwork(edited), held);
+
+        assertTrue(received.section(1) == held.section(1), "unchanged section 1 should keep its instance");
+        assertTrue(received.section(3) == held.section(3), "unchanged section 3 should keep its instance");
+        assertTrue(received.section(2) != held.section(2), "an edited section must not be reused");
+        assertEquals(edited.section(2).nodes(), received.section(2).nodes(), "the edit must arrive");
+    }
 }

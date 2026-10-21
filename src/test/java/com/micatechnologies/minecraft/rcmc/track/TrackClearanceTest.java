@@ -1,5 +1,6 @@
 package com.micatechnologies.minecraft.rcmc.track;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -86,6 +87,71 @@ class TrackClearanceTest {
         assertFalse(TrackClearance.columnWouldClash(loop, start.x, start.z, 55.0D, start.y,
                 1.0D, CLEARANCE, EXCLUSION),
             "a support must not reject itself: the track at its own attachment is what it holds");
+    }
+
+    /** The original whole-section walk, kept here as the reference the spatial index must match. */
+    private static boolean bruteForce(TrackSection section, double x, double z, double bottomY,
+                                      double topY, double attachAt) {
+        double total = section.totalLength();
+        for (double s = 0.0D; s < total; s += 0.5D) {
+            double along = Math.abs(s - attachAt);
+            if (section.isClosed()) {
+                along = Math.min(along, total - along);
+            }
+            if (along <= EXCLUSION) {
+                continue;
+            }
+            Vec3 at = section.positionAtDistance(s);
+            if (at.y < bottomY || at.y > topY) {
+                continue;
+            }
+            double dx = at.x - x;
+            double dz = at.z - z;
+            if (dx * dx + dz * dz < CLEARANCE * CLEARANCE) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Test
+    @DisplayName("the spatial index gives the whole-section walk's answer for every column it is asked about")
+    void indexMatchesTheWalk() {
+        // The loop (open, inverting) and a closed circuit (seam handling), probed on a grid that
+        // crosses the track, at a spread of attachment distances and column heights.
+        List<TrackSection> sections = new ArrayList<>();
+        sections.add(loop());
+        List<TrackNode> ring = new ArrayList<>();
+        for (int i = 0; i < 12; i++) {
+            double a = 2.0D * Math.PI * i / 12;
+            ring.add(new TrackNode(new Vec3(Math.cos(a) * 20.0D, 64.0D + 4.0D * Math.sin(3 * a),
+                Math.sin(a) * 20.0D), 0.0D, null));
+        }
+        sections.add(new TrackSection(2, ring, true, null));
+
+        int clashes = 0;
+        int checked = 0;
+        for (TrackSection section : sections) {
+            TrackClearance.Index index = TrackClearance.Index.of(section);
+            for (double x = -24.0D; x <= 24.0D; x += 0.75D) {
+                for (double z = -24.0D; z <= 24.0D; z += 0.75D) {
+                    for (double attach : new double[] { 0.0D, 0.6D, section.totalLength() * 0.5D,
+                        section.totalLength() - 0.4D }) {
+                        boolean expected = bruteForce(section, x, z, 55.0D, 70.0D, attach);
+                        boolean actual = index.columnWouldClash(x, z, 55.0D, 70.0D, attach, CLEARANCE,
+                            EXCLUSION);
+                        assertEquals(expected, actual,
+                            "index disagrees at x=" + x + " z=" + z + " attach=" + attach);
+                        checked++;
+                        if (expected) {
+                            clashes++;
+                        }
+                    }
+                }
+            }
+        }
+        // A comparison where everything is clear proves nothing about the clash path.
+        assertTrue(clashes > 50 && clashes < checked, "probe grid should hit both outcomes; clashes=" + clashes);
     }
 
     @Test

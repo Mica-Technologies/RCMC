@@ -60,14 +60,45 @@ public final class TrainFloors {
     private static final double EDGE_INSET = 0.05D;
 
     private long cachedAtTime = Long.MIN_VALUE;
-    private List<AxisAlignedBB> cached = Collections.emptyList();
+    private List<TrainBoxes> cached = Collections.emptyList();
+
+    /** One train's boxes and the box around them all, so a query far from it costs one test. */
+    private static final class TrainBoxes {
+        final List<AxisAlignedBB> boxes;
+        final AxisAlignedBB around;
+
+        TrainBoxes(List<AxisAlignedBB> boxes) {
+            this.boxes = boxes;
+            AxisAlignedBB union = boxes.get(0);
+            for (int i = 1; i < boxes.size(); i++) {
+                union = union.union(boxes.get(i));
+            }
+            this.around = union;
+        }
+    }
 
     /**
-     * Every open-door car floor in this world, rebuilt at most once per tick.
+     * Adds every open-door floor and standing-train body box that meets {@code query} to
+     * {@code out}. The boxes are rebuilt at most once per tick.
      *
-     * <p>Empty — and cheap — whenever no train has its doors open, which is almost always.</p>
+     * <p>Grouped by train: every entity's collision query in the whole world comes through here,
+     * and a park with dozens of trains held in stations would otherwise test each against every
+     * slice of every one of them.</p>
      */
-    public List<AxisAlignedBB> floors(World world, RcmcWorldState state) {
+    public void collect(World world, RcmcWorldState state, AxisAlignedBB query, List<AxisAlignedBB> out) {
+        for (TrainBoxes train : floors(world, state)) {
+            if (!train.around.intersects(query)) {
+                continue;
+            }
+            for (AxisAlignedBB box : train.boxes) {
+                if (box.intersects(query)) {
+                    out.add(box);
+                }
+            }
+        }
+    }
+
+    private List<TrainBoxes> floors(World world, RcmcWorldState state) {
         if (world == null || state == null) {
             return Collections.emptyList();
         }
@@ -80,8 +111,8 @@ public final class TrainFloors {
         return cached;
     }
 
-    private static List<AxisAlignedBB> build(World world, RcmcWorldState state) {
-        List<AxisAlignedBB> boxes = null;
+    private static List<TrainBoxes> build(World world, RcmcWorldState state) {
+        List<TrainBoxes> trains = null;
         for (Map.Entry<Integer, Train> entry : state.trains().asMap().entrySet()) {
             Train train = entry.getValue();
             TrainSpec spec = train.spec();
@@ -96,9 +127,7 @@ public final class TrainFloors {
             if (!open && !standing) {
                 continue;
             }
-            if (boxes == null) {
-                boxes = new ArrayList<>();
-            }
+            List<AxisAlignedBB> boxes = new ArrayList<>();
             for (int car = 0; car < spec.carCount(); car++) {
                 TrackFrame frame = train.bodyFrameOfCar(state.network(), car);
                 if (open) {
@@ -109,8 +138,15 @@ public final class TrainFloors {
                     addSlices(boxes, frame, body.halfLength, body.halfWidth, body.bottom, body.top);
                 }
             }
+            if (boxes.isEmpty()) {
+                continue;
+            }
+            if (trains == null) {
+                trains = new ArrayList<>();
+            }
+            trains.add(new TrainBoxes(boxes));
         }
-        return boxes == null ? Collections.<AxisAlignedBB>emptyList() : boxes;
+        return trains == null ? Collections.<TrainBoxes>emptyList() : trains;
     }
 
     /** Slices a car's whole body, {@code bottom} to {@code top} above the track, into boxes. */

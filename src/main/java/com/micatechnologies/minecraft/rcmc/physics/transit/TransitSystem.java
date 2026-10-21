@@ -193,6 +193,27 @@ public final class TransitSystem {
         operationsByLine.putAll(incoming.operationsByLine);
     }
 
+    /** {@link #serviceSnapshots} as of {@link #snapshotsAtTick}; {@code null} when not yet built. */
+    private java.util.List<ServiceSnapshot> snapshotCache;
+    private long snapshotsAtTick = -1L;
+
+    /**
+     * {@link #serviceSnapshots}, built at most once per tick and shared, read-only.
+     *
+     * <p>For callers that ask every tick from many places — the station speakers. Each snapshot
+     * estimates arrival times to every station, and every linked speaker used to ask for its own,
+     * so a city with eighty speakers did the whole estimate eighty times a tick. An authored edit
+     * made mid-tick (a berth renamed) reaches these callers on the next tick.</p>
+     */
+    public java.util.List<ServiceSnapshot> serviceSnapshotsThisTick() {
+        if (snapshotCache != null && snapshotsAtTick == tick) {
+            return snapshotCache;
+        }
+        snapshotCache = java.util.Collections.unmodifiableList(serviceSnapshots());
+        snapshotsAtTick = tick;
+        return snapshotCache;
+    }
+
     /** Wire-format snapshots of every running service, for {@code PacketServiceSync}. */
     public java.util.List<ServiceSnapshot> serviceSnapshots() {
         java.util.List<ServiceSnapshot> snapshots = new java.util.ArrayList<>(services.size());
@@ -428,6 +449,7 @@ public final class TransitSystem {
         // its doors open until released — the operator's hold, ahead of the line's own headway.
         service.setDepartureGate((l, stop, direction) -> !held.contains(trainId) && mayDepart(l, stop, direction));
         services.put(trainId, service);
+        snapshotCache = null;
         arrivals.remove(trainId);
         // A train sitting at rest before service has usually already latched VALLEYED (zero
         // force, zero speed, nothing claiming it) — and TrainManager skips faulted trains before
@@ -591,6 +613,7 @@ public final class TransitSystem {
     public LineService exitService(int trainId) {
         arrivals.remove(trainId);
         LineService service = services.remove(trainId);
+        snapshotCache = null;
         bringToAStand(trainId, service);
         return service;
     }
@@ -674,6 +697,7 @@ public final class TransitSystem {
         lines.clear();
         signalsByLine.clear();
         services.clear();
+        snapshotCache = null;
         operationsByLine.clear();
         lastDepartures.clear();
         timingsByLine.clear();

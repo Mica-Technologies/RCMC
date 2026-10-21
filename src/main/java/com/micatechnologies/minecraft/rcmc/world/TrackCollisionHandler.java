@@ -64,7 +64,7 @@ public final class TrackCollisionHandler {
             if (!mayContainColumns(section.extent(), query)) {
                 continue;
             }
-            for (TrackSupports.Column column : TrackSupports.columnsFor(section, event.getWorld())) {
+            for (TrackSupports.Column column : TrackSupports.columnsNear(section, event.getWorld(), query)) {
                 AxisAlignedBB bounds = column.toBounds();
                 if (bounds.intersects(query)) {
                     event.getCollisionBoxesList().add(bounds);

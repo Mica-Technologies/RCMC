@@ -107,8 +107,12 @@ public class Rcmc {
                 // cars are reconstructed each tick from synced train state rather than from
                 // position packets — so the tracker's job here is presence, not motion.
                 // sendsVelocityUpdates is false: this entity's motion fields are derived, and
-                // vanilla velocity packets would only add traffic nothing consumes.
-                .tracker(160, 1, false)
+                // vanilla velocity packets would only add traffic nothing consumes. For the same
+                // reason the update interval is a second, not every tick: the client discards
+                // position packets for this entity (EntityCoasterCar.setPositionAndRotationDirect),
+                // so at 1 the server sent a move packet per car per tick to every player tracking
+                // it for nothing. Spawn, passenger and metadata changes do not wait on it.
+                .tracker(160, 20, false)
                 .build());
     }
 

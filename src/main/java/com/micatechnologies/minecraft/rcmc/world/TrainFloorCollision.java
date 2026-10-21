@@ -1,7 +1,5 @@
 package com.micatechnologies.minecraft.rcmc.world;
 
-import java.util.List;
-import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraftforge.event.world.GetCollisionBoxesEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 
@@ -36,15 +34,6 @@ public final class TrainFloorCollision {
         if (state == null || state.trains().isEmpty()) {
             return;
         }
-        List<AxisAlignedBB> floors = state.trainFloors().floors(event.getWorld(), state);
-        if (floors.isEmpty()) {
-            return;
-        }
-        AxisAlignedBB query = event.getAabb();
-        for (AxisAlignedBB floor : floors) {
-            if (floor.intersects(query)) {
-                event.getCollisionBoxesList().add(floor);
-            }
-        }
+        state.trainFloors().collect(event.getWorld(), state, event.getAabb(), event.getCollisionBoxesList());
     }
 }

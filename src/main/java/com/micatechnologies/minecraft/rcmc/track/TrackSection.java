@@ -49,6 +49,9 @@ public final class TrackSection {
     private final double[] nodeDistances;
     /** Roll rate at each node, radians per block — see {@link #bankRadiansAt}. */
     private final double[] bankSlopes;
+    /** The style in force from node i onward: the last per-node style at or before it, or the
+     *  section's own. Precomputed so {@link #styleAtDistance} is a lookup, not a walk. */
+    private final String[] styleFromNode;
 
     /**
      * Roll, in radians, that parallel transport accumulates over a full lap of a closed circuit.
@@ -124,6 +127,14 @@ public final class TrackSection {
             nodeDistances[i] = arcLength.distanceAtParam((double) i / segments);
         }
         this.bankSlopes = bankSlopes(this.nodes, nodeDistances, arcLength.totalLength(), closed);
+        this.styleFromNode = new String[this.nodes.size()];
+        String running = styleId;
+        for (int i = 0; i < this.nodes.size(); i++) {
+            if (this.nodes.get(i).styleId() != null) {
+                running = this.nodes.get(i).styleId();
+            }
+            styleFromNode[i] = running;
+        }
 
         this.rollResidual = closed ? computeRollResidual(frames) : 0.0D;
     }
@@ -187,18 +198,40 @@ public final class TrackSection {
         double distance = clampDistance(s);
 
         // Locate the span containing `distance`. Spans are node i -> node i+1, plus a wrap span
-        // from the last node back to the first on a closed circuit.
-        for (int i = 0; i < count - 1; i++) {
-            if (distance <= nodeDistances[i + 1]) {
-                return hermite(nodes.get(i).bankRadians(), nodes.get(i + 1).bankRadians(),
-                    bankSlopes[i], bankSlopes[i + 1], nodeDistances[i], nodeDistances[i + 1], distance);
-            }
+        // from the last node back to the first on a closed circuit. Binary search, not a walk:
+        // this runs inside every frameAtDistance, many times per car per tick, and a city line
+        // has hundreds of nodes.
+        int end = firstNodeAtOrPast(distance, 1);
+        if (end < count) {
+            int i = end - 1;
+            return hermite(nodes.get(i).bankRadians(), nodes.get(end).bankRadians(),
+                bankSlopes[i], bankSlopes[end], nodeDistances[i], nodeDistances[end], distance);
         }
         if (closed) {
             return hermite(nodes.get(count - 1).bankRadians(), nodes.get(0).bankRadians(),
                 bankSlopes[count - 1], bankSlopes[0], nodeDistances[count - 1], total, distance);
         }
         return nodes.get(count - 1).bankRadians();
+    }
+
+    /**
+     * The lowest node index {@code >= from} whose distance is at least {@code distance}, or the
+     * node count if there is none. {@code nodeDistances} never decreases, so this is a binary
+     * search; it answers the same question as walking the nodes from {@code from} upward.
+     */
+    private int firstNodeAtOrPast(double distance, int from) {
+        int low = from;
+        int high = nodeDistances.length;
+        while (low < high) {
+            int mid = (low + high) >>> 1;
+            if (nodeDistances[mid] >= distance) {
+                high = mid;
+            }
+            else {
+                low = mid + 1;
+            }
+        }
+        return low;
     }
 
     private static double hermite(double from, double to, double fromSlope, double toSlope,
@@ -391,16 +424,25 @@ public final class TrackSection {
     /** Style in effect at distance {@code s}, honouring per-node overrides. */
     public String styleAtDistance(double s) {
         double distance = clampDistance(s);
-        String effective = styleId;
-        for (int i = 0; i < nodes.size(); i++) {
-            if (nodeDistances[i] > distance) {
-                break;
+        // The last node at or before `distance`: everything below the first node strictly past it.
+        int past = firstNodeStrictlyPast(distance);
+        return past == 0 ? styleId : styleFromNode[past - 1];
+    }
+
+    /** As {@link #firstNodeAtOrPast} with a strict comparison, from node 0. */
+    private int firstNodeStrictlyPast(double distance) {
+        int low = 0;
+        int high = nodeDistances.length;
+        while (low < high) {
+            int mid = (low + high) >>> 1;
+            if (nodeDistances[mid] > distance) {
+                high = mid;
             }
-            if (nodes.get(i).styleId() != null) {
-                effective = nodes.get(i).styleId();
+            else {
+                low = mid + 1;
             }
         }
-        return effective;
+        return low;
     }
 
     // ---- editing: each returns a new section, rebuilding derived geometry ----

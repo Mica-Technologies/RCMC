@@ -5,7 +5,6 @@ import com.micatechnologies.minecraft.rcmc.track.storage.TransitCodec;
 import com.micatechnologies.minecraft.rcmc.world.RcmcWorldState;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.nbt.NBTTagCompound;
-import net.minecraftforge.fml.common.network.ByteBufUtils;
 import net.minecraftforge.fml.common.network.simpleimpl.IMessage;
 import net.minecraftforge.fml.common.network.simpleimpl.IMessageHandler;
 import net.minecraftforge.fml.common.network.simpleimpl.MessageContext;
@@ -35,12 +34,12 @@ public class PacketTransitSync implements IMessage {
 
     @Override
     public void fromBytes(ByteBuf buf) {
-        this.payload = ByteBufUtils.readTag(buf);
+        this.payload = NbtWire.read(buf);
     }
 
     @Override
     public void toBytes(ByteBuf buf) {
-        ByteBufUtils.writeTag(buf, payload);
+        NbtWire.write(buf, payload);
     }
 
     public static class Handler implements IMessageHandler<PacketTransitSync, IMessage> {

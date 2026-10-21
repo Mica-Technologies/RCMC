@@ -298,7 +298,16 @@ public final class BlockSystem implements TrainManager.ExternalAcceleration, Bou
             throw new IllegalArgumentException("block must not be null");
         }
         blocks.add(block);
+        blockSectionIds.add(block.sectionId());
     }
+
+    /**
+     * Sections any of this system's blocks lie on. A train whose lead is on none of them can be in
+     * no block — {@link #blockIndexContaining} and {@link #blocksUnder} both look only at the lead's
+     * own section — so it is skipped without sampling its body. Otherwise every coaster's block
+     * system sampled every train in the world each tick, metro trains across the map included.
+     */
+    private final java.util.Set<Integer> blockSectionIds = new java.util.HashSet<>();
 
     public List<BlockSection> blocks() {
         return Collections.unmodifiableList(blocks);
@@ -339,7 +348,11 @@ public final class BlockSystem implements TrainManager.ExternalAcceleration, Bou
         occupancy.clear();
         bodyBlocks.clear();
         for (Map.Entry<Integer, Train> entry : trains.asMap().entrySet()) {
-            int index = blockIndexContaining(entry.getValue().reference());
+            TrackRef lead = entry.getValue().reference();
+            if (lead == null || !blockSectionIds.contains(lead.sectionId())) {
+                continue;
+            }
+            int index = blockIndexContaining(lead);
             if (index >= 0) {
                 occupancy.put(entry.getKey(), index);
                 lastEnteredBlock.put(entry.getKey(), index);
