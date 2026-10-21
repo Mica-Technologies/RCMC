@@ -202,4 +202,62 @@ class TrackAttachmentTest {
         assertThrows(IllegalArgumentException.class,
             () -> TrackAttachment.extend(circuit, TrackNetwork.End.END, added));
     }
+
+    /** Index in {@code section} of the node at {@code at}. */
+    private static int indexOf(TrackSection section, Vec3 at) {
+        for (int i = 0; i < section.nodes().size(); i++) {
+            if (section.nodes().get(i).position().distanceTo(at) < 1.0e-9D) {
+                return i;
+            }
+        }
+        throw new AssertionError("no node at " + at);
+    }
+
+    private static void assertTypedSpansSurvive(TrackNetwork.End end) {
+        TrackSection section = existing(1);
+        Vec3 from = section.endpointAt(end);
+        Vec3 out = section.exitDirectionAt(end);
+        List<TrackNode> added = new ArrayList<>();
+        added.add(new TrackNode(from, 0.0D, null));
+        for (int i = 1; i <= 4; i++) {
+            added.add(new TrackNode(from.add(out.scale(i * 9.0D)), 0.0D, null));
+        }
+        // A different type on each drawn span, so a span shifted by one is caught.
+        List<String> types = java.util.Arrays.asList("plain", "lift", "brake", "station", "launch");
+
+        TrackSection extended = TrackAttachment.extend(section, end, added);
+        List<String> aligned = TrackAttachment.alignTypes(section, end, added, types, "plain", extended);
+
+        assertEquals(extended.nodes().size(), aligned.size(), "one type per node of the result");
+        for (int j = 1; j < added.size(); j++) {
+            // The span the builder drew when placing node j runs between placed nodes j-1 and j;
+            // in the section it arrives at whichever of the two comes later.
+            int a = indexOf(extended, added.get(j - 1).position());
+            int b = indexOf(extended, added.get(j).position());
+            assertEquals(1, Math.abs(a - b), "placed neighbours must stay neighbours");
+            assertEquals(types.get(j), aligned.get(Math.max(a, b)),
+                "span drawn as " + types.get(j) + " at the " + end + " is typed wrongly");
+        }
+        // The track that was already there gains no hardware it did not have, apart from the one
+        // node whose arriving span is now new track (the old head, when building onto the head).
+        int typedOld = 0;
+        for (TrackNode old : section.nodes()) {
+            if (!"plain".equals(aligned.get(indexOf(extended, old.position())))) {
+                typedOld++;
+            }
+        }
+        assertTrue(typedOld <= (end == TrackNetwork.End.START ? 1 : 0), typedOld + " old nodes typed");
+    }
+
+    @Test
+    @DisplayName("typed spans drawn while extending from the end stay where they were drawn")
+    void typesAlignWhenAppending() {
+        assertTypedSpansSurvive(TrackNetwork.End.END);
+    }
+
+    @Test
+    @DisplayName("typed spans drawn while extending from the head stay where they were drawn")
+    void typesAlignWhenPrepending() {
+        assertTypedSpansSurvive(TrackNetwork.End.START);
+    }
 }

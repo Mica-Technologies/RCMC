@@ -61,7 +61,7 @@ public class CommandRcmc extends CommandBase {
 
     @Override
     public String getUsage(ICommandSender sender) {
-        return "/rcmc <demo|metrodemo|train|clear|info|build|paint|style|rate|check|block|transfer|ride|station|line"
+        return "/rcmc <demo|metrodemo|train|clear|info|build|track|paint|style|rate|check|block|transfer|ride|station|line"
             + "|switch|platform|rmsection|undo|redo>";
     }
 
@@ -75,8 +75,19 @@ public class CommandRcmc extends CommandBase {
                                           String[] args, BlockPos targetPos) {
         if (args.length == 1) {
             return getListOfStringsMatchingLastWord(args, "demo", "metrodemo", "train", "clear",
-                "info", "build", "paint", "style", "rate", "check", "trains", "block", "transfer", "ride", "station", "line", "switch",
+                "info", "build", "track", "paint", "style", "rate", "check", "trains", "block", "transfer", "ride", "station", "line", "switch",
                 "platform", "rmsection", "undo", "redo");
+        }
+        if (args.length == 2 && "track".equalsIgnoreCase(args[0])) {
+            return getListOfStringsMatchingLastWord(args, "lay", "nodes");
+        }
+        if (args.length == 3 && "track".equalsIgnoreCase(args[0]) && "lay".equalsIgnoreCase(args[1])) {
+            return getListOfStringsMatchingLastWord(args,
+                com.micatechnologies.minecraft.rcmc.track.TrackStyleIds.COMMAND_CHOICES
+                    .toArray(new String[0]));
+        }
+        if (args.length == 4 && "track".equalsIgnoreCase(args[0]) && "lay".equalsIgnoreCase(args[1])) {
+            return getListOfStringsMatchingLastWord(args, "open", "circuit", "append");
         }
         if (args.length == 3 && "style".equalsIgnoreCase(args[0])) {
             return getListOfStringsMatchingLastWord(args,
@@ -129,7 +140,7 @@ public class CommandRcmc extends CommandBase {
             return getListOfStringsMatchingLastWord(args, "add", "remove", "list", "label");
         }
         if (args.length == 2 && "build".equalsIgnoreCase(args[0])) {
-            return getListOfStringsMatchingLastWord(args, "bank", "circuit", "piece", "status", "cancel");
+            return getListOfStringsMatchingLastWord(args, "bank", "height", "circuit", "piece", "status", "cancel");
         }
         if (args.length == 3 && "build".equalsIgnoreCase(args[0]) && "piece".equalsIgnoreCase(args[1])) {
             return getListOfStringsMatchingLastWord(args,
@@ -211,6 +222,9 @@ public class CommandRcmc extends CommandBase {
                 break;
             case "platform":
                 platform(sender, world, state, args);
+                break;
+            case "track":
+                TrackCommands.track(sender, world, state, args);
                 break;
             case "rmsection":
                 removeSection(sender, world, state, args);
@@ -932,22 +946,17 @@ public class CommandRcmc extends CommandBase {
                 return;
             }
             case "add": {
-                EntityPlayer player = getCommandSenderAsPlayer(sender);
-                com.micatechnologies.minecraft.rcmc.track.TrackPicker.Hit hit =
-                    com.micatechnologies.minecraft.rcmc.track.TrackPicker.pick(state.network(),
-                        new Vec3(player.posX, player.posY, player.posZ), 16.0D);
-                if (hit == null) {
-                    throw new CommandException(
-                        "No track within 16 blocks — stand beside the other platform's track");
-                }
-                if (station.platformAt(hit.ref) != null) {
+                // Beside the player as before, or at a named point: see TrackCommands.trackPoint.
+                TrackCommands.NamedPoint point = TrackCommands.trackPoint(sender, state, args, 4);
+                com.micatechnologies.minecraft.rcmc.track.TrackRef ref = point.ref;
+                if (station.platformAt(ref) != null) {
                     throw new CommandException(station.name()
                         + " already has a platform at exactly that point");
                 }
-                String label = args.length > 4 ? args[4] : "";
+                String label = args.length > 4 + point.consumed ? args[4 + point.consumed] : "";
                 com.micatechnologies.minecraft.rcmc.physics.transit.TransitPlatform added =
                     new com.micatechnologies.minecraft.rcmc.physics.transit.TransitPlatform(
-                        hit.ref,
+                        ref,
                         com.micatechnologies.minecraft.rcmc.physics.transit.DoorSide.BOTH, label);
                 // Detected from what is already built, exactly as creating a station does — the
                 // builder answered this by putting decking somewhere.
@@ -962,7 +971,7 @@ public class CommandRcmc extends CommandBase {
                 RcmcNetwork.sendToAllIn(new com.micatechnologies.minecraft.rcmc.net.PacketTransitSync(transit), world.provider.getDimension());
                 reply(sender, TextFormatting.GREEN, "Added platform"
                     + (label.isEmpty() ? "" : " '" + label + "'") + " to " + station.name()
-                    + " at section " + hit.ref.sectionId() + " @ " + fmt(hit.ref.distance())
+                    + " at section " + ref.sectionId() + " @ " + fmt(ref.distance())
                     + (detected == null ? " (no decking found — set doors explicitly)."
                         : ". Doors: " + detected.name().toLowerCase(java.util.Locale.ROOT) + "."));
                 return;
@@ -1135,22 +1144,28 @@ public class CommandRcmc extends CommandBase {
                 return;
             }
             default: {
-                EntityPlayer player = getCommandSenderAsPlayer(sender);
-                com.micatechnologies.minecraft.rcmc.track.TrackPicker.Hit hit =
-                    com.micatechnologies.minecraft.rcmc.track.TrackPicker.pick(state.network(),
-                        new Vec3(player.posX, player.posY, player.posZ), 16.0D);
-                if (hit == null) {
-                    throw new CommandException("No track within 16 blocks — stand at the platform");
-                }
+                // At the player, or — for a script, or a console — at a named point: see
+                // TrackCommands.trackPoint for the forms.
+                TrackCommands.NamedPoint point = TrackCommands.trackPoint(sender, state, args, 2);
+                com.micatechnologies.minecraft.rcmc.track.TrackRef ref = point.ref;
+                String sideArg = args.length > 2 + point.consumed ? args[2 + point.consumed] : "auto";
                 com.micatechnologies.minecraft.rcmc.physics.transit.TransitStation created =
                     new com.micatechnologies.minecraft.rcmc.physics.transit.TransitStation(
-                        args[1], hit.ref);
+                        args[1], ref);
                 // Look for a platform now. If one is already there the answer is authored by the
                 // build rather than by a second command; if not, the station keeps BOTH and
-                // /rcmc platform will settle it when the platform goes in.
-                com.micatechnologies.minecraft.rcmc.physics.transit.DoorSide detected =
-                    com.micatechnologies.minecraft.rcmc.world.PlatformSide.detect(
+                // /rcmc platform will settle it when the platform goes in. A side given here wins.
+                com.micatechnologies.minecraft.rcmc.physics.transit.DoorSide detected;
+                if ("auto".equalsIgnoreCase(sideArg)) {
+                    detected = com.micatechnologies.minecraft.rcmc.world.PlatformSide.detect(
                         world, state.network(), created);
+                }
+                else {
+                    detected = com.micatechnologies.minecraft.rcmc.physics.transit.DoorSide.parse(sideArg);
+                    if (detected == null) {
+                        throw new CommandException("Side must be left, right, both or auto");
+                    }
+                }
                 if (detected != null) {
                     created = created.withDoorSide(detected);
                 }
@@ -1158,7 +1173,7 @@ public class CommandRcmc extends CommandBase {
                 state.markTrackDirty(world);
                 RcmcNetwork.sendToAllIn(new com.micatechnologies.minecraft.rcmc.net.PacketTransitSync(transit), world.provider.getDimension());
                 reply(sender, TextFormatting.GREEN, "Station " + args[1] + " at section "
-                    + hit.ref.sectionId() + " @ " + fmt(hit.ref.distance())
+                    + ref.sectionId() + " @ " + fmt(ref.distance())
                     + " (trains stop with their lead car here)."
                     + (detected == null ? "" : " Doors: " + detected.name().toLowerCase(java.util.Locale.ROOT) + "."));
             }
@@ -1595,6 +1610,11 @@ public class CommandRcmc extends CommandBase {
                 pushSession(player, session);
                 reply(sender, TextFormatting.GREEN, "Nodes placed from now on will be banked "
                     + String.format("%.0f", session.bankDegrees()) + "°.");
+                break;
+            }
+            case "height": {
+                TrackCommands.buildHeight(sender, player, session, args);
+                pushSession(player, session);
                 break;
             }
             case "circuit": {

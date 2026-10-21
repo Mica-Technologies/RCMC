@@ -4,7 +4,6 @@ import com.micatechnologies.minecraft.rcmc.RcmcConstants;
 import com.micatechnologies.minecraft.rcmc.RcmcTab;
 import com.micatechnologies.minecraft.rcmc.builder.TrackBuildSession;
 import com.micatechnologies.minecraft.rcmc.net.PacketBuildSessionSync;
-import com.micatechnologies.minecraft.rcmc.net.PacketTrackSync;
 import com.micatechnologies.minecraft.rcmc.net.RcmcNetwork;
 import com.micatechnologies.minecraft.rcmc.track.TrackNode;
 import com.micatechnologies.minecraft.rcmc.track.TrackAttachment;
@@ -174,81 +173,25 @@ public class ItemTrackTool extends Item {
      */
     private static void commit(EntityPlayer player, World world, TrackBuildSession session) {
         boolean closing = session.isClosing();
-        int minimum = closing ? 3 : 2;
-        if (session.size() < minimum) {
-            say(player, TextFormatting.RED, "Need at least " + minimum + " nodes to build "
-                + (closing ? "a circuit" : "a section") + "; you have " + session.size() + ".");
-            return;
-        }
-
-        RcmcWorldState state = RcmcWorldState.of(world);
-        TrackAttachment.Target attachment = session.attachment();
-        boolean extending = attachment != null && state.network().hasSection(attachment.sectionId);
-
-        int id;
-        TrackSection section;
+        com.micatechnologies.minecraft.rcmc.world.TrackLaying.Result built;
         try {
-            if (extending) {
-                TrackSection existing = state.network().section(attachment.sectionId);
-                if (!attachment.appends() && !canPrependSafely(state, existing)) {
-                    // Prepending redistributes every distance on the section, and not by a constant
-                    // (see TrackAttachment.extend). Anything anchored by distance would end up over
-                    // different track, so refuse rather than move a lift hill silently.
-                    say(player, TextFormatting.RED, "Section #" + existing.id()
-                        + " has ride hardware or a train on it, so it can only be continued from its"
-                        + " far end — building onto its start would move everything already placed.");
-                    return;
-                }
-                id = existing.id();
-                section = TrackAttachment.extend(
-                    existing, attachment.end, session.pending(), closing);
-            }
-            else {
-                id = state.network().allocateSectionId();
-                section = new TrackSection(id, session.pending(), closing, null);
-            }
+            built = com.micatechnologies.minecraft.rcmc.world.TrackLaying.lay(world, RcmcWorldState.of(world),
+                session.pending(), session.pendingTypes(), closing, session.attachment(), null);
         }
-        catch (IllegalArgumentException e) {
-            // Degenerate node layout — report it and keep the session so the builder can undo
-            // rather than losing everything they placed.
-            say(player, TextFormatting.RED, "Could not build that section: " + e.getMessage());
+        catch (com.micatechnologies.minecraft.rcmc.world.TrackLaying.Refused refused) {
+            // The session is kept, so the builder can undo or add a node rather than lose
+            // everything they placed.
+            say(player, TextFormatting.RED, refused.getMessage());
             return;
         }
-
-        if (extending) {
-            state.network().replaceSection(section);
-        }
-        else {
-            state.network().addSection(section);
-        }
-        java.util.List<com.micatechnologies.minecraft.rcmc.physics.element.RideElement> created =
-            addTypedElements(state, section, session);
-        int createdElements = created.size();
-        // A station gets its platform: decking both sides at the cars' floor, and air gates where
-        // the train stops — see CoasterStations.layPlatform. Only into air; nothing is replaced.
-        java.util.List<String> platforms = new java.util.ArrayList<>();
-        for (com.micatechnologies.minecraft.rcmc.physics.element.RideElement element : created) {
-            if (element instanceof com.micatechnologies.minecraft.rcmc.physics.element.StationPlatform) {
-                com.micatechnologies.minecraft.rcmc.world.PlatformBuilder.Result laid =
-                    com.micatechnologies.minecraft.rcmc.world.CoasterStations.layPlatform(world, state,
-                        (com.micatechnologies.minecraft.rcmc.physics.element.StationPlatform) element,
-                        true, true, STATION_PLATFORM_WIDTH);
-                platforms.add(laid.blocks + " platform blocks and " + laid.gates + " air gates");
-            }
-        }
-        state.markTrackDirty(world);
-        // BOTH, always. Sending only the track leaves clients with a lift hill that renders as
-        // plain rail — the element exists and works, but nothing draws a chain on it, so a builder
-        // who selected "chain lift" sees no evidence it took. That was reported as segment type
-        // not working at all.
-        int dimension = world.provider.getDimension();
-        RcmcNetwork.sendToAllIn(new PacketTrackSync(state.network()), dimension);
-        RcmcNetwork.sendToAllIn(
-            new com.micatechnologies.minecraft.rcmc.net.PacketElementSync(state.elements()), dimension);
+        TrackSection section = built.section;
+        int id = section.id();
+        // Described before the reset clears them: read after it, this always said "(none recorded)".
+        String typesDescribed = describeTypes(session);
         session.reset();
         pushSession(player, session);
 
-        say(player, TextFormatting.GREEN, (extending ? "Extended section #" : "Built section #")
+        say(player, TextFormatting.GREEN, (built.extended ? "Extended section #" : "Built section #")
             + id + " — " + String.format("%.1f", section.totalLength()) + " blocks, "
             + section.nodes().size() + " nodes"
             + (closing ? " (circuit)" : "") + ".");
@@ -258,10 +201,10 @@ public class ItemTrackTool extends Item {
         // failed — whether the tags were recorded and the hardware never made, or the hardware was
         // made and never took effect. Saying what was actually built removes the guesswork from
         // the next report.
-        say(player, TextFormatting.DARK_GRAY, "  Segments: " + describeTypes(session)
-            + "  ->  " + createdElements + " element(s)");
+        say(player, TextFormatting.DARK_GRAY, "  Segments: " + typesDescribed
+            + "  ->  " + built.created.size() + " element(s)");
 
-        for (String platform : platforms) {
+        for (String platform : built.platforms) {
             say(player, TextFormatting.GRAY, "  Station: laid " + platform
                 + ". Rebuild or change it with /rcmc ride " + id + " platform.");
         }
@@ -292,48 +235,6 @@ public class ItemTrackTool extends Item {
     private static RcmcWorldState state(World world) {
         return RcmcWorldState.of(world);
     }
-
-    /**
-     * Whether {@code section} can have track prepended without stranding anything anchored to it.
-     *
-     * <p>Only a bare section qualifies. See {@link TrackAttachment#extend} for why a caller cannot
-     * simply shift the anchors along instead.</p>
-     */
-    private static boolean canPrependSafely(RcmcWorldState state, TrackSection section) {
-        for (com.micatechnologies.minecraft.rcmc.physics.element.RideElement element
-            : state.elements().elements()) {
-            if (element.sectionId() == section.id()) {
-                return false;
-            }
-        }
-        for (com.micatechnologies.minecraft.rcmc.physics.Train train
-            : state.trains().asMap().values()) {
-            if (train.reference() != null && train.reference().sectionId() == section.id()) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    /**
-     * Adds the ride hardware the builder's segment tags describe.
-     *
-     * <p>The mapping itself lives in {@link com.micatechnologies.minecraft.rcmc.builder.SegmentElements},
-     * which is free of Minecraft types and therefore testable — it was inline here, and shipped
-     * broken because the only way to check it was to build a coaster and ride it.</p>
-     */
-    private static java.util.List<com.micatechnologies.minecraft.rcmc.physics.element.RideElement>
-        addTypedElements(RcmcWorldState state, TrackSection section, TrackBuildSession session) {
-        java.util.List<com.micatechnologies.minecraft.rcmc.physics.element.RideElement> created =
-            com.micatechnologies.minecraft.rcmc.builder.SegmentElements.build(section, session.pendingTypes());
-        for (com.micatechnologies.minecraft.rcmc.physics.element.RideElement element : created) {
-            state.elements().add(element);
-        }
-        return created;
-    }
-
-    /** Blocks of platform either side of a station the builder lays, the edge course included. */
-    private static final int STATION_PLATFORM_WIDTH = 3;
 
     /**
      * A compact rendering of the type recorded at each node, e.g. {@code PPPLLLLPP}.
@@ -374,7 +275,7 @@ public class ItemTrackTool extends Item {
      * words. Two builders' tools describing the same geometry differently would make a report of
      * "the validator says X" impossible to act on without also knowing which wand was held.</p>
      */
-    static void report(EntityPlayer player, TrackSection section) {
+    public static void report(net.minecraft.command.ICommandSender player, TrackSection section) {
         List<TrackIssue> issues = new TrackValidator(ValidationLimits.DEFAULT).validate(section);
         if (issues.isEmpty()) {
             return;
@@ -396,7 +297,7 @@ public class ItemTrackTool extends Item {
         }
     }
 
-    static void say(EntityPlayer player, TextFormatting colour, String message) {
+    static void say(net.minecraft.command.ICommandSender player, TextFormatting colour, String message) {
         player.sendMessage(new TextComponentString(colour + message));
     }
 

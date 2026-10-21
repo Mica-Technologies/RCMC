@@ -186,4 +186,68 @@ public final class TrackAttachment {
             atEnd ? section.leadIn() : null, atEnd ? null : section.leadOut(),
             atEnd ? section.startUp() : null);
     }
+
+    /**
+     * Per-node segment types for the section {@link #extend} produced, from the types recorded
+     * against the added nodes in the order they were placed.
+     *
+     * <p>Segment types are indexed by the section's nodes (a type at node {@code i} describes the
+     * span arriving at it — see {@code SegmentElements.build}), but a builder records them against
+     * the nodes they placed. Those are not the same list once a section is extended: the existing
+     * nodes come first (or last), a node landing on the endpoint is dropped, and building onto the
+     * head reverses the new ones. Passing the placed list straight through put every typed span of
+     * an extension in the wrong place.</p>
+     *
+     * <ul>
+     *   <li><b>At the end</b>, placement order is section order, so added node {@code j} keeps
+     *   its type and the existing nodes are {@code plain}.</li>
+     *   <li><b>At the head</b>, the span between placed nodes {@code j-1} and {@code j} was drawn
+     *   with type {@code t[j]} but now arrives at {@code j-1}; so each type moves one node toward
+     *   the old start, the new first node is {@code plain}, and the old first node takes the type
+     *   of the span that now joins it.</li>
+     * </ul>
+     *
+     * @param before     the section as it was
+     * @param added      the nodes passed to {@code extend}, in placement order
+     * @param addedTypes the type recorded at each of {@code added}
+     * @param plain      the "no hardware" type
+     * @param after      what {@code extend} returned
+     */
+    public static <T> List<T> alignTypes(TrackSection before, TrackNetwork.End end, List<TrackNode> added,
+                                         List<T> addedTypes, T plain, TrackSection after) {
+        int n = added.size();
+        int first = added.get(0).position().distanceTo(before.endpointAt(end)) <= TrackNetwork.MAX_JOIN_GAP
+            ? 1 : 0;
+        List<T> types = new ArrayList<>(after.nodes().size());
+        if (end == TrackNetwork.End.END) {
+            for (int i = 0; i < before.nodes().size(); i++) {
+                types.add(plain);
+            }
+            for (int j = first; j < n; j++) {
+                types.add(typeAt(addedTypes, j, plain));
+            }
+        }
+        else {
+            types.add(plain);
+            for (int k = n - 2; k >= first; k--) {
+                types.add(typeAt(addedTypes, k + 1, plain));
+            }
+            types.add(typeAt(addedTypes, first, plain));
+            for (int i = 1; i < before.nodes().size(); i++) {
+                types.add(plain);
+            }
+        }
+        // Closing drops the last node onto the first; its span becomes the wrap.
+        while (types.size() > after.nodes().size()) {
+            types.remove(types.size() - 1);
+        }
+        while (types.size() < after.nodes().size()) {
+            types.add(plain);
+        }
+        return types;
+    }
+
+    private static <T> T typeAt(List<T> types, int index, T plain) {
+        return types != null && index < types.size() && types.get(index) != null ? types.get(index) : plain;
+    }
 }

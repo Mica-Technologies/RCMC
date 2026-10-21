@@ -164,7 +164,20 @@ public final class TrackBuildSession {
      * at the moment the builder scrolled past the limit.</p>
      */
     public void adjustHeightOffset(double delta) {
-        heightOffset = Math.max(-32.0D, Math.min(64.0D, heightOffset + delta));
+        setHeightOffset(heightOffset + delta);
+    }
+
+    /** The range {@link #adjustHeightOffset} keeps the offset in. */
+    public static final double MIN_HEIGHT_OFFSET = -32.0D;
+    public static final double MAX_HEIGHT_OFFSET = 64.0D;
+
+    /**
+     * Sets the height offset outright, clamped as {@link #adjustHeightOffset} is. For
+     * {@code /rcmc build height}: scrolling only reaches whole steps, and a grade or a vertical
+     * curve wants a fraction of a block.
+     */
+    public void setHeightOffset(double offset) {
+        heightOffset = Math.max(MIN_HEIGHT_OFFSET, Math.min(MAX_HEIGHT_OFFSET, offset));
     }
 
     /** Removes and returns the most recently placed node, or {@code null} if there is none. */
