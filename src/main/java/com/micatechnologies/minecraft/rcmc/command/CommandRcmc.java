@@ -94,6 +94,10 @@ public class CommandRcmc extends CommandBase {
                 com.micatechnologies.minecraft.rcmc.track.TrackStyleIds.COMMAND_CHOICES
                     .toArray(new String[0]));
         }
+        if (args.length == 4 && "style".equalsIgnoreCase(args[0])
+            && com.micatechnologies.minecraft.rcmc.track.TrackStyleIds.TRANSIT_THIRD_RAIL.equalsIgnoreCase(args[2])) {
+            return getListOfStringsMatchingLastWord(args, "left", "right");
+        }
         if (args.length == 2 && "line".equalsIgnoreCase(args[0])) {
             return getListOfStringsMatchingLastWord(args, "create", "list", "remove", "start",
                 "stop", "signals", "set", "trains", "check", "hold", "release");
@@ -616,7 +620,7 @@ public class CommandRcmc extends CommandBase {
         if (args.length < 3) {
             throw new CommandException("/rcmc style <sectionId> <"
                 + String.join("|", com.micatechnologies.minecraft.rcmc.track.TrackStyleIds.COMMAND_CHOICES)
-                + "> [wireHeight]");
+                + "> [wireHeight | left|right for a third rail]");
         }
         int sectionId = parseInt(args[1]);
         TrackSection section = state.network().section(sectionId);
@@ -626,7 +630,16 @@ public class CommandRcmc extends CommandBase {
         String styleId;
         try {
             styleId = com.micatechnologies.minecraft.rcmc.track.TrackStyleIds.resolve(args[2]);
-            if (args.length > 3 && styleId != null) {
+            if (args.length > 3 && com.micatechnologies.minecraft.rcmc.track.TrackStyleIds.isThirdRail(styleId)) {
+                // A third rail takes a side, not a height: the side it runs away from platforms.
+                if (!"left".equalsIgnoreCase(args[3]) && !"right".equalsIgnoreCase(args[3])) {
+                    throw new CommandException("A third rail runs on the left or the right, not '"
+                        + args[3] + "'");
+                }
+                styleId = com.micatechnologies.minecraft.rcmc.track.TrackStyleIds.thirdRailOn(
+                    "left".equalsIgnoreCase(args[3]) ? -1 : 1);
+            }
+            else if (args.length > 3 && styleId != null) {
                 // An optional height rides on the style id itself; see TrackStyleIds.resolve for
                 // why the suffix beats adding a field to every section.
                 styleId = com.micatechnologies.minecraft.rcmc.track.TrackStyleIds.withWireHeight(
@@ -647,7 +660,10 @@ public class CommandRcmc extends CommandBase {
             .contactWireHeight(styleId);
         reply(sender, TextFormatting.GREEN, "Section " + sectionId + " style -> "
             + (styleId == null ? "coaster" : styleId)
-            + (wire > 0.0D ? ", contact wire at " + fmt(wire) + " blocks" : ""));
+            + (wire > 0.0D ? ", contact wire at " + fmt(wire) + " blocks" : "")
+            + (com.micatechnologies.minecraft.rcmc.track.TrackStyleIds.isThirdRail(styleId)
+                ? ", third rail on the " + (com.micatechnologies.minecraft.rcmc.track.TrackStyleIds.thirdRailSide(styleId) < 0
+                    ? "left" : "right") + " away from platforms" : ""));
     }
 
     /**

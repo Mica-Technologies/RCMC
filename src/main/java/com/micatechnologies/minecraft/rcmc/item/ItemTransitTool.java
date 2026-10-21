@@ -87,7 +87,7 @@ public class ItemTransitTool extends Item {
     /** The styles the tool cycles: the transit looks, then back to the plain coaster default. */
     private static final String[] STYLE_CYCLE = {
         TrackStyleIds.TRANSIT, TrackStyleIds.TRANSIT_CATENARY,
-        TrackStyleIds.TRANSIT_PORTAL, TrackStyleIds.TRANSIT_TUNNEL, null
+        TrackStyleIds.TRANSIT_PORTAL, TrackStyleIds.TRANSIT_TUNNEL, TrackStyleIds.TRANSIT_THIRD_RAIL, null
     };
 
     public ItemTransitTool() {
@@ -610,7 +610,7 @@ public class ItemTransitTool extends Item {
         String current = section.styleId();
         int index = 0;
         for (int i = 0; i < STYLE_CYCLE.length; i++) {
-            if (STYLE_CYCLE[i] == null ? current == null : STYLE_CYCLE[i].equals(current)) {
+            if (STYLE_CYCLE[i] == null ? current == null : STYLE_CYCLE[i].equals(TrackStyleIds.baseOf(current))) {
                 index = i + 1;
                 break;
             }

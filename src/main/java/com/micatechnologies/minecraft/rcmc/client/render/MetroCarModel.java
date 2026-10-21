@@ -240,7 +240,7 @@ final class MetroCarModel {
                      boolean drawPantograph, float wireHeight, float doorFraction,
                      boolean lightsOn, boolean outerFront, boolean outerRear,
                      float[] bodyColour, float[] trimColour, float[] seatColour) {
-        emit(buffer, bogieSpacing, drawCoupling, drawPantograph, wireHeight, doorFraction,
+        emit(buffer, bogieSpacing, drawCoupling, drawPantograph, wireHeight, false, doorFraction,
             doorFraction, lightsOn, outerFront, outerRear, bodyColour, trimColour, seatColour);
     }
 
@@ -257,7 +257,7 @@ final class MetroCarModel {
      * @param leftFraction  likewise for the {@code -x} side
      */
     static void emit(BufferBuilder buffer, float bogieSpacing, boolean drawCoupling,
-                     boolean drawPantograph, float wireHeight, float rightFraction,
+                     boolean drawPantograph, float wireHeight, boolean thirdRail, float rightFraction,
                      float leftFraction, boolean lightsOn, boolean outerFront, boolean outerRear,
                      float[] bodyColour, float[] trimColour, float[] seatColour) {
         float bodyLength = bogieSpacing / TRUCK_CENTRE_RATIO;
@@ -306,7 +306,13 @@ final class MetroCarModel {
         emitTruck(buffer, truckAt);
         emitTruck(buffer, -truckAt);
 
-        if (drawPantograph) {
+        if (thirdRail) {
+            // Collecting from beside the track: shoegear on both sides of each truck, because the
+            // conductor changes sides at platforms. Nothing on the roof to reach for.
+            emitShoes(buffer, truckAt);
+            emitShoes(buffer, -truckAt);
+        }
+        else if (drawPantograph) {
             emitPantograph(buffer, wireHeight);
         }
 
@@ -813,6 +819,31 @@ final class MetroCarModel {
         // Truck bolster spanning under the car between the side frames.
         box(buffer, -TRUCK_INNER, RAIL_TOP + 0.20F, atZ - 0.25F,
             TRUCK_INNER, RAIL_TOP + 0.45F, atZ + 0.25F, TRUCK_COLOR);
+    }
+
+    // Collector shoes, sized against TrackMeshBuilder's third rail: its centre is 2.10 out with a
+    // top at u 0.16, under a cover board whose underside is at 0.275. The shoe paddle rides on the
+    // rail's top; the beam carrying it out from the truck passes under the board.
+    private static final float SHOE_BEAM_INNER = TRUCK_OUTER;
+    private static final float SHOE_PADDLE_INNER = 1.95F;
+    private static final float SHOE_OUTER = 2.25F;
+    private static final float SHOE_BOTTOM = 0.16F;
+    private static final float SHOE_TOP = 0.21F;
+    private static final float SHOE_BEAM_TOP = 0.26F;
+    private static final float SHOE_HALF_LENGTH = 0.30F;
+    private static final float[] SHOE_COLOR = { 0.22F, 0.20F, 0.18F };
+
+    /** Shoegear both sides of the truck at {@code atZ}: a beam out from the side frame, a paddle on it. */
+    private static void emitShoes(BufferBuilder buffer, float atZ) {
+        for (int side = -1; side <= 1; side += 2) {
+            float beamFrom = side * SHOE_BEAM_INNER;
+            float paddleFrom = side * SHOE_PADDLE_INNER;
+            float outer = side * SHOE_OUTER;
+            box(buffer, Math.min(beamFrom, paddleFrom), SHOE_TOP, atZ - 0.08F,
+                Math.max(beamFrom, paddleFrom), SHOE_BEAM_TOP, atZ + 0.08F, SHOE_COLOR);
+            box(buffer, Math.min(paddleFrom, outer), SHOE_BOTTOM, atZ - SHOE_HALF_LENGTH,
+                Math.max(paddleFrom, outer), SHOE_TOP, atZ + SHOE_HALF_LENGTH, SHOE_COLOR);
+        }
     }
 
     /** Same box emitter as {@link CarModel}; see there for the winding/culling note. */

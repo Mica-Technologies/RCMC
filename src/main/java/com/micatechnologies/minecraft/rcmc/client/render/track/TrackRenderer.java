@@ -277,13 +277,74 @@ public final class TrackRenderer {
         // Cheap when cached; also what fills in columns over chunks that have loaded since.
         List<com.micatechnologies.minecraft.rcmc.world.TrackSupports.Column> columns =
             com.micatechnologies.minecraft.rcmc.world.TrackSupports.columnsFor(section, world);
-        if (entry.builtFor != section || entry.builtSpans != spans || entry.builtColumns != columns) {
+        ThirdRailPlan plan = thirdRailPlanFor(section, RcmcWorldState.of(world));
+        if (entry.builtFor != section || entry.builtSpans != spans || entry.builtColumns != columns
+            || !java.util.Objects.equals(entry.builtPlan, plan)) {
             if (entry.pendingFor != section || entry.pendingSpans != spans
-                || entry.pendingColumns != columns) {
-                entry.submit(section, spans, columns);
+                || entry.pendingColumns != columns || !java.util.Objects.equals(entry.pendingPlan, plan)) {
+                entry.submit(section, spans, columns, plan);
             }
         }
         return entry;
+    }
+
+    /**
+     * How far either side of a berth's stop point the third rail moves away from the platform, in
+     * blocks. A berth is a point — where the lead car stops — and records no platform length or
+     * which way trains arrive, so this covers a long train standing either side of it.
+     */
+    private static final double BERTH_REACH = 100.0D;
+
+    /** Bare rail at a section end that belongs to a switch, so the conductor clears the points. */
+    private static final double SWITCH_GAP = 8.0D;
+
+    /**
+     * Where {@code section}'s third rail runs, or {@code null} for a section without one.
+     *
+     * <p>Worked out each frame from the berths and switches this client knows about, and compared
+     * with the plan the current mesh was built from, so adding a station or a switch moves the rail
+     * without the track itself being edited. Cheap: a pass over the stations, and only for
+     * third-rail sections.</p>
+     */
+    private static ThirdRailPlan thirdRailPlanFor(TrackSection section, RcmcWorldState state) {
+        if (state == null
+            || !com.micatechnologies.minecraft.rcmc.track.TrackStyleIds.isThirdRail(section.styleId())) {
+            return null;
+        }
+        List<double[]> overrides = new ArrayList<>();
+        for (com.micatechnologies.minecraft.rcmc.physics.transit.TransitStation station
+            : state.transit().stations()) {
+            for (com.micatechnologies.minecraft.rcmc.physics.transit.TransitPlatform berth : station.platforms()) {
+                if (berth.stopPoint().sectionId() != section.id()) {
+                    continue;
+                }
+                // The side away from the doors. A berth opening both ways leaves no clear side,
+                // so the rail stays where it is.
+                com.micatechnologies.minecraft.rcmc.physics.transit.DoorSide doors = berth.doorSide();
+                if (doors == com.micatechnologies.minecraft.rcmc.physics.transit.DoorSide.BOTH) {
+                    continue;
+                }
+                int away = doors == com.micatechnologies.minecraft.rcmc.physics.transit.DoorSide.RIGHT ? -1 : 1;
+                double at = berth.stopPoint().distance();
+                overrides.add(new double[] { at - BERTH_REACH, at + BERTH_REACH, away });
+            }
+        }
+        List<double[]> gaps = new ArrayList<>();
+        double total = section.totalLength();
+        for (TrackNetwork.TrackSwitch sw : state.network().switches()) {
+            List<TrackNetwork.SectionEnd> ends = new ArrayList<>(sw.branches());
+            ends.add(sw.throat());
+            for (TrackNetwork.SectionEnd end : ends) {
+                if (end.sectionId != section.id()) {
+                    continue;
+                }
+                gaps.add(end.end == TrackNetwork.End.START
+                    ? new double[] { 0.0D, SWITCH_GAP }
+                    : new double[] { total - SWITCH_GAP, total });
+            }
+        }
+        return new ThirdRailPlan(com.micatechnologies.minecraft.rcmc.track.TrackStyleIds.thirdRailSide(
+            section.styleId()), overrides, gaps);
     }
 
     private void pruneRemovedSections(TrackNetwork network) {
@@ -362,15 +423,18 @@ public final class TrackRenderer {
         TrackSection builtFor;
         List<ElementSpan> builtSpans;
         List<com.micatechnologies.minecraft.rcmc.world.TrackSupports.Column> builtColumns;
+        ThirdRailPlan builtPlan;
         RenderCell[] cells;
 
         TrackSection pendingFor;
         List<ElementSpan> pendingSpans;
         List<com.micatechnologies.minecraft.rcmc.world.TrackSupports.Column> pendingColumns;
+        ThirdRailPlan pendingPlan;
         Future<List<TrackMeshCells.Cell>> pending;
 
         void submit(TrackSection section, List<ElementSpan> spans,
-                    List<com.micatechnologies.minecraft.rcmc.world.TrackSupports.Column> columns) {
+                    List<com.micatechnologies.minecraft.rcmc.world.TrackSupports.Column> columns,
+                    ThirdRailPlan plan) {
             if (pending != null) {
                 pending.cancel(false);
             }
@@ -380,8 +444,9 @@ public final class TrackRenderer {
             pendingFor = section;
             pendingSpans = spans;
             pendingColumns = columns;
+            pendingPlan = plan;
             pending = MESHER.submit(() -> TrackMeshCells.partition(
-                TrackMeshBuilder.build(section, spanSnapshot, supports)));
+                TrackMeshBuilder.build(section, spanSnapshot, supports, plan)));
         }
 
         /** Swaps in a finished build, if one has landed. Never blocks. */
@@ -402,6 +467,7 @@ public final class TrackRenderer {
                 builtFor = pendingFor;
                 builtSpans = pendingSpans;
                 builtColumns = pendingColumns;
+                builtPlan = pendingPlan;
                 return;
             }
             releaseCells();
@@ -413,6 +479,7 @@ public final class TrackRenderer {
             builtFor = pendingFor;
             builtSpans = pendingSpans;
             builtColumns = pendingColumns;
+            builtPlan = pendingPlan;
         }
 
         void release() {

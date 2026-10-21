@@ -33,9 +33,21 @@ public final class TrackStyleIds {
     /** Transit track with a rigid overhead conductor rail — tunnel electrification look. */
     public static final String TRANSIT_TUNNEL = "transit-tunnel";
 
+    /**
+     * Transit track with a third (conductor) rail beside the running rails, on insulator chairs
+     * under a cover board: the classic subway look, with nothing overhead. The rail runs on the
+     * right, in the direction of increasing distance, unless the id carries {@code -left}; at a
+     * berth it moves to the side away from the platform, as real third rail does.
+     */
+    public static final String TRANSIT_THIRD_RAIL = "transit-third-rail";
+
+    /** Suffix putting a third rail on the left. Right is the default and carries no suffix. */
+    private static final String LEFT_SUFFIX = "-left";
+    private static final String RIGHT_SUFFIX = "-right";
+
     /** What {@code /rcmc style} accepts; "coaster" resolves to the {@code null} default style. */
     public static final List<String> COMMAND_CHOICES = Arrays.asList(
-        "coaster", TRANSIT, TRANSIT_CATENARY, TRANSIT_PORTAL, TRANSIT_TUNNEL);
+        "coaster", TRANSIT, TRANSIT_CATENARY, TRANSIT_PORTAL, TRANSIT_TUNNEL, TRANSIT_THIRD_RAIL);
 
     /**
      * Height of the contact wire above the railheads, in blocks, when a style does not say.
@@ -76,7 +88,8 @@ public final class TrackStyleIds {
      */
     public static String next(String current) {
         String base = current == null ? null : baseOf(current);
-        List<String> cycle = Arrays.asList(null, TRANSIT, TRANSIT_CATENARY, TRANSIT_PORTAL, TRANSIT_TUNNEL);
+        List<String> cycle = Arrays.asList(null, TRANSIT, TRANSIT_CATENARY, TRANSIT_PORTAL, TRANSIT_TUNNEL,
+            TRANSIT_THIRD_RAIL);
         int index = cycle.indexOf(base);
         return cycle.get((index + 1) % cycle.size());
     }
@@ -100,6 +113,17 @@ public final class TrackStyleIds {
             return null;
         }
         String key = argument.toLowerCase(Locale.ROOT);
+        if (key.startsWith(TRANSIT_THIRD_RAIL)) {
+            String suffix = key.substring(TRANSIT_THIRD_RAIL.length());
+            if (suffix.isEmpty() || RIGHT_SUFFIX.equals(suffix)) {
+                return TRANSIT_THIRD_RAIL;
+            }
+            if (LEFT_SUFFIX.equals(suffix)) {
+                return key;
+            }
+            throw new IllegalArgumentException("Style '" + TRANSIT_THIRD_RAIL
+                + "' takes a side, left or right, not '" + suffix.replaceFirst("^-", "") + "'");
+        }
         String base = baseOf(key);
         if (!TRANSIT.equals(base) && !TRANSIT_CATENARY.equals(base)
             && !TRANSIT_PORTAL.equals(base) && !TRANSIT_TUNNEL.equals(base)) {
@@ -144,6 +168,11 @@ public final class TrackStyleIds {
             return null;
         }
         String key = styleId.toLowerCase(Locale.ROOT);
+        if (key.startsWith(TRANSIT_THIRD_RAIL)) {
+            // Its suffix is a side, not a height, and "third-rail" must not read as a base of
+            // "transit-third" either.
+            return TRANSIT_THIRD_RAIL;
+        }
         int dash = key.lastIndexOf('-');
         if (dash <= 0 || dash == key.length() - 1) {
             return key;
@@ -160,7 +189,7 @@ public final class TrackStyleIds {
      */
     public static double contactWireHeight(String styleId) {
         String base = baseOf(styleId);
-        if (base == null || TRANSIT.equals(base) || !base.startsWith(TRANSIT)) {
+        if (base == null || TRANSIT.equals(base) || TRANSIT_THIRD_RAIL.equals(base) || !base.startsWith(TRANSIT)) {
             return 0.0D;
         }
         String key = styleId.toLowerCase(Locale.ROOT);
@@ -219,5 +248,26 @@ public final class TrackStyleIds {
     /** Whether this style id is one of the transit family (wider gauge). */
     public static boolean isTransit(String styleId) {
         return styleId != null && styleId.startsWith(TRANSIT);
+    }
+
+    /** Whether this style carries a third rail. */
+    public static boolean isThirdRail(String styleId) {
+        return styleId != null && styleId.toLowerCase(Locale.ROOT).startsWith(TRANSIT_THIRD_RAIL);
+    }
+
+    /**
+     * Which side a third-rail style puts its conductor on away from platforms: {@code +1} for the
+     * frame's right (the default), {@code -1} for its left, {@code 0} for a style with no third rail.
+     */
+    public static int thirdRailSide(String styleId) {
+        if (!isThirdRail(styleId)) {
+            return 0;
+        }
+        return styleId.toLowerCase(Locale.ROOT).endsWith(LEFT_SUFFIX) ? -1 : 1;
+    }
+
+    /** The third-rail style with its conductor on {@code side} ({@code -1} left, else right). */
+    public static String thirdRailOn(int side) {
+        return side < 0 ? TRANSIT_THIRD_RAIL + LEFT_SUFFIX : TRANSIT_THIRD_RAIL;
     }
 }

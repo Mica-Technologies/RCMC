@@ -245,7 +245,7 @@ public class RenderCoasterCar extends Render<EntityCoasterCar> {
             float rightFraction = side.opensRight() ? doorFraction : 0.0F;
             float leftFraction = side.opensLeft() ? doorFraction : 0.0F;
             MetroCarModel.emit(buffer, length, drawCoupling, entity.carIndex() % 2 == 0,
-                (float) wireHeightFor(entity), rightFraction, leftFraction,
+                (float) wireHeightFor(entity), onThirdRail(entity), rightFraction, leftFraction,
                 lightsOn, outerFront, outerRear,
                 colourOf(spec, TrainSpec.Part.BODY, 3),
                 colourOf(spec, TrainSpec.Part.TRIM, 4),
@@ -340,15 +340,23 @@ public class RenderCoasterCar extends Render<EntityCoasterCar> {
      * catenary — what the pantograph stretches to meet.
      */
     private static double wireHeightFor(EntityCoasterCar entity) {
+        return com.micatechnologies.minecraft.rcmc.track.TrackStyleIds.contactWireHeight(styleUnder(entity));
+    }
+
+    /** Whether the section this car is on collects from a third rail. */
+    private static boolean onThirdRail(EntityCoasterCar entity) {
+        return com.micatechnologies.minecraft.rcmc.track.TrackStyleIds.isThirdRail(styleUnder(entity));
+    }
+
+    /** Style of the section this car's train is on, or {@code null} when it is not known. */
+    private static String styleUnder(EntityCoasterCar entity) {
         RcmcWorldState state = RcmcWorldState.of(entity.world);
         Train train = state == null ? null : state.trains().train(entity.trainId());
         if (train == null) {
-            return 0.0D;
+            return null;
         }
         com.micatechnologies.minecraft.rcmc.track.TrackSection section =
             state.network().section(train.reference().sectionId());
-        return section == null ? 0.0D
-            : com.micatechnologies.minecraft.rcmc.track.TrackStyleIds
-                .contactWireHeight(section.styleId());
+        return section == null ? null : section.styleId();
     }
 }

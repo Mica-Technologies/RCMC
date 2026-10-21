@@ -203,6 +203,17 @@ public final class TrackMeshBuilder {
     public static TrackMesh build(TrackSection section,
                                   java.util.List<com.micatechnologies.minecraft.rcmc.track.ElementSpan> spans,
                                   java.util.List<double[]> supports) {
+        return build(section, spans, supports, null);
+    }
+
+    /**
+     * As above, with where a third-rail section's conductor runs and breaks. {@code null} runs it
+     * the length of the section on the style's own side, which is right for a section with no
+     * platforms or switches on it.
+     */
+    public static TrackMesh build(TrackSection section,
+                                  java.util.List<com.micatechnologies.minecraft.rcmc.track.ElementSpan> spans,
+                                  java.util.List<double[]> supports, ThirdRailPlan thirdRail) {
         List<MeshQuad> quads = new ArrayList<>();
         double total = section.totalLength();
         if (total <= 0.0D) {
@@ -228,6 +239,12 @@ public final class TrackMeshBuilder {
         buildLiftChains(section, total, spans, quads);
         buildSupports(section, supports, quads);
         buildCatenary(section, total, rings, style, quads);
+        if (style.thirdRail) {
+            ThirdRailPlan plan = thirdRail != null ? thirdRail : new ThirdRailPlan(
+                com.micatechnologies.minecraft.rcmc.track.TrackStyleIds.thirdRailSide(section.styleId()),
+                java.util.Collections.<double[]>emptyList(), java.util.Collections.<double[]>emptyList());
+            buildThirdRail(section, total, rings, style, plan, quads);
+        }
 
         double[] bounds = boundsOf(quads);
         return new TrackMesh(quads, bounds[0], bounds[1], bounds[2], bounds[3], bounds[4], bounds[5]);
@@ -617,6 +634,79 @@ public final class TrackMeshBuilder {
             sweepTube(section, tieRings, profile, colourOf(section,
                 com.micatechnologies.minecraft.rcmc.track.TrackPalette.Part.TIE), true, out);
         }
+    }
+
+    // ---- third rail ----
+    // Frame-local, like everything else here: r across the track, u up from the railheads. The
+    // conductor sits outside the running rail, its top just above railhead height so a car's
+    // collector shoe rides on it; real third rail is laid the same way, a little proud of the
+    // running rails and clear of the wheel flanges.
+
+    /** Centre of the conductor rail from the track centreline. Outside the tie ends (1.9). */
+    static final double THIRD_RAIL_OFFSET = 2.10D;
+    static final double THIRD_RAIL_CENTRE_U = 0.10D;
+    private static final double THIRD_RAIL_HALF_WIDTH = 0.07D;
+    private static final double THIRD_RAIL_HALF_HEIGHT = 0.06D;
+
+    /** Protection board over the rail, a little outboard so it shades the live top. */
+    private static final double COVER_CENTRE_U = 0.30D;
+    private static final double COVER_OUTBOARD = 0.05D;
+    private static final double COVER_HALF_WIDTH = 0.30D;
+    private static final double COVER_HALF_THICKNESS = 0.025D;
+
+    /** Insulator chairs, from the ballast up to the conductor's underside. */
+    private static final double CHAIR_SPACING = 2.0D;
+    private static final double CHAIR_BOTTOM_U = -0.30D;
+    private static final double CHAIR_HALF_WIDTH = 0.08D;
+    private static final double CHAIR_HALF_LENGTH = 0.10D;
+
+    private static final float[] CONDUCTOR_COLOR = { 0.50F, 0.50F, 0.52F };
+    private static final float[] COVER_COLOR = { 0.47F, 0.41F, 0.33F };
+    private static final float[] INSULATOR_COLOR = { 0.84F, 0.82F, 0.76F };
+
+    /**
+     * Sweeps the conductor rail and its cover board along each run of the plan, with insulator
+     * chairs under it. Each run is capped at both ends, so the breaks at side changes and at
+     * switches read as the ramped-off ends of separate lengths of rail.
+     */
+    private static void buildThirdRail(TrackSection section, double total, double[] rings,
+                                       TrackStyles style, ThirdRailPlan plan, List<MeshQuad> out) {
+        for (ThirdRailPlan.Run run : plan.runs(total, section.isClosed())) {
+            double[] runRings = ringsWithin(rings, run.from, run.to);
+            double r = run.side * THIRD_RAIL_OFFSET;
+            sweepTube(section, runRings,
+                rectangle(r, THIRD_RAIL_CENTRE_U, THIRD_RAIL_HALF_WIDTH, THIRD_RAIL_HALF_HEIGHT),
+                CONDUCTOR_COLOR, true, out);
+            sweepTube(section, runRings,
+                rectangle(r + run.side * COVER_OUTBOARD, COVER_CENTRE_U, COVER_HALF_WIDTH, COVER_HALF_THICKNESS),
+                COVER_COLOR, true, out);
+
+            double chairTop = THIRD_RAIL_CENTRE_U - THIRD_RAIL_HALF_HEIGHT;
+            ProfileEdge[] chair = rectangle(r, (chairTop + CHAIR_BOTTOM_U) * 0.5D, CHAIR_HALF_WIDTH,
+                (chairTop - CHAIR_BOTTOM_U) * 0.5D);
+            for (double s = Math.ceil(run.from / CHAIR_SPACING) * CHAIR_SPACING; s <= run.to;
+                 s += CHAIR_SPACING) {
+                sweepTube(section, new double[] { s - CHAIR_HALF_LENGTH, s + CHAIR_HALF_LENGTH }, chair,
+                    INSULATOR_COLOR, true, out);
+            }
+        }
+    }
+
+    /** The section's own rings that fall inside {@code [from, to]}, with both ends added exactly. */
+    static double[] ringsWithin(double[] rings, double from, double to) {
+        List<Double> within = new ArrayList<>();
+        within.add(from);
+        for (double ring : rings) {
+            if (ring > from + 1.0e-6D && ring < to - 1.0e-6D) {
+                within.add(ring);
+            }
+        }
+        within.add(to);
+        double[] result = new double[within.size()];
+        for (int i = 0; i < result.length; i++) {
+            result[i] = within.get(i);
+        }
+        return result;
     }
 
     // ---- catenary ----

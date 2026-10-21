@@ -32,13 +32,17 @@ final class TrackStyles {
 
     /** The classic coaster look — current dimensions, unchanged, unelectrified, no ballast. */
     static final TrackStyles COASTER =
-        new TrackStyles(0.55D, 0.70D, 0.08D, 0.12D, 0.05D, 0.05D, false, Catenary.NONE);
+        new TrackStyles(0.55D, 0.70D, 0.08D, 0.12D, 0.05D, 0.05D, false, Catenary.NONE, false);
 
     /** Shared transit cross-section; the three electrified variants differ only in catenary. */
     private static final TrackStyles TRANSIT = transit(Catenary.NONE);
     private static final TrackStyles TRANSIT_CATENARY = transit(Catenary.POLES);
     private static final TrackStyles TRANSIT_PORTAL = transit(Catenary.PORTALS);
     private static final TrackStyles TRANSIT_TUNNEL = transit(Catenary.TUNNEL);
+    /** Electrified from beside the track rather than above it: the conductor is swept by
+     *  {@link TrackMeshBuilder} along the plan the renderer works out, so no catenary. */
+    private static final TrackStyles TRANSIT_THIRD_RAIL =
+        new TrackStyles(1.40D, 1.90D, 0.26D, 0.20D, 0.11D, 0.09D, true, Catenary.NONE, true);
 
     final double halfGauge;
     final double tieHalfLength;
@@ -49,10 +53,12 @@ final class TrackStyles {
     /** Whether the track sweeps a ballast bed beneath the spine — heavy rail sits on stone. */
     final boolean ballast;
     final Catenary catenary;
+    /** Whether a conductor rail runs beside the running rails. */
+    final boolean thirdRail;
 
     private TrackStyles(double halfGauge, double tieHalfLength, double spineHalfWidth,
                         double spineHalfHeight, double railHalfWidth, double railHalfHeight,
-                        boolean ballast, Catenary catenary) {
+                        boolean ballast, Catenary catenary, boolean thirdRail) {
         this.halfGauge = halfGauge;
         this.tieHalfLength = tieHalfLength;
         this.spineHalfWidth = spineHalfWidth;
@@ -61,6 +67,7 @@ final class TrackStyles {
         this.railHalfHeight = railHalfHeight;
         this.ballast = ballast;
         this.catenary = catenary;
+        this.thirdRail = thirdRail;
     }
 
     private static TrackStyles transit(Catenary catenary) {
@@ -68,7 +75,7 @@ final class TrackStyles {
         // between railheads, long ties, a chunky spine, and visibly heavier rail. Widened from 2.0
         // when the stock was scaled up — the body must still read as overhanging its track, which
         // is what makes rolling stock look like rolling stock.
-        return new TrackStyles(1.40D, 1.90D, 0.26D, 0.20D, 0.11D, 0.09D, true, catenary);
+        return new TrackStyles(1.40D, 1.90D, 0.26D, 0.20D, 0.11D, 0.09D, true, catenary, false);
     }
 
     /** Resolves a section's style id. Unknown or {@code null} ids fall back to the coaster look
@@ -86,6 +93,8 @@ final class TrackStyles {
                 return TRANSIT_CATENARY;
             case TrackStyleIds.TRANSIT_PORTAL:
                 return TRANSIT_PORTAL;
+            case TrackStyleIds.TRANSIT_THIRD_RAIL:
+                return TRANSIT_THIRD_RAIL;
             case TrackStyleIds.TRANSIT_TUNNEL:
                 return TRANSIT_TUNNEL;
             default:
