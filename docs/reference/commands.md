@@ -392,7 +392,7 @@ change when a service reverses. Announcements convert it to the rider's own left
 /rcmc line create <name> <loop|shuttle|turnback> <stationA> <stationB> [...]
 /rcmc line list
 /rcmc line remove <name>
-/rcmc line start <name> <trainId> [cruiseSpeed]     put a train into service on the line
+/rcmc line start <name> <trainId> [cruiseSpeed] [forward|reverse]    put a train into service on the line
 /rcmc line stop <trainId>                           withdraw it
 /rcmc line signals <name> <count|off>               install or clear block signalling
 /rcmc line set <name> dwell <seconds>               how long the doors stay open at each stop
@@ -411,10 +411,17 @@ doors open. `line list` shows each line's settings.
 A line stores its ordered **stations**; the route between them is discovered by walking the track
 graph, so it survives changes to the track underneath.
 
+**Which way a train starts.** A moving train keeps going the way it is moving. A standing one runs
+the way the line's other trains on its track are already running, and when it is the first, toward
+the nearest station either way. `forward` or `reverse` (along the track's own direction, the way its
+distances increase) overrides that; if no station of the line can be reached that way, it says so
+and runs the other way.
+
 ### `/rcmc switch`
 
 ```
 /rcmc switch create <throatSection> <start|end> <branchSection> <start|end> <branchSection> <start|end> [...]
+/rcmc switch create <throughSection> <distance | near <x> <y> <z>> <divergeSection>
 /rcmc switch list
 /rcmc switch throw <throatSection> <start|end> [branchIndex]     no index = cycle to the next branch
 /rcmc switch remove <throatSection> <start|end>
@@ -423,6 +430,30 @@ graph, so it survives changes to the track underneath.
 A switch needs a throat and **at least two branches**; `create` refuses fewer. Each end is named
 by its section id and which end of it — `start` or `end`. Trailing moves against
 the points dead-end.
+
+The second form puts a switch **partway along a section**, a circuit included, where a siding or
+spur leaves it. Lay the diverging track first, starting at the points; then name the through
+section, the point along it, and the diverging section. The through section is split there (see
+[`/rcmc section`](#rcmc-section)) and the join at the split becomes the switch. Which side is the
+throat follows from which way the diverging track leaves. It starts lined straight, so trains run
+through exactly as before until it is thrown:
+
+```
+/rcmc switch create 13 18342.5 21      siding #21 leaves the Blue Line 18,342.5 blocks along
+```
+
+### `/rcmc section`
+
+```
+/rcmc section split <sectionId> <distance | near <x> <y> <z>>
+```
+
+Splits a section at a point, what the [track editor](items-and-blocks.md#track-editor)'s split does
+at a node. If no node is within a block of the point, one is added there on the curve first, so the
+track does not move. Open track becomes two sections joined at the point; a circuit is opened into
+one section whose end meets its own start there, still joined, so trains run straight through either
+way. Ride hardware, stations, berths, trains, joins and switches all follow the track, and the split
+can be undone.
 
 ### `/rcmc platform`
 

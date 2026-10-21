@@ -401,6 +401,9 @@ public final class TransitSystem {
         if (line == null) {
             throw new IllegalArgumentException("no line named " + lineName);
         }
+        if (preferredFacing == 0.0D && Math.abs(train.velocity()) <= LineService.FACING_SPEED) {
+            preferredFacing = flowFacing(line, train);
+        }
         if (preferredFacing != 0.0D) {
             double facing = preferredFacing > 0.0D ? 1.0D : -1.0D;
             LineService service = enterFacing(trainId, train, network, line, controller,
@@ -457,6 +460,32 @@ public final class TransitSystem {
         // the recovery: setHeld(true) both marks the intent and clears the stall, per Train.
         train.setHeld(true);
         return service;
+    }
+
+    /**
+     * The way most of {@code line}'s trains on this train's section are already running: {@code +1}
+     * or {@code -1} along it, or {@code 0} when there are none or they are evenly split.
+     *
+     * <p>A standing train joining a line goes with them. Left to "nearest station either way", one
+     * stood just past a stop turned back to serve it, and on a loop that is running head-on into
+     * every train behind it. {@link #facingsWithTheFlow} catches that only for a train it can see,
+     * within its walk horizon; on a city-scale loop the next train can be further than that.</p>
+     */
+    private double flowFacing(TransitLine line, Train train) {
+        if (train.reference() == null || tickTrains == null) {
+            return 0.0D;
+        }
+        int sectionId = train.reference().sectionId();
+        double sum = 0.0D;
+        for (Map.Entry<Integer, LineService> entry : services.entrySet()) {
+            Train other = tickTrains.train(entry.getKey());
+            if (other != null && other != train && other.reference() != null
+                && other.reference().sectionId() == sectionId
+                && entry.getValue().line().name().equalsIgnoreCase(line.name())) {
+                sum += entry.getValue().facing() >= 0.0D ? 1.0D : -1.0D;
+            }
+        }
+        return Math.signum(sum);
     }
 
     /** Below this speed a train entering service may be stood and turned round. */

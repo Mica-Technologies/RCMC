@@ -153,4 +153,39 @@ class LoopServiceDirectionTest {
         assertEquals(3, service.currentStopIndex());
         assertEquals(-1, service.serviceDirection());
     }
+
+    @Test
+    @DisplayName("on a loop longer than a train can see, a standing train joins the way the line's trains run")
+    void standingTrainJoinsWithTheFlowOnACityLoop() {
+        // ~24 km round: the next train ahead is further than the head-on check looks, which is how
+        // a Blue Line train stood just past a stop turned back into everything behind it.
+        List<TrackNode> nodes = new ArrayList<>();
+        double side = 6000.0D;
+        for (double[] p : new double[][] {{0, 0}, {side, 0}, {side, side}, {0, side}}) {
+            nodes.add(new TrackNode(new Vec3(p[0], 64.0D, p[1])));
+        }
+        TrackNetwork network = new TrackNetwork();
+        network.addSection(new TrackSection(1, nodes, true, null));
+        TransitSystem transit = lineOn(network, true);
+        double length = network.section(1).totalLength();
+
+        com.micatechnologies.minecraft.rcmc.physics.TrainManager trains =
+            new com.micatechnologies.minecraft.rcmc.physics.TrainManager();
+        Train running = trainAt(length * 0.2D);
+        trains.add(1, running);
+        transit.enterService(1, running, network, "Ring", TransitDrives.metro(15.0D, 0.05D), 1.0D);
+
+        // Three blocks past North, the line's first stop: nearest station either way is behind.
+        Train standing = trainAt(length * 0.125D + 3.0D);
+        trains.add(2, standing);
+        transit.beginTick(trains, network);
+        LineService joined = transit.enterService(2, standing, network, "Ring", TransitDrives.metro(15.0D, 0.05D));
+        assertEquals(1.0D, joined.facing(), "should join running forward, with train 1");
+
+        // Asked for, the other way is still available.
+        Train reversed = trainAt(length * 0.6D);
+        trains.add(3, reversed);
+        LineService asked = transit.enterService(3, reversed, network, "Ring", TransitDrives.metro(15.0D, 0.05D), -1.0D);
+        assertEquals(-1.0D, asked.facing(), "an explicit direction is honoured");
+    }
 }

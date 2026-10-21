@@ -278,6 +278,76 @@ final class TrackCommands {
         throw new CommandException("Unknown segment type '@" + name + "' - one of " + names);
     }
 
+    // ---- /rcmc section split, and switches at a point ----
+
+    /** {@code /rcmc section split <sectionId> <distance | near <x> <y> <z>>}. */
+    static void section(ICommandSender sender, World world, RcmcWorldState state, String[] args)
+        throws CommandException {
+        if (args.length < 4 || !"split".equalsIgnoreCase(args[1])) {
+            throw new CommandException("/rcmc section split <sectionId> <distance | near <x> <y> <z>>");
+        }
+        int sectionId = CommandBase.parseInt(args[2]);
+        double distance = distanceAlong(state, sectionId, args, 3);
+        try {
+            reply(sender, TextFormatting.GREEN,
+                com.micatechnologies.minecraft.rcmc.world.TrackSplits.splitAt(world, state, sectionId, distance).message);
+        }
+        catch (com.micatechnologies.minecraft.rcmc.world.TrackSplits.Refused refused) {
+            throw new CommandException(refused.getMessage());
+        }
+    }
+
+    /**
+     * {@code /rcmc switch create <throughSectionId> <distance | near <x> <y> <z>> <divergeSectionId>}:
+     * a switch at a point along a section, a circuit included, splitting it there.
+     */
+    static void switchAtPoint(ICommandSender sender, World world, RcmcWorldState state, String[] args)
+        throws CommandException {
+        int throughId = CommandBase.parseInt(args[2]);
+        int divergeArg = "near".equalsIgnoreCase(args[3]) ? 7 : 4;
+        if (args.length <= divergeArg) {
+            throw new CommandException("/rcmc switch create <throughSection> <distance | near <x> <y> <z>>"
+                + " <divergeSection>");
+        }
+        double distance = distanceAlong(state, throughId, args, 3);
+        int divergeId = CommandBase.parseInt(args[divergeArg]);
+        try {
+            reply(sender, TextFormatting.GREEN, com.micatechnologies.minecraft.rcmc.world.TrackSplits.switchAt(
+                world, state, throughId, distance, divergeId));
+        }
+        catch (com.micatechnologies.minecraft.rcmc.world.TrackSplits.Refused refused) {
+            throw new CommandException(refused.getMessage());
+        }
+    }
+
+    /** Whether {@code args} is the point form of switch create, rather than the ends form. */
+    static boolean isSwitchAtPoint(String[] args) {
+        return args.length >= 5 && ("near".equalsIgnoreCase(args[3]) || isNumber(args[3]));
+    }
+
+    /** {@code <distance>} or {@code near <x> <y> <z>} at {@code args[from]}, as a distance along the section. */
+    private static double distanceAlong(RcmcWorldState state, int sectionId, String[] args, int from)
+        throws CommandException {
+        TrackSection section = state.network().section(sectionId);
+        if (section == null) {
+            throw new CommandException("No section with id " + sectionId);
+        }
+        if (!"near".equalsIgnoreCase(args[from])) {
+            return CommandBase.parseDouble(args[from]);
+        }
+        if (from + 3 >= args.length) {
+            throw new CommandException("near needs <x> <y> <z>");
+        }
+        Vec3 point = new Vec3(CommandBase.parseDouble(args[from + 1]), CommandBase.parseDouble(args[from + 2]),
+            CommandBase.parseDouble(args[from + 3]));
+        TrackPicker.Hit hit = TrackPicker.pickOn(section, point);
+        if (hit == null || hit.distanceFromQuery > PICK_RADIUS) {
+            throw new CommandException("Section #" + sectionId + " does not pass within " + (int) PICK_RADIUS
+                + " blocks of " + fmt(point.x) + " " + fmt(point.y) + " " + fmt(point.z));
+        }
+        return hit.ref.distance();
+    }
+
     // ---- /rcmc build height ----
 
     static void buildHeight(ICommandSender sender, EntityPlayer player, TrackBuildSession session, String[] args)

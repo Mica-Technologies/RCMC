@@ -61,7 +61,7 @@ public class CommandRcmc extends CommandBase {
 
     @Override
     public String getUsage(ICommandSender sender) {
-        return "/rcmc <demo|metrodemo|train|clear|info|build|track|paint|style|rate|check|block|transfer|ride|station|line"
+        return "/rcmc <demo|metrodemo|train|clear|info|build|track|section|paint|style|rate|check|block|transfer|ride|station|line"
             + "|switch|platform|rmsection|undo|redo>";
     }
 
@@ -75,7 +75,7 @@ public class CommandRcmc extends CommandBase {
                                           String[] args, BlockPos targetPos) {
         if (args.length == 1) {
             return getListOfStringsMatchingLastWord(args, "demo", "metrodemo", "train", "clear",
-                "info", "build", "track", "paint", "style", "rate", "check", "trains", "block", "transfer", "ride", "station", "line", "switch",
+                "info", "build", "track", "section", "paint", "style", "rate", "check", "trains", "block", "transfer", "ride", "station", "line", "switch",
                 "platform", "rmsection", "undo", "redo");
         }
         if (args.length == 2 && "track".equalsIgnoreCase(args[0])) {
@@ -226,6 +226,9 @@ public class CommandRcmc extends CommandBase {
                 break;
             case "platform":
                 platform(sender, world, state, args);
+                break;
+            case "section":
+                TrackCommands.section(sender, world, state, args);
                 break;
             case "track":
                 TrackCommands.track(sender, world, state, args);
@@ -776,12 +779,18 @@ public class CommandRcmc extends CommandBase {
         if (args.length < 2) {
             throw new CommandException("/rcmc switch create <throatSection> <start|end>"
                 + " <branchSection> <start|end> <branchSection> <start|end> [...]"
+                + " | create <throughSection> <distance|near x y z> <divergeSection>"
                 + " | list | throw <throatSection> <start|end> [branchIndex]"
                 + " | remove <throatSection> <start|end>");
         }
         TrackNetwork network = state.network();
         switch (args[1].toLowerCase(java.util.Locale.ROOT)) {
             case "create": {
+                // At a point along a section, a circuit included: see TrackSplits.switchAt.
+                if (TrackCommands.isSwitchAtPoint(args)) {
+                    TrackCommands.switchAtPoint(sender, world, state, args);
+                    return;
+                }
                 // throat + at least two branches = 3 pairs after "switch create".
                 if (args.length < 8 || (args.length - 2) % 2 != 0) {
                     throw new CommandException("/rcmc switch create <throatSection> <start|end>"
@@ -1302,18 +1311,32 @@ public class CommandRcmc extends CommandBase {
             }
             case "start": {
                 if (args.length < 4) {
-                    throw new CommandException("/rcmc line start <name> <trainId> [cruiseSpeed]");
+                    throw new CommandException("/rcmc line start <name> <trainId> [cruiseSpeed] [forward|reverse]");
                 }
                 int trainId = parseInt(args[3]);
                 Train train = state.trains().train(trainId);
                 if (train == null) {
                     throw new CommandException("No train with id " + trainId);
                 }
-                double cruise = args.length > 4 ? parseDouble(args[4], 1.0D, 40.0D) : 15.0D;
+                // Optional, in either order: a cruise speed, and which way along the track to run.
+                double cruise = 15.0D;
+                double facing = 0.0D;
+                for (int i = 4; i < args.length; i++) {
+                    if ("forward".equalsIgnoreCase(args[i]) || "reverse".equalsIgnoreCase(args[i])) {
+                        facing = "forward".equalsIgnoreCase(args[i]) ? 1.0D : -1.0D;
+                    }
+                    else {
+                        cruise = parseDouble(args[i], 1.0D, 40.0D);
+                    }
+                }
                 try {
                     com.micatechnologies.minecraft.rcmc.physics.transit.LineService service =
                         transit.enterService(trainId, train, state.network(), args[2],
-                            metroController(cruise));
+                            metroController(cruise), facing);
+                    if (facing != 0.0D && service.facing() * facing < 0.0D) {
+                        reply(sender, TextFormatting.YELLOW, "No station of " + args[2] + " is reachable running "
+                            + (facing > 0.0D ? "forward" : "reverse") + " from here, so it runs the other way.");
+                    }
                     reply(sender, TextFormatting.GREEN, "Train #" + trainId + " in service on "
                         + service.line().name() + ", first stop "
                         + service.line().station(service.currentStopIndex()).name()

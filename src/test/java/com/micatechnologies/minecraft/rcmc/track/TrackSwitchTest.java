@@ -134,4 +134,47 @@ class TrackSwitchTest {
         // The trunk end is free again, so a plain join is legal now.
         network.connect(throat(), new TrackNetwork.SectionEnd(2, TrackNetwork.End.START));
     }
+
+    @Test
+    @DisplayName("a switch where a circuit was opened runs trains straight round, or onto the siding when thrown")
+    void switchOnAnOpenedCircuit() {
+        // What /rcmc switch create <circuit> <distance> <siding> builds: the circuit opened at the
+        // points, so its end meets its own start there, and that join replaced by a switch.
+        java.util.List<TrackNode> ring = new java.util.ArrayList<>();
+        for (int i = 0; i < 8; i++) {
+            double a = 2.0D * Math.PI * i / 8;
+            ring.add(node(Math.cos(a) * 100.0D, 64, Math.sin(a) * 100.0D));
+        }
+        TrackSection circuit = new TrackSection(1, ring, true, null);
+        SectionSurgery.Result opened = SectionSurgery.split(circuit, 0, 99);
+        TrackNetwork n = new TrackNetwork();
+        for (TrackSection section : opened.sections()) {
+            n.addSection(section);
+        }
+        // A siding leaving the points forward, slightly inside the loop.
+        n.addSection(new TrackSection(2, Arrays.asList(
+            node(100, 64, 0), node(98, 64, 30), node(90, 64, 60)), false, null));
+        TrackNetwork.SectionEnd end = new TrackNetwork.SectionEnd(1, TrackNetwork.End.END);
+        TrackNetwork.SectionEnd start = new TrackNetwork.SectionEnd(1, TrackNetwork.End.START);
+        n.addSwitch(end, Arrays.asList(start, new TrackNetwork.SectionEnd(2, TrackNetwork.End.START)));
+
+        TrackSection loop = n.section(1);
+        double total = loop.totalLength();
+        assertEquals(circuit.totalLength(), total, 1e-6, "opening the circuit must not change its length");
+
+        // Lined straight: forward through the points carries on round the loop...
+        TrackNetwork.Traversal on = n.advance(new TrackRef(1, total - 5.0D), 10.0D);
+        assertEquals(1, on.ref.sectionId());
+        assertEquals(5.0D, on.ref.distance(), 1e-6);
+        // ...and backward through them too, since the straight route is the selected one.
+        TrackNetwork.Traversal back = n.advance(new TrackRef(1, 5.0D), -10.0D);
+        assertEquals(1, back.ref.sectionId());
+        assertEquals(total - 5.0D, back.ref.distance(), 1e-6);
+
+        // Thrown: the same run forward goes onto the siding.
+        n.setSwitchSelection(end, 1);
+        TrackNetwork.Traversal diverged = n.advance(new TrackRef(1, total - 5.0D), 10.0D);
+        assertEquals(2, diverged.ref.sectionId());
+        assertEquals(5.0D, diverged.ref.distance(), 1e-6);
+    }
 }
