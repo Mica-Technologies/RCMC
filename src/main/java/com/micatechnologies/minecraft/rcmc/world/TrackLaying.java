@@ -130,7 +130,7 @@ public final class TrackLaying {
         // BOTH, always. Sending only the track leaves clients with a lift hill that renders as
         // plain rail — the element exists and works, but nothing draws a chain on it.
         int dimension = world.provider.getDimension();
-        RcmcNetwork.sendToAllIn(new PacketTrackSync(state.network()), dimension);
+        PacketTrackSync.broadcast(state.network(), dimension);
         RcmcNetwork.sendToAllIn(new PacketElementSync(state.elements()), dimension);
         return new Result(section, extending, created, platforms);
     }

@@ -249,7 +249,7 @@ public final class SectionSurgeries {
             service.refreshBerth();
         }
         state.markTrackDirty(world);
-        RcmcNetwork.sendToAllIn(new com.micatechnologies.minecraft.rcmc.net.PacketTrackSync(network), dimension);
+        com.micatechnologies.minecraft.rcmc.net.PacketTrackSync.broadcast(network, dimension);
         RcmcNetwork.sendToAllIn(new com.micatechnologies.minecraft.rcmc.net.PacketElementSync(state.elements()),
             dimension);
         RcmcNetwork.sendToAllIn(new PacketTransitSync(transit), dimension);

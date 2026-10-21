@@ -204,4 +204,42 @@ class TrackCodecTest {
         assertTrue(received.section(2) != held.section(2), "an edited section must not be reused");
         assertEquals(edited.section(2).nodes(), received.section(2).nodes(), "the edit must arrive");
     }
+
+    private static void assertSameNetwork(TrackNetwork expected, TrackNetwork actual) {
+        assertEquals(expected.sectionCount(), actual.sectionCount(), "section count");
+        for (TrackSection section : expected.sections()) {
+            TrackSection other = actual.section(section.id());
+            assertNotNull(other, "section " + section.id() + " missing");
+            assertEquals(section.nodes(), other.nodes(), "nodes of " + section.id());
+            assertEquals(section.isClosed(), other.isClosed(), "closed flag of " + section.id());
+            assertEquals(section.styleId(), other.styleId(), "style of " + section.id());
+        }
+        assertEquals(expected.joins(), actual.joins(), "joins");
+        assertEquals(expected.switches().size(), actual.switches().size(), "switches");
+    }
+
+    @Test
+    @DisplayName("a delta brings a client's network to the server's, keeps what did not change, and can be applied twice")
+    void deltaMatchesTheServer() {
+        TrackNetwork server = sampleNetwork();
+        TrackNetwork client = TrackCodec.readNetwork(TrackCodec.writeNetwork(server));
+        TrackSection untouched = client.section(1);
+
+        // The server edits section 2, removes 3 (and with it the join to 1), and adds 4 joined to 1.
+        server.replaceSection(server.section(2).withNode(0, node(31.0D, 65.0D, 0.0D, 0.0D, null)));
+        server.removeSection(3);
+        server.addSection(new TrackSection(4, Arrays.asList(
+            node(80.0D, 64.0D, 10.0D, 0, null), node(80.0D, 64.0D, 90.0D, 0, null)), false, "transit"));
+        server.connect(new TrackNetwork.SectionEnd(1, TrackNetwork.End.END),
+            new TrackNetwork.SectionEnd(4, TrackNetwork.End.START));
+
+        NBTTagCompound delta = TrackCodec.writeNetworkDelta(server, Arrays.asList(2, 4), Arrays.asList(3));
+        assertTrue(TrackCodec.isDelta(delta));
+        TrackCodec.applyDelta(delta, client);
+        assertSameNetwork(server, client);
+        assertTrue(client.section(1) == untouched, "a section the delta does not name keeps its instance");
+
+        TrackCodec.applyDelta(delta, client);
+        assertSameNetwork(server, client);
+    }
 }

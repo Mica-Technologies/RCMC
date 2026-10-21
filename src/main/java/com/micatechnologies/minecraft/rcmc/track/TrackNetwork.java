@@ -199,6 +199,16 @@ public final class TrackNetwork {
         extent = null;
     }
 
+    /**
+     * Drops every join and switch, keeping the sections: for a sync that is about to lay down the
+     * connections afresh, as they stand on the server.
+     */
+    public void clearConnections() {
+        joins.clear();
+        switches.clear();
+        branchToThroat.clear();
+    }
+
     /** Removes a section and every join and switch touching it. */
     public TrackSection removeSection(int sectionId) {
         TrackSection removed = sections.remove(sectionId);

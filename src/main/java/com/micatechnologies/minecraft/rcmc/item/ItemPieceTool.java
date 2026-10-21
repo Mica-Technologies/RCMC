@@ -183,7 +183,7 @@ public class ItemPieceTool extends Item {
         state.network().addSection(section);
         state.markTrackDirty(world);
         int dimension = world.provider.getDimension();
-        RcmcNetwork.sendToAllIn(new PacketTrackSync(state.network()), dimension);
+        PacketTrackSync.broadcast(state.network(), dimension);
         RcmcNetwork.sendToAllIn(new PacketElementSync(state.elements()), dimension);
 
         int pieces = session.pieceCount();

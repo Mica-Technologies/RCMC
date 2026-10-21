@@ -174,8 +174,7 @@ public final class TrackSplits {
 
     private static void broadcast(World world, RcmcWorldState state) {
         int dimension = world.provider.getDimension();
-        com.micatechnologies.minecraft.rcmc.net.RcmcNetwork.sendToAllIn(
-            new com.micatechnologies.minecraft.rcmc.net.PacketTrackSync(state.network()), dimension);
+        com.micatechnologies.minecraft.rcmc.net.PacketTrackSync.broadcast(state.network(), dimension);
     }
 
     /** A node within {@link #SNAP_TO_NODE} of {@code distance} that the section can be split at, or -1. */

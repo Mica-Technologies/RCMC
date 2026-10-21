@@ -380,7 +380,7 @@ public final class RcmcWorldState {
                 restoredBlocks);
 
             int dimension = world.provider.getDimension();
-            RcmcNetwork.sendToAllIn(new PacketTrackSync(restoredNetwork), dimension);
+            PacketTrackSync.broadcast(restoredNetwork, dimension);
             RcmcNetwork.sendToAllIn(new PacketElementSync(restoredElements), dimension);
             RcmcNetwork.sendToAllIn(new com.micatechnologies.minecraft.rcmc.net.PacketTransitSync(
                 restoredTransit), dimension);
@@ -527,6 +527,10 @@ public final class RcmcWorldState {
         public void onWorldUnload(WorldEvent.Unload event) {
             STATES.remove(event.getWorld());
             TrackSupports.invalidate(event.getWorld());
+            if (!event.getWorld().isRemote) {
+                // A world loaded again starts from a whole sync, not a delta against the old one.
+                PacketTrackSync.forget(event.getWorld().provider.getDimension());
+            }
         }
 
         /**

@@ -471,7 +471,7 @@ public class ItemTrackEditor extends Item {
 
     private static void broadcast(World world, RcmcWorldState state) {
         int dimension = world.provider.getDimension();
-        RcmcNetwork.sendToAllIn(new PacketTrackSync(state.network()), dimension);
+        PacketTrackSync.broadcast(state.network(), dimension);
         RcmcNetwork.sendToAllIn(new PacketElementSync(state.elements()), dimension);
     }
 

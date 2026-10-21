@@ -719,8 +719,7 @@ public class ItemTransitTool extends Item {
     }
 
     private static void syncTrack(World world, RcmcWorldState state) {
-        RcmcNetwork.sendToAllIn(new PacketTrackSync(state.network()),
-            world.provider.getDimension());
+        PacketTrackSync.broadcast(state.network(), world.provider.getDimension());
     }
 
     private static void say(EntityPlayer player, TextFormatting colour, String message) {

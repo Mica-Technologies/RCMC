@@ -13,14 +13,17 @@ import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 
 /**
- * Ships the whole track network to a client.
+ * Ships track to clients: the whole network to a player joining or changing dimension, and after
+ * that only what changed.
  *
- * <p>Sending everything rather than a delta is a deliberate first cut. Track changes only when a
- * builder edits it, which is rare compared to the tick rate, and correctness here matters more
- * than bytes: a client whose geometry disagrees with the server's does not merely render wrongly,
- * it <em>predicts</em> wrongly, because the same geometry feeds the physics on both sides. Deltas
- * are a Phase 2 optimisation once the editor exists to generate them, and they will need a
- * generation counter to detect a missed update.</p>
+ * <p>Correctness matters more than bytes here — a client whose geometry disagrees with the
+ * server's does not merely render wrongly, it <em>predicts</em> wrongly, because the same geometry
+ * feeds the physics on both sides. So a delta is built to be safe rather than small: it carries
+ * every section that is a different instance from the one last broadcast to that dimension
+ * ({@code TrackSection} is immutable, so a new instance is exactly an edited section), the ids of
+ * those since removed, and every join and switch, and applying it is idempotent. A player who
+ * joined after the last broadcast holds a full network at least that new, and a delta applied over
+ * it changes nothing it should not.</p>
  *
  * <p>Reuses {@link TrackCodec}, so the wire format and the save format cannot drift apart.</p>
  */
@@ -28,12 +31,65 @@ public class PacketTrackSync implements IMessage {
 
     private NBTTagCompound payload;
 
+    /**
+     * Server side: the section instances last broadcast to each dimension, what the next delta is
+     * worked out against. Synchronized because more than one world can tick at once with a mod
+     * that parallelises them, and the map is shared.
+     */
+    private static final java.util.Map<Integer, java.util.Map<Integer, TrackSection>> BROADCAST =
+        java.util.Collections.synchronizedMap(new java.util.HashMap<>());
+
     /** Required by the network system's reflective instantiation. */
     public PacketTrackSync() {
     }
 
+    /** The whole network: for a player joining, or arriving in a dimension. */
     public PacketTrackSync(TrackNetwork network) {
         this.payload = TrackCodec.writeNetwork(network);
+    }
+
+    private PacketTrackSync(NBTTagCompound payload) {
+        this.payload = payload;
+    }
+
+    /**
+     * Tells everyone in {@code dimension} what changed in {@code network} since the last broadcast
+     * to it. The first broadcast to a dimension, with nothing to compare against, is whole.
+     */
+    public static void broadcast(TrackNetwork network, int dimension) {
+        PacketTrackSync packet;
+        synchronized (BROADCAST) {
+            java.util.Map<Integer, TrackSection> last = BROADCAST.get(dimension);
+            java.util.Map<Integer, TrackSection> now = new java.util.HashMap<>();
+            for (TrackSection section : network.sections()) {
+                now.put(section.id(), section);
+            }
+            if (last == null) {
+                packet = new PacketTrackSync(network);
+            }
+            else {
+                java.util.List<Integer> changed = new java.util.ArrayList<>();
+                for (TrackSection section : network.sections()) {
+                    if (last.get(section.id()) != section) {
+                        changed.add(section.id());
+                    }
+                }
+                java.util.List<Integer> removed = new java.util.ArrayList<>();
+                for (int id : last.keySet()) {
+                    if (!now.containsKey(id)) {
+                        removed.add(id);
+                    }
+                }
+                packet = new PacketTrackSync(TrackCodec.writeNetworkDelta(network, changed, removed));
+            }
+            BROADCAST.put(dimension, now);
+        }
+        RcmcNetwork.sendToAllIn(packet, dimension);
+    }
+
+    /** Forgets {@code dimension}'s baseline, so the next broadcast to it is whole: its world unloading. */
+    public static void forget(int dimension) {
+        BROADCAST.remove(dimension);
     }
 
     @Override
@@ -65,6 +121,12 @@ public class PacketTrackSync implements IMessage {
                 return;
             }
             TrackNetwork local = state.network();
+            if (TrackCodec.isDelta(message.payload)) {
+                // Only what changed: every other section keeps its instance, and with it every
+                // mesh and cache built from it.
+                TrackCodec.applyDelta(message.payload, local);
+                return;
+            }
             // Unchanged sections keep their instance, and with it every mesh and cache built
             // from it; only what the edit touched is rebuilt.
             TrackNetwork incoming = TrackCodec.readNetwork(message.payload, local);

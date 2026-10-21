@@ -109,7 +109,7 @@ public final class TrackEdits {
             service.refreshBerth();
         }
         state.markTrackDirty(world);
-        RcmcNetwork.sendToAllIn(new com.micatechnologies.minecraft.rcmc.net.PacketTrackSync(state.network()),
+        com.micatechnologies.minecraft.rcmc.net.PacketTrackSync.broadcast(state.network(),
             dimension);
         RcmcNetwork.sendToAllIn(new com.micatechnologies.minecraft.rcmc.net.PacketElementSync(state.elements()),
             dimension);

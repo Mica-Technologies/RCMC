@@ -180,6 +180,88 @@ public final class TrackCodec {
                 ? held : readSection(sectionTag));
         }
 
+        readConnections(root, network);
+
+        network.reserveSectionIdsFrom(root.getInteger(KEY_NEXT_SECTION_ID));
+        return network;
+    }
+
+    /** Marks a payload as a delta; see {@link #writeNetworkDelta}. */
+    private static final String KEY_DELTA = "Delta";
+    private static final String KEY_REMOVED = "Removed";
+
+    /**
+     * A network payload carrying only the sections in {@code changed} and the ids in
+     * {@code removed}, with every join and switch, for a client that already holds the rest.
+     *
+     * <p>An edit used to send the whole network to every player and rebuild it on every client; a
+     * 23 km city line alone is ~180 KB of it, sent for an edit to some coaster across the map. Joins
+     * and switches are always sent whole: they are small, and a switch thrown is a change that no
+     * section records.</p>
+     *
+     * <p>Applying one is idempotent — an upsert per section, a removal per id, the connections
+     * replaced — so a player who received a full network more recent than the last delta's base is
+     * unharmed by it.</p>
+     */
+    public static NBTTagCompound writeNetworkDelta(TrackNetwork network, java.util.Collection<Integer> changed,
+                                                   java.util.Collection<Integer> removed) {
+        NBTTagCompound root = writeNetwork(network);
+        NBTTagList sectionList = new NBTTagList();
+        for (int id : changed) {
+            TrackSection section = network.section(id);
+            if (section != null) {
+                sectionList.appendTag(writeSection(section));
+            }
+        }
+        root.setTag(KEY_SECTIONS, sectionList);
+        int[] gone = new int[removed.size()];
+        int i = 0;
+        for (int id : removed) {
+            gone[i++] = id;
+        }
+        root.setIntArray(KEY_REMOVED, gone);
+        root.setBoolean(KEY_DELTA, true);
+        return root;
+    }
+
+    /** Whether {@code root} is a {@link #writeNetworkDelta} payload rather than a whole network. */
+    public static boolean isDelta(NBTTagCompound root) {
+        return root != null && root.getBoolean(KEY_DELTA);
+    }
+
+    /** Applies a {@link #writeNetworkDelta} payload to {@code network} in place. */
+    public static void applyDelta(NBTTagCompound root, TrackNetwork network) {
+        int version = root.getInteger(KEY_VERSION);
+        if (version > DATA_VERSION) {
+            throw new IllegalStateException("RCMC track data is version " + version
+                + " but this build only understands up to " + DATA_VERSION + ".");
+        }
+        for (int id : root.getIntArray(KEY_REMOVED)) {
+            network.removeSection(id);
+        }
+        // Connections are dropped first: replacing a section keeps its ends' joins, and the ones
+        // arriving are the whole truth anyway.
+        network.clearConnections();
+        NBTTagList sectionList = root.getTagList(KEY_SECTIONS, 10);
+        for (int i = 0; i < sectionList.tagCount(); i++) {
+            TrackSection section = readSection(sectionList.getCompoundTagAt(i));
+            if (network.hasSection(section.id())) {
+                network.replaceSection(section);
+            }
+            else {
+                network.addSection(section);
+            }
+        }
+        readConnections(root, network);
+        network.reserveSectionIdsFrom(root.getInteger(KEY_NEXT_SECTION_ID));
+    }
+
+    /**
+     * Reads a payload's joins and switches into {@code network}, which must already hold the
+     * sections they name. One naming a section that is not there is skipped rather than aborting
+     * the read — a section that failed to load must not take the rest of the park with it.
+     */
+    private static void readConnections(NBTTagCompound root, TrackNetwork network) {
         NBTTagList joinList = root.getTagList(KEY_JOINS, 10);
         for (int i = 0; i < joinList.tagCount(); i++) {
             NBTTagCompound join = joinList.getCompoundTagAt(i);
@@ -218,8 +300,6 @@ public final class TrackCodec {
             }
         }
 
-        network.reserveSectionIdsFrom(root.getInteger(KEY_NEXT_SECTION_ID));
-        return network;
     }
 
     public static NBTTagCompound writeSection(TrackSection section) {

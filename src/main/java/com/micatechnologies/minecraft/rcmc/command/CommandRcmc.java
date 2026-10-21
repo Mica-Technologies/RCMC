@@ -1717,7 +1717,7 @@ public class CommandRcmc extends CommandBase {
      */
     private static void broadcastTrack(World world, RcmcWorldState state) {
         int dimension = world.provider.getDimension();
-        RcmcNetwork.sendToAllIn(new PacketTrackSync(state.network()), dimension);
+        PacketTrackSync.broadcast(state.network(), dimension);
         // Ride hardware is drawn, so its spans travel with the geometry. Sending one without the
         // other leaves a lift hill rendering as plain track until the next full sync.
         RcmcNetwork.sendToAllIn(new PacketElementSync(state.elements()), dimension);
@@ -1994,7 +1994,7 @@ public class CommandRcmc extends CommandBase {
         state.network().removeSection(sectionId);
         state.markTrackDirty(world);
 
-        RcmcNetwork.sendToAllIn(new PacketTrackSync(state.network()), dimension);
+        PacketTrackSync.broadcast(state.network(), dimension);
         RcmcNetwork.sendToAllIn(new PacketElementSync(state.elements()), dimension);
 
         reply(sender, TextFormatting.GREEN, "Removed section #" + sectionId + " — "

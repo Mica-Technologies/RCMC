@@ -200,7 +200,7 @@ public final class TrackEditOperations {
                 // client mesh cache, which keys on section identity.
                 state.network().replaceSection(section.withStyle(next));
                 state.markTrackDirty(player.world);
-                RcmcNetwork.sendToAllIn(new com.micatechnologies.minecraft.rcmc.net.PacketTrackSync(state.network()),
+                com.micatechnologies.minecraft.rcmc.net.PacketTrackSync.broadcast(state.network(),
                     player.world.provider.getDimension());
                 message = "Style: " + TrackStyleIds.label(next) + ".";
                 break;
