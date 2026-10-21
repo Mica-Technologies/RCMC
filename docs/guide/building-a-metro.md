@@ -52,9 +52,31 @@ are covered in full in the [track styles reference](../reference/track-styles.md
 | `transit-catenary` | Masts every 24 blocks, sagging messenger with droppers, contact wire |
 | `transit-portal` | Two-legged gantries carrying the same wires — for multi-track alignments |
 | `transit-tunnel` | Rigid conductor bar, no sag, clear of the car roof |
+| `transit-third-rail` | A conductor rail beside the track, nothing overhead; moves away from platforms |
 
 Style is per section, purely visual, and does not touch the spline or the physics. Electrification
 is scenery: there is **no "requires power" mechanic**, and that stays the promise.
+
+### Laying a long line by coordinates
+
+A city line drawn ahead of time — in a spreadsheet, a script, or another tool — can be laid straight
+from its coordinates instead of clicked out:
+
+```
+/rcmc track lay transit-third-rail circuit file blue-line
+```
+
+reads one node per line from `config/rcmc/polylines/blue-line.txt` and builds the whole section in
+one go, nodes exactly where the file puts them, off the block grid where the curves need it.
+Stations can then be placed by distance along it, with no one standing there:
+
+```
+/rcmc station Harbour at 13 4210.5 right
+/rcmc station platform Harbour add at 13 4890 2
+```
+
+`/rcmc track nodes <sectionId> file <name>` writes a section back out in the same format. See
+[`/rcmc track`](../reference/commands.md#rcmc-track) for the format and the rest of the options.
 
 ---
 

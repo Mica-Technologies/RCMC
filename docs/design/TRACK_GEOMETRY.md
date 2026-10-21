@@ -150,7 +150,7 @@ This page covers one section's geometry. The layers above it all exist:
 - **Track network** — `TrackNetwork` joins sections end to end and owns switches: a throat
   leading to a choice of branches, with selection state. `TrackWalk` walks the graph read-only for
   routing.
-- **Track styles** — the coaster look and four transit styles (`TrackStyleIds`, drawn by the
+- **Track styles** — the coaster look and five transit styles (`TrackStyleIds`, drawn by the
   client-only `TrackStyles`), per section and purely visual; see
   [track styles](../reference/track-styles.md). Support columns are generated under the track,
   and are solid.
@@ -159,5 +159,11 @@ This page covers one section's geometry. The layers above it all exist:
 - **Persistence** — sections are stored in the world's saved data (`TrackCodec`), not as blocks,
   so a train keeps running through unloaded chunks. Edits are undoable.
 
-What genuinely remains is presentation: sections more than 256 blocks away are skipped, but there
-is **no level of detail**, so every section within that range is drawn in full detail.
+Drawing scales with the track near the camera, not with the size of the park or the length of a
+section. Each section's mesh is split into 32-block cells, each culled on its own by distance (the
+client's render distance, 64 to 512 blocks) and by frustum, and each compiled once into a GPU buffer
+that is recompiled only when its light changes. Culling whole sections instead was fine for coasters
+and drew every quad of a 23 km city line every frame.
+
+What genuinely remains is presentation: there is **no level of detail**, so every cell in range is
+drawn in full detail.

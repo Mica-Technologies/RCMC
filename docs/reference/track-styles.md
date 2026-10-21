@@ -4,7 +4,7 @@ A style decides what a section **looks** like. It never touches the spline, the 
 the physics — a train runs identically on every style.
 
 ```
-/rcmc style <sectionId> <style> [wireHeight]
+/rcmc style <sectionId> <style> [wireHeight | left|right]
 ```
 
 or cycle through the transit looks by pointing at a section with the
@@ -22,6 +22,7 @@ one park. An unrecognised style id degrades to the coaster look rather than fail
 | `transit-catenary` | Wide (2.8) | Yes | Masts, messenger and contact wire |
 | `transit-portal` | Wide (2.8) | Yes | Two-legged gantries carrying the same wires |
 | `transit-tunnel` | Wide (2.8) | Yes | Rigid conductor bar, no sag |
+| `transit-third-rail` | Wide (2.8) | Yes | None: a conductor rail beside the track |
 
 ### `coaster`
 
@@ -60,6 +61,33 @@ actually uses.
 A **rigid conductor bar** with clamp stubs, no sag, hung at 7.0 blocks by default. Rigid overhead
 conductor rail is what real tunnels use precisely because it needs no sag clearance.
 
+### `transit-third-rail`
+
+```
+/rcmc style 13 transit-third-rail
+/rcmc style 13 transit-third-rail left
+```
+
+The subway look: nothing overhead, and a **conductor rail beside the running rails**, 2.1 blocks out
+from the centreline with its top just above railhead height, on insulator chairs every two blocks
+under a timber cover board. It suits low tunnels, which have no room for a wire over the train.
+
+- **Side.** The rail runs on the **right**, looking along the section in the direction its distances
+  increase, unless the style says `left` (stored as `transit-third-rail-left`).
+- **Platforms.** At a berth whose doors open on one side, the rail moves to the other side, so it is
+  never at the platform edge. It changes sides 100 blocks before the stop point and back 100 blocks
+  after it, which covers a long train standing at the berth from either direction. A berth with doors
+  on both sides leaves the rail where it is.
+- **Breaks.** Every change of side leaves a three-block gap between the ramped ends of the two
+  lengths, as real third rail does. The rail also stops 8 blocks short of any switch a section end
+  belongs to, clear of the points.
+- **Trains.** Metro cars on a third-rail section carry collector shoes on both sides of each truck,
+  riding on the rail's top, and no pantograph. Both sides, because the rail swaps sides at stations;
+  real third-rail stock is built the same way.
+
+The rail follows the stations and switches as they change: adding a berth moves it without the track
+being edited.
+
 ## Wire height
 
 ```
@@ -85,8 +113,8 @@ The **pantograph derives its reach from the wire**, so it stretches to meet 7 bl
 than carrying its own constant. That retires a "one measurement in two places" hazard that had
 already produced one stale comment in the source.
 
-`transit` carries no wire, so it takes no height — passing one is an error rather than a silent
-no-op.
+`transit` and `transit-third-rail` carry no wire, so they take no height. Passing one to `transit`
+is an error rather than a silent no-op; `transit-third-rail` takes `left` or `right` in its place.
 
 ## Colour
 
@@ -109,13 +137,14 @@ palettes are why RCT parks look coherent instead of garish.
 !!! info "Recolouring rebuilds the section mesh"
 
     Colour is currently resolved once per mesh build rather than per draw, so a repaint costs the
-    same as any other edit. Fine for occasional painting; it would need revisiting for a live
+    same as any other edit. The rebuild runs in the background and the old mesh keeps drawing until
+    it is done, so even a long line repaints without a stall. It would need revisiting for a live
     colour picker.
 
 ## Not yet built
 
-- **Third rail** — a `transit-thirdrail` look with a conductor rail on insulators beside the track
-  at railhead height, and no overhead anything.
 - **Per-node style overrides** within a section.
+- **Explicit third-rail side ranges.** The rail's side away from platforms is worked out from the
+  berths; there is no way yet to set it by hand over a stretch of a section.
 - **A "requires power" mechanic.** Electrification is scenery and stays that way — default-off is
   the promise.

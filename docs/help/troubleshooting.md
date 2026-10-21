@@ -48,10 +48,13 @@ player's game predicts it, so trains are smooth even at speed.
 
 **Does a big park slow the game down?**
 It's built to cost very little. A train's physics is one number moved along its track, so running
-trains is cheap, and an empty server does no work for them at all. Track is drawn from a cached model,
-rebuilt only when you edit it, and track more than 256 blocks away isn't drawn. Very large parks do draw
-a lot of track up close, since lower detail at a distance isn't in yet. A full performance test of big
-parks is still to come, so reports of slowdowns are welcome.
+trains is cheap, and an empty server does no work for them at all. Track is drawn from cached models,
+in pieces, and only the pieces within your render distance and in view are drawn, so a 23 km metro
+line costs no more to look at than the stretch of it you can see. Tested with that line and 58
+six-car metro trains in service: the server held 20 TPS with RCMC using about 2–3 ms of each tick,
+and the client stayed well above 60 FPS at a 32-chunk render distance. Very large parks do draw
+a lot of track up close, since lower detail at a distance isn't in yet, so reports of slowdowns are
+still welcome.
 
 **Why only Minecraft 1.12.2?**
 It's a deliberate choice: one version, done properly. RCMC does unusual things (its own track rendering,
@@ -74,7 +77,7 @@ These are known and listed so they read as gaps, not bugs:
 - **No door markers on platforms.** The platform knows where a train stops, but nothing marks where each
   door will be.
 - **One metro livery.** Metro trains are one design, repainted with `/rcmc paint`.
-- **No distance detail for track.** Everything within 256 blocks is drawn in full.
+- **No distance detail for track.** Everything within your render distance is drawn in full.
 
 ## Reporting a problem
 

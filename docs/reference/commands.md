@@ -95,6 +95,7 @@ Settings for the in-hand track builder. Operates on *your* build session.
 ```
 /rcmc build status                  pending node count, current bank, circuit mode
 /rcmc build bank <degrees>          bank applied to nodes placed from now on (-180 to 180)
+/rcmc build height <blocks>         height of the next nodes above the clicked block's top (-32 to 64)
 /rcmc build circuit [true|false]    close the next section into a circuit (needs 3+ nodes)
 /rcmc build piece <name> [value]    select a piece for the piece tool, and set its parameter
 /rcmc build cancel                  discard pending nodes and reset bank/circuit mode
@@ -107,15 +108,61 @@ value: `/rcmc build piece immelmann 26`. The pieces are `straight`, `slope`, `cu
 `immelmann`, `dive_loop` and `airtime_hill`, and tab completion lists them.
 Leave the value out to keep the piece's current setting.
 
+`/rcmc build height` sets the same offset that scrolling with the track tool adjusts, but to any
+value, fractions included — a 5% grade or a vertical curve wants heights the scroll steps cannot
+reach. Like the scrolled offset, it lasts until the section is committed.
+
+### `/rcmc track`
+
+Lays track from coordinates rather than clicks, for building from a plan or a script.
+
+```
+/rcmc track lay <style> [open|circuit] <nodes>                  build a new section through these nodes
+/rcmc track lay <style> append <sectionId> [close] <nodes>      continue a section from its far end
+/rcmc track nodes <sectionId> [file <name>]                     list a section's nodes, or write them to a file
+```
+
+`<nodes>` is either the nodes themselves or `file <name>`, which reads
+`config/rcmc/polylines/<name>.txt`. Each node is `x,y,z`, or `x,y,z,bank` with the bank in degrees,
+and nodes are separated by `;` or by line breaks. In a file, `#` starts a comment.
+
+```
+/rcmc track lay transit circuit 55.5,47,-2935.5; 55.5,47,-2895.5; 63.5,47,-2895.5; 63.5,47,-2935.5
+/rcmc track lay transit-third-rail open file blue-line-north
+```
+
+- **Coordinates are used exactly.** The track tool snaps a click to the block centre and the block
+  top; these do not, so curves, reverse curves and turnouts can put nodes off the grid. The height is
+  the railhead's.
+- **Segment types** follow a node as `@type`: `55.5,47,-2600@station`. As with the track tool's
+  selected type, it describes the track *arriving* at that node and carries on until the next `@`;
+  `@plain` ends a run. The types are `plain`, `lift`, `launch`, `launch_backward`, `brake`,
+  `block_brake`, `tyres`, `transfer` and `station`.
+- **The style** is any of the [track styles](track-styles.md), with a suffix if it takes one
+  (`transit-catenary-12`, `transit-third-rail-left`).
+- **`append`** continues an open section from its end, so nothing already on it moves. `close`
+  makes the result a circuit. A different transit style given here starts from the first new node.
+- A section laid this way is built exactly as the track tool builds one: same hardware for segment
+  types, same station platform, same validator report, and it can be undone.
+- A chat line holds 256 characters. Longer alignments go in a file, or through the server console or
+  a command block, which have no such limit.
+
+`/rcmc track nodes` prints each node with its distance along the section. With `file <name>` it
+writes them to `config/rcmc/polylines/<name>.txt` in the format `lay` reads, so what you export lays
+back as the same section, coordinate for coordinate.
+
 ### `/rcmc style`
 
 ```
 /rcmc style <sectionId> <coaster|transit|transit-catenary|transit-portal|transit-tunnel> [wireHeight]
+/rcmc style <sectionId> transit-third-rail [left|right]
 ```
 
 Restyles one section. Purely visual — the spline and the physics are untouched. `wireHeight` is
 7–15 blocks and applies only to the styles that carry a wire; it rides on the style id itself as a
-suffix (`transit-catenary-12`). See [track styles](track-styles.md).
+suffix (`transit-catenary-12`). A third rail takes a side instead, `right` by default: the side it
+runs on away from platforms, stored as `transit-third-rail-left` for the left. See
+[track styles](track-styles.md).
 
 ### `/rcmc paint`
 
@@ -274,20 +321,30 @@ retrieved from the ride's operator panel — see
 ### `/rcmc station`
 
 ```
-/rcmc station <name>                                  create or move a station at the track nearest where you stand
+/rcmc station <name> [<point>] [left|right|both|auto]     create or move a station
 /rcmc station list
 /rcmc station remove <name>
 /rcmc station doors <name> [platform] <left|right|both|auto>    which side the doors open
-/rcmc station platform <name> add [label]             add a berth at the track you are standing by
+/rcmc station platform <name> add [<point>] [label]      add a berth
 /rcmc station platform <name> remove <label|number>
 /rcmc station platform <name> list
 /rcmc station platform <name> label <label|number> <new label>    rename a berth; 'none' clears it
 ```
 
-`/rcmc station <name>` and `platform … add` both use the point on the track **nearest where you are
-standing**, within 16 blocks — not where you are looking — so stand beside the track at the spot a
-train's lead car should stop. Running `/rcmc station <name>` again for a station that already exists
-moves it to a single new berth: any extra platforms it had are dropped, and must be added again.
+Where a station or berth goes is the train's lead car's stopping point, given as `<point>`:
+
+| `<point>` | Means |
+|---|---|
+| *(nothing)* | the point on the track **nearest where you are standing**, within 16 blocks — not where you are looking |
+| `at <sectionId> <distance>` | exactly that distance along that section, as `/rcmc station list` and `/rcmc track nodes` report them |
+| `<sectionId> <distance>` | the same, without the `at` |
+| `near <x> <y> <z>` | the point on the track nearest that position, within 16 blocks |
+
+The last three need no player, so a script or the server console can set up a whole line without
+anyone moving: `/rcmc station Harbour at 13 4210.5 right`. For a station, the door side can follow;
+`auto`, the default, works it out from the decking beside the track. Running `/rcmc station <name>`
+again for a station that already exists moves it to a single new berth: any extra platforms it had
+are dropped, and must be added again.
 
 **Platforms** are the berths at a station — one per track through it. A station has one by default,
 which is every ordinary single-track stop. An **island platform** has a running line down each side,
