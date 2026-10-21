@@ -38,11 +38,16 @@ public final class TrackValidator {
     /** Below this, a node-to-node distance is treated as an exact duplicate, not just "close". */
     private static final double COINCIDENT_EPSILON = 1.0e-6D;
 
-    /** Upper bound on samples for the continuous sweep, so a pathological length can't run away. */
-    private static final int MAX_CONTINUOUS_SAMPLES = 20_000;
+    /**
+     * Upper bound on samples for the continuous sweep, so a pathological length cannot run away.
+     * Past it the spacing widens to cover the whole section. It used to stop sampling at the cap
+     * and jump to the end instead, so a 23 km circuit was checked for its first 10 km only, and
+     * the jump from there to the start (heading the other way) read as a 180-degree cusp.
+     */
+    private static final int MAX_CONTINUOUS_SAMPLES = 200_000;
 
-    /** Upper bound on samples for the O(n^2) self-intersection sweep — see {@link #checkSelfIntersection}. */
-    private static final int MAX_SELF_INTERSECTION_SAMPLES = 4_000;
+    /** Upper bound on samples for the self-intersection sweep, which widens its spacing past it. */
+    private static final int MAX_SELF_INTERSECTION_SAMPLES = 200_000;
 
     private final ValidationLimits limits;
 
@@ -100,7 +105,8 @@ public final class TrackValidator {
      */
     private ContinuousSamples sampleContinuous(TrackSection section) {
         double total = section.totalLength();
-        double spacing = Math.max(limits.sampleSpacingBlocks(), 1.0e-6D);
+        double spacing = Math.max(limits.sampleSpacingBlocks(), total / (MAX_CONTINUOUS_SAMPLES - 1));
+        spacing = Math.max(spacing, 1.0e-6D);
         int count = (int) Math.min(MAX_CONTINUOUS_SAMPLES, Math.ceil(total / spacing) + 1.0D);
         count = Math.max(count, 2);
 
@@ -229,20 +235,16 @@ public final class TrackValidator {
      * near the start and one near the end of the same lap are correctly treated as adjacent, not
      * as a false-positive self-intersection.</p>
      *
-     * <p><b>Complexity: naive O(n^2) over sampled points, and that is a deliberate, acceptable
-     * choice here.</b> This runs once when a section is built or edited, not per tick, and
-     * realistic circuit lengths (a few hundred to a couple thousand blocks) keep the sample
-     * count — and so the comparison count — comfortably fast; {@link #MAX_SELF_INTERSECTION_SAMPLES}
-     * exists only to put a hard ceiling on pathological input. A real implementation for very
-     * long circuits would bucket samples into a spatial hash keyed by rounded position (cell size
-     * ~ the clearance distance), so each sample only compares against the handful of samples in
-     * its own cell and the 26 neighbouring cells instead of every other sample — turning this
-     * into an amortized O(n) scan. That is not worth the added complexity for a design-time
-     * warning check at the lengths this mod's tracks actually reach.</p>
+     * <p><b>Complexity: linear.</b> Samples are bucketed in a grid with cells the clearance wide,
+     * and each compares only against the 27 cells around it. This was an all-pairs sweep, capped
+     * at 4,000 samples on the reasoning that tracks are a few thousand blocks long; a city metro
+     * line is twenty kilometres, so it was both slow and checked only its first few.</p>
      */
     private void checkSelfIntersection(TrackSection section, List<TrackIssue> out) {
         double total = section.totalLength();
-        double spacing = Math.max(limits.selfIntersectionSampleSpacingBlocks(), 1.0e-6D);
+        double spacing = Math.max(limits.selfIntersectionSampleSpacingBlocks(),
+            total / (MAX_SELF_INTERSECTION_SAMPLES - 1));
+        spacing = Math.max(spacing, 1.0e-6D);
         int n = (int) Math.min(MAX_SELF_INTERSECTION_SAMPLES, Math.ceil(total / spacing) + 1.0D);
         n = Math.max(n, 2);
         boolean closed = section.isClosed();
@@ -266,12 +268,33 @@ public final class TrackValidator {
         double minArcSeparation = limits.selfIntersectionMinArcSeparationBlocks();
         double clearance = limits.selfIntersectionClearanceBlocks();
 
+        // Only a partner closer than `clearance` can be reported, and with cells at least that
+        // wide every such partner lies in the 27 cells around a sample. So comparing against those
+        // alone finds exactly the pairs the all-pairs sweep did, in time linear in the length:
+        // all pairs was a quarter-second per commit at 4,000 samples and could not go higher.
+        double cell = Math.max(clearance, 1.0e-3D);
+        java.util.Map<Long, java.util.List<Integer>> grid = new java.util.HashMap<>();
+        for (int i = 0; i < n; i++) {
+            grid.computeIfAbsent(cellKey(position[i], cell, 0, 0, 0), k -> new java.util.ArrayList<>()).add(i);
+        }
+
         double[] bestDistance = new double[n];
         int[] bestPartner = new int[n];
         for (int i = 0; i < n; i++) {
             double best = Double.POSITIVE_INFINITY;
             int bestJ = -1;
-            for (int j = 0; j < n; j++) {
+            java.util.List<Integer> near = new java.util.ArrayList<>();
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dy = -1; dy <= 1; dy++) {
+                    for (int dz = -1; dz <= 1; dz++) {
+                        java.util.List<Integer> members = grid.get(cellKey(position[i], cell, dx, dy, dz));
+                        if (members != null) {
+                            near.addAll(members);
+                        }
+                    }
+                }
+            }
+            for (int j : near) {
                 if (i == j) {
                     continue;
                 }
@@ -320,6 +343,14 @@ public final class TrackValidator {
                 i++;
             }
         }
+    }
+
+    /** The grid cell of {@code p}, offset by whole cells; 21 bits an axis. */
+    private static long cellKey(Vec3 p, double cell, int dx, int dy, int dz) {
+        long x = ((long) Math.floor(p.x / cell) + dx) & 0x1FFFFFL;
+        long y = ((long) Math.floor(p.y / cell) + dy) & 0x1FFFFFL;
+        long z = ((long) Math.floor(p.z / cell) + dz) & 0x1FFFFFL;
+        return (x << 42) | (y << 21) | z;
     }
 
     // ---- shared run-merging ----------------------------------------------------------------

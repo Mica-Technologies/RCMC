@@ -198,4 +198,53 @@ class TrackValidatorTest {
         assertTrue(withCode(issues, "TRACK_SELF_INTERSECTION").isEmpty(),
             "closed ring falsely flagged its own seam: " + issues);
     }
+
+    /** Nodes along a straight line from (x0,z0) to (x1,z1), every ~250 blocks, excluding the start. */
+    private static void run(List<TrackNode> nodes, double x0, double z0, double x1, double z1) {
+        double length = Math.hypot(x1 - x0, z1 - z0);
+        int steps = Math.max(1, (int) Math.ceil(length / 250.0D));
+        for (int i = 1; i <= steps; i++) {
+            double t = i / (double) steps;
+            nodes.add(node(x0 + (x1 - x0) * t, 64.0D, z0 + (z1 - z0) * t));
+        }
+    }
+
+    @Test
+    @DisplayName("a 25 km circuit validates clean: the whole length is checked, with no phantom cusp at the sample cap")
+    void cityScaleCircuitHasNoPhantomErrors() {
+        // A capped sweep stopped at 10 km and jumped to the end; on a circuit the end heads the
+        // other way, which read as a 180-degree cusp — an ERROR on perfectly good track.
+        List<TrackNode> ring = new ArrayList<>();
+        double radius = 4000.0D;
+        int count = 630;
+        for (int i = 0; i < count; i++) {
+            double a = 2.0D * Math.PI * i / count;
+            ring.add(node(Math.cos(a) * radius, 47.0D, Math.sin(a) * radius));
+        }
+        List<TrackIssue> errors = new ArrayList<>();
+        for (TrackIssue issue : issuesOf(new TrackSection(1, ring, true, "transit"))) {
+            if (issue.severity() == TrackIssue.Severity.ERROR) {
+                errors.add(issue);
+            }
+        }
+        assertTrue(errors.isEmpty(), "unexpected errors: " + errors);
+    }
+
+    @Test
+    @DisplayName("track crossing itself 19 km along a section is still reported")
+    void selfIntersectionFarAlongIsFound() {
+        // East 10 km, up 100, back west 9 km, then south across the first leg at x = 1000.
+        // The all-pairs sweep stopped sampling after 4,000 samples and never saw the second pass.
+        List<TrackNode> nodes = new ArrayList<>();
+        nodes.add(node(0, 64, 0));
+        run(nodes, 0, 0, 10000, 0);
+        run(nodes, 10000, 0, 10000, 100);
+        run(nodes, 10000, 100, 1000, 100);
+        run(nodes, 1000, 100, 1000, -100);
+        TrackSection section = new TrackSection(1, nodes, false, null);
+        assertTrue(section.totalLength() > 19000.0D);
+
+        List<TrackIssue> crossings = withCode(issuesOf(section), "TRACK_SELF_INTERSECTION");
+        assertFalse(crossings.isEmpty(), "the crossing at x = 1000 was not reported");
+    }
 }
