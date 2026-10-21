@@ -67,10 +67,16 @@ public final class TrackMeshBuilder {
     private static final double MAX_RING_ANGLE = Math.toRadians(5.0D);
 
     /**
-     * Safety bound on ring count, mirroring {@code TrackSection.MAX_FRAME_SAMPLES}: protects
-     * against runaway tessellation on a degenerate section rather than hanging the client.
+     * Loop-iteration allowance per ring the section could need at {@link #MIN_RING_SPACING}: one
+     * accepted step plus the halvings that can precede it (3 down to 0.25 is four).
+     *
+     * <p>The bound scales with length on purpose. It used to be a flat 8000 iterations, which a
+     * 23 km city line exhausts on its straights alone — and the loop then appended the end ring
+     * anyway, so one quad row spanned the rest of the circuit as a straight chord across the
+     * map. Every step makes at least {@code MIN_RING_SPACING} of progress, so this bound is never
+     * reached by a real section; it is there only so a NaN length cannot spin forever.</p>
      */
-    private static final int MAX_RINGS = 8000;
+    private static final int ITERATIONS_PER_MIN_RING = 6;
 
     // ---- cross-section, in blocks, in the frame's local (right, up) plane ----
     // Gauge, tie length, rail and spine sizes all come from the section's TrackStyles; only the
@@ -408,8 +414,9 @@ public final class TrackMeshBuilder {
         double step = MAX_RING_SPACING;
         Vec3 tangent = section.tangentAtDistance(0.0D);
         int guard = 0;
+        long maxIterations = 16L + ITERATIONS_PER_MIN_RING * (long) Math.ceil(total / MIN_RING_SPACING);
 
-        while (s < total - 1.0e-6D && guard++ < MAX_RINGS) {
+        while (s < total - 1.0e-6D && guard++ < maxIterations) {
             double trial = Math.min(step, total - s);
             Vec3 nextTangent = section.tangentAtDistance(s + trial);
             double angle = angleBetween(tangent, nextTangent);

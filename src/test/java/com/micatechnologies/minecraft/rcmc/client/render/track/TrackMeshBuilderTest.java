@@ -79,6 +79,34 @@ class TrackMeshBuilderTest {
         }
     }
 
+    /** A closed circle of {@code radius} with a node every ~40 blocks, like a laid metro loop. */
+    static TrackSection cityLoop(double radius) {
+        int count = (int) Math.ceil(2.0D * Math.PI * radius / 40.0D);
+        List<TrackNode> nodes = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            double a = 2.0D * Math.PI * i / count;
+            nodes.add(node(Math.cos(a) * radius, 47.0D, Math.sin(a) * radius));
+        }
+        return new TrackSection(13, nodes, true, null);
+    }
+
+    @Test
+    @DisplayName("a 25 km city loop is tessellated all the way round, with no ring gap wider than a straight's")
+    void longSectionIsTessellatedToTheEnd() {
+        // Issue #8's line was 22.9 km. A flat cap on ring count used to stop tessellating ~20 km in
+        // and append the end ring anyway, so one quad row cut straight across the map to close.
+        TrackSection loop = cityLoop(4000.0D);
+        double[] rings = TrackMeshBuilder.ringDistances(loop, loop.totalLength());
+
+        assertEquals(loop.totalLength(), rings[rings.length - 1], 1e-6);
+        double widest = 0.0D;
+        for (int i = 1; i < rings.length; i++) {
+            widest = Math.max(widest, rings[i] - rings[i - 1]);
+        }
+        assertTrue(widest <= 3.0D + 1e-6,
+            "no gap between rings may exceed the straight-track spacing; widest was " + widest);
+    }
+
     @Test
     @DisplayName("a degenerately short section still tessellates without looping or throwing")
     void shortSectionDoesNotHang() {
