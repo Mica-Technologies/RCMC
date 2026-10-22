@@ -1,5 +1,6 @@
 package com.micatechnologies.minecraft.rcmc.sound;
 
+import com.micatechnologies.minecraft.rcmc.entity.EntityCoasterCar;
 import com.micatechnologies.minecraft.rcmc.net.PacketStationAnnounce;
 import com.micatechnologies.minecraft.rcmc.net.RcmcNetwork;
 import com.micatechnologies.minecraft.rcmc.physics.Train;
@@ -36,7 +37,7 @@ import net.minecraft.world.World;
  * untouched.</p>
  *
  * <p>Server-side only. Sound <em>effects</em> (the chimes, door close, brake release) are emitted at
- * the train's lead car through {@code World.playSound(null, ...)}, which broadcasts to every client
+ * every car of the train through {@code World.playSound(null, ...)}, which broadcasts to every client
  * in range and lets each one attenuate it — the sounds are mono precisely so that works. Spoken
  * <em>announcements</em> ("Next stop: …", "This is …") go the same way the platform speaker sends
  * its calls: a {@link PacketStationAnnounce} of text to each nearby player, which the client turns
@@ -72,11 +73,17 @@ public final class TransitSounds {
 
     private static final float VOLUME = 0.7F;
 
-    /** trainId -> the phase it was in last tick, so transitions can be spotted. */
-    private final Map<Integer, TransitStopController.Phase> lastPhase = new HashMap<>();
-
-    /** trainId -> whether its warning chime has already played for the stop it is at. */
-    private final Map<Integer, Boolean> chimed = new HashMap<>();
+    /**
+     * trainId -> what has been played for the stop visit it is at, or last berthed at.
+     *
+     * <p><b>State, not transitions.</b> These used to fire only on an exact phase edge — door close
+     * on entering DOORS_CLOSING, the arrival call only on APPROACHING to DOORS_OPENING — and any
+     * other route through the cycle skipped them: a service rebuilt after a restart or chunk reload
+     * has no previous phase, and a hold or turnback reaches the berth another way. Each event is now
+     * owed once per visit, the visit being the controller's {@code stopsServed} count, and plays on
+     * the first tick it is seen to be owed.</p>
+     */
+    private final Map<Integer, Visit> visits = new HashMap<>();
 
     /**
      * trainId -> the stop index its "Entering …" call has already been made for.
@@ -116,64 +123,61 @@ public final class TransitSounds {
             LineService service = entry.getValue();
             TransitStopController controller = service.controller();
             TransitStopController.Phase phase = controller.phase();
-            TransitStopController.Phase previous = lastPhase.put(trainId, phase);
-
             Train train = trains.train(trainId);
             if (train == null) {
                 continue;
             }
 
-            if (phase == TransitStopController.Phase.BOARDING) {
-                // Chime once, timed so it finishes as the doors begin to move.
-                if (!Boolean.TRUE.equals(chimed.get(trainId))
-                    && controller.phaseTicksRemaining() <= CHIME_LEAD_TICKS) {
-                    play(world, train, network, RcmcSounds.METRO_DOOR_CHIME);
-                    chimed.put(trainId, Boolean.TRUE);
+            int visitIndex = controller.stopsServed();
+            Visit visit = visits.get(trainId);
+            if (phase != TransitStopController.Phase.APPROACHING) {
+                if (visit == null || visit.index != visitIndex) {
+                    visit = new Visit(visitIndex);
+                    visits.put(trainId, visit);
                 }
-            } else if (phase != TransitStopController.Phase.DOORS_CLOSING) {
-                chimed.remove(trainId);
-            }
-
-            announceEntering(world, transit, trainId, service, train, network);
-
-            if (previous == null || previous == phase) {
-                continue;
-            }
-            if (phase == TransitStopController.Phase.DOORS_OPENING
-                && previous == TransitStopController.Phase.APPROACHING) {
-                // Berthing: the "Entering …" call has served its purpose, and clearing it here is
-                // what rearms it for the next station.
-                enteringAnnounced.remove(trainId);
-                // Arrived: the doors are starting to open. Ding now, then say "This is <here>".
-                // currentStopIndex is still the station being berthed at.
-                play(world, train, network, RcmcSounds.METRO_ANNOUNCE_CHIME);
-                String arrival =
-                    TransitSignText.arrivalAnnouncement(stopName(service, service.currentStopIndex()));
-                TtsTrace.stage("CHIME", "train#" + trainId, "", arrival);
-                pending.add(new PendingAnnouncement(trainId, CHIME_TO_SPEECH_TICKS, arrival, false));
-            }
-            if (phase == TransitStopController.Phase.DOORS_CLOSING) {
-                play(world, train, network, RcmcSounds.METRO_DOOR_CLOSE);
-            } else if (previous == TransitStopController.Phase.DOORS_CLOSING
-                && phase == TransitStopController.Phase.APPROACHING) {
+                if (!visit.arrived) {
+                    visit.arrived = true;
+                    // Berthed: the "Entering …" call has served its purpose, and clearing it here
+                    // is what rearms it for the next station.
+                    enteringAnnounced.remove(trainId);
+                    // Ding now, then say "This is <here>". currentStopIndex is still the station
+                    // being berthed at.
+                    play(world, train, network, RcmcSounds.METRO_ANNOUNCE_CHIME);
+                    String arrival = TransitSignText.arrivalAnnouncement(
+                        stopName(service, service.currentStopIndex()));
+                    TtsTrace.stage("CHIME", "train#" + trainId, "", arrival);
+                    pending.add(new PendingAnnouncement(trainId, CHIME_TO_SPEECH_TICKS, arrival, false));
+                }
+                // Chime once, timed so it finishes as the doors begin to move.
+                if (!visit.chimed && phase == TransitStopController.Phase.BOARDING
+                    && controller.phaseTicksRemaining() <= CHIME_LEAD_TICKS) {
+                    visit.chimed = true;
+                    play(world, train, network, RcmcSounds.METRO_DOOR_CHIME);
+                }
+                if (!visit.closed && phase == TransitStopController.Phase.DOORS_CLOSING) {
+                    visit.closed = true;
+                    if (!visit.chimed) {
+                        TtsTrace.stage("SKIP", "train#" + trainId, "reason=no-boarding-window",
+                            "door chime");
+                    }
+                    play(world, train, network, RcmcSounds.METRO_DOOR_CLOSE);
+                }
+            } else if (visit != null && !visit.departed && visit.index < visitIndex) {
+                visit.departed = true;
                 // Doors shut, brakes off, and away: the release is the sound of departure.
                 play(world, train, network, RcmcSounds.METRO_BRAKE_RELEASE);
                 // Two seconds later, announce the stop now being run to. The service has already
-                // advanced its target this tick, so currentStopIndex names the next stop. Capture
-                // the name now — the chime-then-speech is scheduled, not spoken here.
+                // advanced its target, so currentStopIndex names the next stop. Capture the name
+                // now — the chime-then-speech is scheduled, not spoken here.
                 pending.add(new PendingAnnouncement(trainId, DEPART_ANNOUNCE_DELAY_TICKS,
                     TransitSignText.nextStopAnnouncement(stopName(service, service.currentStopIndex())),
                     true));
             }
+
+            announceEntering(world, transit, trainId, service, train, network);
         }
         // Services that ended take their sound state with them.
-        for (Iterator<Integer> it = lastPhase.keySet().iterator(); it.hasNext(); ) {
-            Integer id = it.next();
-            if (transit.serviceFor(id) == null) {
-                it.remove();
-                chimed.remove(id);
-            }
-        }
+        visits.keySet().removeIf(id -> transit.serviceFor(id) == null);
         pending.removeIf(p -> transit.serviceFor(p.trainId) == null);
     }
 
@@ -252,32 +256,51 @@ public final class TransitSounds {
         }
     }
 
+    /**
+     * Plays a sound at every car, not only the lead one: a five-car train is a hundred blocks long,
+     * and a rider in the last car or a player at the far end of the platform heard nothing from a
+     * sound placed at the front.
+     */
     private static void play(World world, Train train, TrackNetwork network, SoundEvent sound) {
-        TrackFrame frame = train.frameOfCar(network, 0);
-        if (frame == null) {
-            return;
+        for (int car = 0; car < train.spec().carCount(); car++) {
+            TrackFrame frame = train.frameOfCar(network, car);
+            if (frame == null) {
+                continue;
+            }
+            // null player: heard by everyone in range including whoever is aboard.
+            world.playSound(null, frame.position.x, frame.position.y, frame.position.z,
+                sound, SoundCategory.NEUTRAL, VOLUME, 1.0F);
         }
-        // null player: heard by everyone in range including whoever is aboard.
-        world.playSound(null, frame.position.x, frame.position.y, frame.position.z,
-            sound, SoundCategory.NEUTRAL, VOLUME, 1.0F);
     }
 
-    /** Sends an in-car announcement to every player riding or near the train. */
+    /**
+     * Sends an in-car announcement to every player riding the train or near any of its cars —
+     * measured from the nearest car, not the lead one, so the back of a long train hears it too.
+     */
     private static void announce(World world, Train train, TrackNetwork network, int trainId,
                                  String text) {
-        TrackFrame frame = train.frameOfCar(network, 0);
-        if (frame == null) {
-            return;
+        List<TrackFrame> frames = new ArrayList<>();
+        for (int car = 0; car < train.spec().carCount(); car++) {
+            TrackFrame frame = train.frameOfCar(network, car);
+            if (frame != null) {
+                frames.add(frame);
+            }
         }
         double rangeSq = ANNOUNCE_RANGE * ANNOUNCE_RANGE;
         for (EntityPlayer player : world.playerEntities) {
             if (!(player instanceof EntityPlayerMP)) {
                 continue;
             }
-            double dx = player.posX - frame.position.x;
-            double dy = player.posY - frame.position.y;
-            double dz = player.posZ - frame.position.z;
-            if (dx * dx + dy * dy + dz * dz <= rangeSq) {
+            boolean hears = player.getRidingEntity() instanceof EntityCoasterCar
+                && ((EntityCoasterCar) player.getRidingEntity()).trainId() == trainId;
+            for (int i = 0; !hears && i < frames.size(); i++) {
+                TrackFrame frame = frames.get(i);
+                double dx = player.posX - frame.position.x;
+                double dy = player.posY - frame.position.y;
+                double dz = player.posZ - frame.position.z;
+                hears = dx * dx + dy * dy + dz * dz <= rangeSq;
+            }
+            if (hears) {
                 // Empty voice: the client uses the TTS engine's default, as the platform speaker does.
                 RcmcNetwork.sendTo(new PacketStationAnnounce(text, ""), (EntityPlayerMP) player);
                 TtsTrace.stage("SEND", "train#" + trainId, "to=" + player.getName(), text);
@@ -291,6 +314,19 @@ public final class TransitSounds {
      * without it, the entry speaks. Arrival goes straight to the speech stage because its ding has
      * already played by the time the entry is queued.
      */
+    /** What has been played for one stop visit; see {@code visits}. */
+    private static final class Visit {
+        final int index;
+        boolean arrived;
+        boolean chimed;
+        boolean closed;
+        boolean departed;
+
+        Visit(int index) {
+            this.index = index;
+        }
+    }
+
     private static final class PendingAnnouncement {
         final int trainId;
         int ticks;
