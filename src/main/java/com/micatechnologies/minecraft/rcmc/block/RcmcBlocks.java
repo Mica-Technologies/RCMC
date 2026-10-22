@@ -29,6 +29,7 @@ public final class RcmcBlocks {
     public static BlockAirGate airGate;
     public static BlockRideSign rideSign;
     public static BlockLineDesk lineDesk;
+    public static com.micatechnologies.minecraft.rcmc.block.signal.BlockSignalHead signalHead;
 
     private RcmcBlocks() {
         throw new AssertionError("No instances.");
@@ -50,6 +51,8 @@ public final class RcmcBlocks {
         airGate = RcmcRegistry.addBlock(new BlockAirGate());
         rideSign = RcmcRegistry.addBlock(new BlockRideSign());
         lineDesk = RcmcRegistry.addBlock(new BlockLineDesk());
+        signalHead = RcmcRegistry.addBlock(
+            new com.micatechnologies.minecraft.rcmc.block.signal.BlockSignalHead());
 
         // An ItemBlock carries the block's registry name, not its own — they share a namespace and
         // Forge matches them by name when binding models.
@@ -76,6 +79,10 @@ public final class RcmcBlocks {
             .setRegistryName(RcmcConstants.MOD_NAMESPACE, BlockRideSign.NAME));
         RcmcRegistry.addItem(new ItemBlock(lineDesk)
             .setRegistryName(RcmcConstants.MOD_NAMESPACE, BlockLineDesk.NAME));
+        // One item, three styles: the style rides on the item damage.
+        RcmcRegistry.addItem(new com.micatechnologies.minecraft.rcmc.block.signal.ItemSignalHead(
+            signalHead).setRegistryName(RcmcConstants.MOD_NAMESPACE,
+            com.micatechnologies.minecraft.rcmc.block.signal.BlockSignalHead.NAME));
 
         // Tile entities travel with their blocks. Registry-namespaced ids, per convention.
         net.minecraftforge.fml.common.registry.GameRegistry.registerTileEntity(
@@ -100,5 +107,9 @@ public final class RcmcBlocks {
         net.minecraftforge.fml.common.registry.GameRegistry.registerTileEntity(
             TileRideSign.class,
             new net.minecraft.util.ResourceLocation(RcmcConstants.MOD_NAMESPACE, BlockRideSign.NAME));
+        net.minecraftforge.fml.common.registry.GameRegistry.registerTileEntity(
+            com.micatechnologies.minecraft.rcmc.block.signal.TileSignalHead.class,
+            new net.minecraft.util.ResourceLocation(RcmcConstants.MOD_NAMESPACE,
+                com.micatechnologies.minecraft.rcmc.block.signal.BlockSignalHead.NAME));
     }
 }

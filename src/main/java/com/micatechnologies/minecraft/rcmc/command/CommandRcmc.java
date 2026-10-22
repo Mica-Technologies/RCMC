@@ -61,7 +61,7 @@ public class CommandRcmc extends CommandBase {
 
     @Override
     public String getUsage(ICommandSender sender) {
-        return "/rcmc <demo|metrodemo|train|clear|info|build|track|section|paint|style|rate|check|block|transfer|ride|station|line"
+        return "/rcmc <demo|metrodemo|train|clear|info|build|track|section|paint|style|rate|check|block|transfer|ride|station|line|signal"
             + "|switch|platform|rmsection|undo|redo>";
     }
 
@@ -75,7 +75,7 @@ public class CommandRcmc extends CommandBase {
                                           String[] args, BlockPos targetPos) {
         if (args.length == 1) {
             return getListOfStringsMatchingLastWord(args, "demo", "metrodemo", "train", "clear",
-                "info", "build", "track", "section", "paint", "style", "rate", "check", "trains", "block", "transfer", "ride", "station", "line", "switch",
+                "info", "build", "track", "section", "paint", "style", "rate", "check", "trains", "block", "transfer", "ride", "station", "line", "signal", "switch",
                 "platform", "rmsection", "undo", "redo");
         }
         if (args.length == 2 && "track".equalsIgnoreCase(args[0])) {
@@ -101,6 +101,25 @@ public class CommandRcmc extends CommandBase {
         if (args.length == 2 && "line".equalsIgnoreCase(args[0])) {
             return getListOfStringsMatchingLastWord(args, "create", "list", "remove", "start",
                 "stop", "signals", "set", "trains", "check", "hold", "release");
+        }
+        if (args.length == 2 && "signal".equalsIgnoreCase(args[0])) {
+            return getListOfStringsMatchingLastWord(args, "heads");
+        }
+        if (args.length == 3 && "signal".equalsIgnoreCase(args[0])) {
+            RcmcWorldState state = RcmcWorldState.of(sender.getEntityWorld());
+            List<String> names = new ArrayList<>();
+            if (state != null) {
+                for (com.micatechnologies.minecraft.rcmc.physics.transit.TransitLine line
+                    : state.transit().lines()) {
+                    if (state.transit().signalsFor(line.name()) != null) {
+                        names.add(line.name());
+                    }
+                }
+            }
+            return getListOfStringsMatchingLastWord(args, names);
+        }
+        if (args.length == 4 && "signal".equalsIgnoreCase(args[0])) {
+            return getListOfStringsMatchingLastWord(args, "both");
         }
         if (args.length == 2 && "demo".equalsIgnoreCase(args[0])) {
             return getListOfStringsMatchingLastWord(args, "shuttle");
@@ -221,6 +240,9 @@ public class CommandRcmc extends CommandBase {
                 break;
             case "line":
                 line(sender, world, state, args);
+                break;
+            case "signal":
+                signal(sender, world, state, args);
                 break;
             case "switch":
                 trackSwitch(sender, world, state, args);
@@ -2405,6 +2427,87 @@ public class CommandRcmc extends CommandBase {
     /** Ratings read as RCT-style two-decimal scores rather than raw doubles. */
     private static String score(double value) {
         return String.format("%.2f", value);
+    }
+
+    /** How far to the side of the track centre line an auto-placed signal head stands, blocks. */
+    private static final double SIGNAL_HEAD_OFFSET = 2.8D;
+
+    /**
+     * {@code /rcmc signal heads <line> [both]} — places a linked LED signal head at every block
+     * boundary of a signalled line, on the right of a train running with the track ({@code both}
+     * adds the heads for trains running against it, on their right).
+     *
+     * <p>Each head goes {@value #SIGNAL_HEAD_OFFSET} blocks out from the centre line, which clears
+     * a metro car body, at rail level, or one block up when rail level is taken (a platform edge,
+     * say). Positions in unloaded chunks, or where both are taken, are skipped and counted, never
+     * forced: this must not load chunks or overwrite what a builder put there.</p>
+     */
+    private void signal(ICommandSender sender, World world, RcmcWorldState state, String[] args)
+        throws CommandException {
+        if (args.length < 3 || !"heads".equalsIgnoreCase(args[1])) {
+            throw new CommandException("/rcmc signal heads <line> [both]");
+        }
+        com.micatechnologies.minecraft.rcmc.physics.transit.TransitSystem transit = state.transit();
+        com.micatechnologies.minecraft.rcmc.physics.transit.TransitLine line = transit.line(args[2]);
+        if (line == null) {
+            throw new CommandException("No line named " + args[2] + " — try /rcmc line list");
+        }
+        com.micatechnologies.minecraft.rcmc.physics.transit.LineSignals signals =
+            transit.signalsFor(line.name());
+        if (signals == null) {
+            throw new CommandException("Line " + line.name()
+                + " has no signalling — add it with /rcmc line signals " + line.name() + " <count>");
+        }
+        boolean both = args.length > 3 && "both".equalsIgnoreCase(args[3]);
+
+        TrackNetwork network = state.network();
+        int placed = 0;
+        int unloaded = 0;
+        int blocked = 0;
+        for (com.micatechnologies.minecraft.rcmc.physics.transit.SignalHeads.Boundary boundary
+            : com.micatechnologies.minecraft.rcmc.physics.transit.SignalHeads.boundaries(
+                signals.blocks())) {
+            if (boundary.direction < 0 && !both) {
+                continue;
+            }
+            if (!network.hasSection(boundary.sectionId)) {
+                blocked++;
+                continue;
+            }
+            TrackFrame frame = network.frameAt(new TrackRef(boundary.sectionId, boundary.distance));
+            Vec3 travel = frame.forward.scale(boundary.direction);
+            Vec3 right = frame.right.scale(boundary.direction);
+            Vec3 at = frame.position.add(right.scale(SIGNAL_HEAD_OFFSET));
+            BlockPos pos = new BlockPos(Math.floor(at.x), Math.floor(at.y + 0.01D),
+                Math.floor(at.z));
+            if (!world.isBlockLoaded(pos)) {
+                unloaded++;
+                continue;
+            }
+            if (!world.isAirBlock(pos)) {
+                pos = pos.up();
+                if (!world.isAirBlock(pos)) {
+                    blocked++;
+                    continue;
+                }
+            }
+            world.setBlockState(pos, RcmcBlocks.signalHead.getDefaultState());
+            net.minecraft.tileentity.TileEntity tile = world.getTileEntity(pos);
+            if (tile instanceof com.micatechnologies.minecraft.rcmc.block.signal.TileSignalHead) {
+                com.micatechnologies.minecraft.rcmc.block.signal.TileSignalHead head =
+                    (com.micatechnologies.minecraft.rcmc.block.signal.TileSignalHead) tile;
+                head.setFacingDegrees(
+                    com.micatechnologies.minecraft.rcmc.block.signal.TileSignalHead.yawOf(travel));
+                head.bindTo(line.name(), boundary.sectionId, boundary.distance, boundary.direction);
+            }
+            placed++;
+        }
+        reply(sender, placed > 0 ? TextFormatting.GREEN : TextFormatting.YELLOW, "Placed " + placed
+            + " signal head(s) on " + line.name() + (both ? " (both directions)" : "") + ".");
+        if (unloaded > 0 || blocked > 0) {
+            reply(sender, TextFormatting.GRAY, "  Skipped " + unloaded + " in unloaded chunks and "
+                + blocked + " where the spot was taken.");
+        }
     }
 
     private static void reply(ICommandSender sender, TextFormatting colour, String message) {

@@ -440,6 +440,20 @@ the nearest station either way. `forward` or `reverse` (along the track's own di
 distances increase) overrides that; if no station of the line can be reached that way, it says so
 and runs the other way.
 
+### `/rcmc signal`
+
+```
+/rcmc signal heads <line> [both]     place a linked signal head at every block boundary of a line
+```
+
+Needs the line to be signalled first (`/rcmc line signals`). Each head is an LED three-aspect head on
+a post, linked to its signal, standing 2.8 blocks out from the track's centre line on the right of a
+train running with the track (the way its distances increase), and facing that train. `both` also
+places the heads for trains running the other way, on their right. A head goes at rail level, or one
+block up if rail level is taken. A spot in an unloaded chunk, or where both are taken, is skipped;
+the command reports how many heads it placed and how many it skipped. There is no undo: break the
+heads by hand. See `rcmc:signal_head` in [Items and blocks](items-and-blocks.md#blocks).
+
 ### `/rcmc switch`
 
 ```

@@ -1,0 +1,30 @@
+{
+  "parent": "block/block",
+  "textures": {
+    "particle": "minecraft:blocks/concrete_black",
+    "body": "minecraft:blocks/concrete_black",
+    "red": "minecraft:blocks/concrete_red",
+    "yellow": "minecraft:blocks/concrete_yellow",
+    "green": "minecraft:blocks/concrete_lime"
+  },
+  "elements": [
+    {
+      "from": [ 6, 5, 6 ], "to": [ 10, 15, 10 ],
+      "faces": {
+        "down":  { "texture": "#body" },
+        "up":    { "texture": "#body" },
+        "north": { "texture": "#body" },
+        "south": { "texture": "#body" },
+        "west":  { "texture": "#body" },
+        "east":  { "texture": "#body" }
+      }
+    },
+    { "from": [ 7, 12, 5 ], "to": [ 9, 14, 11 ], "faces": { "north": { "texture": "#red" }, "south": { "texture": "#red" } } },
+    { "from": [ 7, 9, 5 ], "to": [ 9, 11, 11 ], "faces": { "north": { "texture": "#yellow" }, "south": { "texture": "#yellow" } } },
+    { "from": [ 7, 6, 5 ], "to": [ 9, 8, 11 ], "faces": { "north": { "texture": "#green" }, "south": { "texture": "#green" } } }
+  ],
+  "display": {
+    "thirdperson": { "rotation": [ 10, -45, 170 ], "translation": [ 0, 1.5, -2.75 ], "scale": [ 0.375, 0.375, 0.375 ] },
+    "gui":         { "rotation": [ 30, 225, 0 ],   "translation": [ 0, 0, 0 ],        "scale": [ 0.8, 0.8, 0.8 ] }
+  }
+}

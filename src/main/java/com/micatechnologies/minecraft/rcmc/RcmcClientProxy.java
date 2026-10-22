@@ -37,6 +37,10 @@ public class RcmcClientProxy extends RcmcCommonProxy {
         net.minecraftforge.fml.client.registry.ClientRegistry.bindTileEntitySpecialRenderer(
             com.micatechnologies.minecraft.rcmc.block.sign.TileArrivalBoard.class,
             new com.micatechnologies.minecraft.rcmc.client.render.sign.RenderArrivalBoard());
+        // Signal heads: housing and emissive lenses drawn per tile, culled by distance.
+        net.minecraftforge.fml.client.registry.ClientRegistry.bindTileEntitySpecialRenderer(
+            com.micatechnologies.minecraft.rcmc.block.signal.TileSignalHead.class,
+            new com.micatechnologies.minecraft.rcmc.client.render.sign.RenderSignalHead());
         // Without this the client never advances its trains between server corrections, and the
         // ride visibly steps at the correction rate rather than the frame rate.
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new ClientTrainTicker());
@@ -111,6 +115,16 @@ public class RcmcClientProxy extends RcmcCommonProxy {
             com.micatechnologies.minecraft.rcmc.block.RcmcBlocks.rideSign));
         bindModel(net.minecraft.item.Item.getItemFromBlock(
             com.micatechnologies.minecraft.rcmc.block.RcmcBlocks.lineDesk));
+        // One item model per signal head style, keyed by the item damage.
+        net.minecraft.item.Item signalHead = net.minecraft.item.Item.getItemFromBlock(
+            com.micatechnologies.minecraft.rcmc.block.RcmcBlocks.signalHead);
+        for (com.micatechnologies.minecraft.rcmc.block.signal.SignalHeadStyle style
+            : com.micatechnologies.minecraft.rcmc.block.signal.SignalHeadStyle.values()) {
+            net.minecraftforge.client.model.ModelLoader.setCustomModelResourceLocation(signalHead,
+                style.ordinal(), new net.minecraft.client.renderer.block.model.ModelResourceLocation(
+                    com.micatechnologies.minecraft.rcmc.RcmcConstants.MOD_NAMESPACE + ":signal_head_"
+                        + style.getName(), "inventory"));
+        }
     }
 
     private static void bindModel(net.minecraft.item.Item item) {

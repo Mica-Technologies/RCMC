@@ -1,0 +1,8 @@
+{
+  "forge_marker": 1,
+  "defaults": { "model": "rcmc:signal_head" },
+  "variants": {
+    "style": { "led": {}, "searchlight": {}, "dwarf": {} },
+    "mount": { "post": {}, "wall": {}, "ceiling": {} }
+  }
+}
