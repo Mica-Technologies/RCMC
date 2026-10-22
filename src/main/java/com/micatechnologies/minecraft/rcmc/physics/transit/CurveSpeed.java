@@ -79,9 +79,15 @@ public final class CurveSpeed {
      */
     public static double allowed(TrackNetwork network, TrackRef lead, double facing, double length,
                                  double brake, double lookAhead, double margin) {
+        return allowed(network, lead, facing, length, brake, lookAhead, margin, null);
+    }
+
+    /** {@link #allowed}, also holding to the signed {@code limits}, which may be null. */
+    public static double allowed(TrackNetwork network, TrackRef lead, double facing, double length,
+                                 double brake, double lookAhead, double margin, SpeedLimits limits) {
         // The cars trail the lead reference toward -s whichever way the train runs, so the body is
         // always that stretch; running -s it is the tail that leads, and the look ahead starts there.
-        double underTrain = scan(network, lead, -1.0D, length, brake, false, 0.0D);
+        double underTrain = scan(network, lead, -1.0D, length, brake, false, 0.0D, limits);
         TrackRef front = lead;
         double dir = 1.0D;
         if (facing < 0.0D) {
@@ -90,7 +96,7 @@ public final class CurveSpeed {
             // Past a join that flips the axis, carrying on the same way is +s on the tail's section.
             dir = tail.reversed ? 1.0D : -1.0D;
         }
-        double ahead = scan(network, front, dir, lookAhead + margin, brake, true, margin);
+        double ahead = scan(network, front, dir, lookAhead + margin, brake, true, margin, limits);
         return Math.min(underTrain, ahead);
     }
 
@@ -99,7 +105,7 @@ public final class CurveSpeed {
      * — raised, when {@code braking}, by what braking over the distance to it buys.
      */
     private static double scan(TrackNetwork network, TrackRef from, double dir, double horizon,
-                               double brake, boolean braking, double margin) {
+                               double brake, boolean braking, double margin, SpeedLimits limits) {
         double lowest = Double.POSITIVE_INFINITY;
         int sectionId = from.sectionId();
         double position = from.distance();
@@ -110,6 +116,7 @@ public final class CurveSpeed {
                 break;
             }
             double[] profile = profile(section);
+            boolean signed = limits != null && limits.has(sectionId);
             double length = section.totalLength();
             double toEnd = dir > 0.0D ? length - position : position;
             double reach = Math.min(toEnd, horizon - walked);
@@ -123,7 +130,7 @@ public final class CurveSpeed {
                 if (x > reach) {
                     break;
                 }
-                double limit = profile[i];
+                double limit = signed ? Math.min(profile[i], limits.at(sectionId, i * STEP)) : profile[i];
                 if (Double.isInfinite(limit)) {
                     continue;
                 }

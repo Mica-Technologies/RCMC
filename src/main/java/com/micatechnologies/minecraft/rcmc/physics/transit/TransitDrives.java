@@ -45,9 +45,34 @@ public final class TransitDrives {
      * @param tickSeconds length of a game tick in seconds
      */
     public static TransitStopController metro(double cruiseSpeed, double tickSeconds) {
-        TrainDriver driver = new TrainDriver(
-            new TractionProfile(1.2D, 24.0D, 22.0D),
-            1.2D, 2.0D, 1.5D, tickSeconds);
+        return metro(cruiseSpeed, tickSeconds, 0.0D, 0.0D);
+    }
+
+    /** Stock traction acceleration, blocks/s². */
+    public static final double METRO_ACCELERATION = 1.2D;
+
+    /** Stock service braking, blocks/s². */
+    public static final double METRO_DECELERATION = 1.2D;
+
+    /**
+     * The metro drive with a line's own rates.
+     *
+     * <p>Propulsion used to cut out at a fixed 22 blocks/s, so any cruise speed above that was
+     * never reached however it was set. The cut-out now sits just above the cruise speed, and the
+     * traction power grows with it so a fast line still pulls away at line speed — though, as on a
+     * real train, acceleration tails off as speed rises.</p>
+     *
+     * @param acceleration traction acceleration, blocks/s², or {@code 0} for the stock rate
+     * @param deceleration service braking, blocks/s², or {@code 0} for the stock rate
+     */
+    public static TransitStopController metro(double cruiseSpeed, double tickSeconds,
+                                              double acceleration, double deceleration) {
+        double accel = acceleration > 0.0D ? acceleration : METRO_ACCELERATION;
+        double brake = deceleration > 0.0D ? deceleration : METRO_DECELERATION;
+        double power = Math.max(24.0D * accel / METRO_ACCELERATION, 0.8D * accel * cruiseSpeed);
+        double cutOut = Math.max(22.0D, cruiseSpeed + 2.0D);
+        TrainDriver driver = new TrainDriver(new TractionProfile(accel, power, cutOut),
+            brake, 2.0D, 1.5D, tickSeconds);
         return new TransitStopController(driver, cruiseSpeed, 0.75D, 30, METRO_DWELL_TICKS, 30);
     }
 }

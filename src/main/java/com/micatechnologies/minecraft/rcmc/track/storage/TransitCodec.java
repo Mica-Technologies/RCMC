@@ -74,6 +74,10 @@ public final class TransitCodec {
     private static final String KEY_LABEL = "Label";
 
     private static final String KEY_SIGNALS = "TransitSignals";
+    private static final String KEY_SPEED_LIMITS = "SpeedLimits";
+    private static final String KEY_MAX_SPEED = "MaxSpeed";
+    private static final String KEY_ACCEL = "Acceleration";
+    private static final String KEY_DECEL = "Deceleration";
     private static final String KEY_LINE = "Line";
     private static final String KEY_MARGIN = "Margin";
     private static final String KEY_HORIZON = "Horizon";
@@ -111,6 +115,9 @@ public final class TransitCodec {
                 transit.operationsFor(line.name());
             tag.setInteger(KEY_DWELL, operations.dwellTicks());
             tag.setInteger(KEY_HEADWAY, operations.headwayTicks());
+            tag.setDouble(KEY_MAX_SPEED, operations.maxSpeed());
+            tag.setDouble(KEY_ACCEL, operations.acceleration());
+            tag.setDouble(KEY_DECEL, operations.deceleration());
             lineList.appendTag(tag);
         }
         root.setTag(KEY_LINES, lineList);
@@ -135,6 +142,20 @@ public final class TransitCodec {
             signalList.appendTag(tag);
         }
         root.setTag(KEY_SIGNALS, signalList);
+
+        NBTTagList limitList = new NBTTagList();
+        for (Map.Entry<Integer, List<com.micatechnologies.minecraft.rcmc.physics.transit.SpeedLimits.Limit>> entry
+            : transit.speedLimits().all().entrySet()) {
+            for (com.micatechnologies.minecraft.rcmc.physics.transit.SpeedLimits.Limit limit : entry.getValue()) {
+                NBTTagCompound tag = new NBTTagCompound();
+                tag.setInteger(KEY_SECTION, entry.getKey());
+                tag.setDouble(KEY_START, limit.from);
+                tag.setDouble(KEY_END, limit.to);
+                tag.setDouble(KEY_MAX_SPEED, limit.speed);
+                limitList.appendTag(tag);
+            }
+        }
+        root.setTag(KEY_SPEED_LIMITS, limitList);
     }
 
     /** Reads authored transit into a fresh system. Malformed entries are skipped, not fatal. */
@@ -175,7 +196,9 @@ public final class TransitCodec {
                 int max = com.micatechnologies.minecraft.rcmc.physics.transit.LineOperations.MAX_TICKS;
                 transit.setOperations(tag.getString(KEY_NAME),
                     new com.micatechnologies.minecraft.rcmc.physics.transit.LineOperations(
-                        Math.max(0, Math.min(max, dwell)), Math.max(0, Math.min(max, headway))));
+                        Math.max(0, Math.min(max, dwell)), Math.max(0, Math.min(max, headway)),
+                        Math.max(0.0D, tag.getDouble(KEY_MAX_SPEED)), Math.max(0.0D, tag.getDouble(KEY_ACCEL)),
+                        Math.max(0.0D, tag.getDouble(KEY_DECEL))));
             }
         }
 
@@ -202,6 +225,16 @@ public final class TransitCodec {
             }
             transit.setSignals(tag.getString(KEY_LINE),
                 new LineSignals(sections, tag.getDouble(KEY_MARGIN), tag.getDouble(KEY_HORIZON)));
+        }
+        NBTTagList limitList = root.getTagList(KEY_SPEED_LIMITS, 10);
+        for (int i = 0; i < limitList.tagCount(); i++) {
+            NBTTagCompound tag = limitList.getCompoundTagAt(i);
+            double speed = tag.getDouble(KEY_MAX_SPEED);
+            if (speed > 0.0D) {
+                transit.speedLimits().add(tag.getInteger(KEY_SECTION),
+                    new com.micatechnologies.minecraft.rcmc.physics.transit.SpeedLimits.Limit(
+                        tag.getDouble(KEY_START), tag.getDouble(KEY_END), speed));
+            }
         }
         return transit;
     }

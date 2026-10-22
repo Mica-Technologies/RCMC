@@ -5,7 +5,6 @@ import com.micatechnologies.minecraft.rcmc.physics.Train;
 import com.micatechnologies.minecraft.rcmc.physics.TrainManager;
 import com.micatechnologies.minecraft.rcmc.physics.TrainSpec;
 import com.micatechnologies.minecraft.rcmc.physics.transit.LineService;
-import com.micatechnologies.minecraft.rcmc.physics.transit.TransitDrives;
 import com.micatechnologies.minecraft.rcmc.physics.transit.TransitSystem;
 import com.micatechnologies.minecraft.rcmc.track.TrackNetwork;
 import com.micatechnologies.minecraft.rcmc.track.TrackRef;
@@ -221,7 +220,7 @@ public final class TrainCodec {
                 // with it in both directions, so without this the way it sets off is a coin toss.
                 double facing = tag.hasKey(KEY_FACING) ? tag.getDouble(KEY_FACING) : 0.0D;
                 transit.enterService(trainId, train, network, tag.getString(KEY_LINE),
-                    TransitDrives.metro(cruise, tickSeconds), facing);
+                    transit.driveFor(tag.getString(KEY_LINE), cruise, tickSeconds), facing);
                 resumed++;
             }
             catch (IllegalArgumentException e) {

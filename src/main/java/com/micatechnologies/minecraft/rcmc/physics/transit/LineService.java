@@ -261,6 +261,15 @@ public final class LineService {
     private static final double CURVE_CACHE_SPEED_SLACK = 5.0D;
 
     private double cachedCurveCap = Double.POSITIVE_INFINITY;
+
+    /** Limits signed along the track, held to like curve limits; null for none. */
+    private SpeedLimits speedLimits;
+
+    /** Hands this service the track's signed speed limits. */
+    public void setSpeedLimits(SpeedLimits limits) {
+        speedLimits = limits;
+        curveCapAge = CURVE_CACHE_TICKS;
+    }
     private int curveCapAge = CURVE_CACHE_TICKS;
     private double curveCapFacing;
 
@@ -278,7 +287,7 @@ public final class LineService {
         double margin = (Math.abs(train.velocity()) + CURVE_CACHE_SPEED_SLACK)
             * CURVE_CACHE_TICKS * TICK_SECONDS;
         cachedCurveCap = CurveSpeed.allowed(network, train.reference(), facing,
-            train.spec().totalLength(), brake, lookAhead, margin);
+            train.spec().totalLength(), brake, lookAhead, margin, speedLimits);
         curveCapAge = 1;
         curveCapFacing = facing;
         return cachedCurveCap;

@@ -122,8 +122,18 @@ public final class Train {
         }
     }
 
+    /** The share of the configured air drag a metro train feels. */
+    static final double METRO_AIR_DRAG_FRACTION = 0.1D;
+
     private void step(TrackNetwork network, double externalAcceleration, double dt) {
         double gravity = averageGravityAlongTrack(network);
+        if (spec.carStyle() == TrainSpec.CarStyle.METRO) {
+            // The configured air drag is a coaster's: an open car, riders in the wind. A metro is a
+            // long closed tube that real drag barely touches at line speed, and at the coaster's
+            // figure no traction could get one much past 25 blocks/s. Most of it is handed back.
+            externalAcceleration += (1.0D - METRO_AIR_DRAG_FRACTION)
+                * integrator.airDrag() * velocity * Math.abs(velocity);
+        }
         double newVelocity = integrator.advanceVelocity(velocity, gravity, externalAcceleration, dt);
 
         TrackNetwork.Traversal traversal = network.advance(reference, newVelocity * dt);

@@ -117,7 +117,7 @@ public class CommandRcmc extends CommandBase {
         }
         if (args.length == 4 && "line".equalsIgnoreCase(args[0])
             && "set".equalsIgnoreCase(args[1])) {
-            return getListOfStringsMatchingLastWord(args, "dwell", "headway");
+            return getListOfStringsMatchingLastWord(args, "dwell", "headway", "maxspeed", "accel", "decel");
         }
         if (args.length == 4 && "line".equalsIgnoreCase(args[0])
             && "create".equalsIgnoreCase(args[1])) {
@@ -1206,20 +1206,6 @@ public class CommandRcmc extends CommandBase {
     }
 
     /**
-     * Default metro drive used by {@code /rcmc line start} until per-stock configs exist.
-     *
-     * <p>The numbers, including the dwell, live in {@code TransitDrives} — shared with the save
-     * loader, which resumes a service the same way this command starts one. Two copies would let a
-     * line quietly change character across a restart: braking later, dwelling longer, accelerating
-     * harder, with both paths looking correct in isolation.</p>
-     */
-    private static com.micatechnologies.minecraft.rcmc.physics.transit.TransitStopController
-        metroController(double cruiseSpeed) {
-        return com.micatechnologies.minecraft.rcmc.physics.transit.TransitDrives.metro(
-            cruiseSpeed, RcmcConstants.SECONDS_PER_TICK);
-    }
-
-    /**
      * {@code /rcmc line …} — create lines from stations, and enter/withdraw trains from
      * service. See each branch for syntax.
      */
@@ -1287,8 +1273,7 @@ public class CommandRcmc extends CommandBase {
                         + l.kind().label()
                         + "): " + stops
                         + (sig == null ? "" : "  [" + sig.blocks().size() + " signal blocks]"));
-                    reply(sender, TextFormatting.GRAY, "  dwell " + seconds(ops.dwellTicks())
-                        + ", headway " + (ops.regulatesHeadway() ? seconds(ops.headwayTicks()) : "off"));
+                    reply(sender, TextFormatting.GRAY, "  " + describe(ops));
                 }
                 return;
             }
@@ -1319,20 +1304,20 @@ public class CommandRcmc extends CommandBase {
                     throw new CommandException("No train with id " + trainId);
                 }
                 // Optional, in either order: a cruise speed, and which way along the track to run.
-                double cruise = 15.0D;
+                double cruise = transit.lineSpeed(args[2]);
                 double facing = 0.0D;
                 for (int i = 4; i < args.length; i++) {
                     if ("forward".equalsIgnoreCase(args[i]) || "reverse".equalsIgnoreCase(args[i])) {
                         facing = "forward".equalsIgnoreCase(args[i]) ? 1.0D : -1.0D;
                     }
                     else {
-                        cruise = parseDouble(args[i], 1.0D, 40.0D);
+                        cruise = parseDouble(args[i], 1.0D, RcmcConfig.maxSpeed);
                     }
                 }
                 try {
                     com.micatechnologies.minecraft.rcmc.physics.transit.LineService service =
                         transit.enterService(trainId, train, state.network(), args[2],
-                            metroController(cruise), facing);
+                            transit.driveFor(args[2], cruise, RcmcConstants.SECONDS_PER_TICK), facing);
                     if (facing != 0.0D && service.facing() * facing < 0.0D) {
                         reply(sender, TextFormatting.YELLOW, "No station of " + args[2] + " is reachable running "
                             + (facing > 0.0D ? "forward" : "reverse") + " from here, so it runs the other way.");
@@ -1410,7 +1395,8 @@ public class CommandRcmc extends CommandBase {
                          com.micatechnologies.minecraft.rcmc.physics.transit.TransitSystem transit,
                          RcmcWorldState state, String[] args) throws CommandException {
         if (args.length < 5) {
-            throw new CommandException("/rcmc line set <name> dwell <seconds> | headway <seconds|off>");
+            throw new CommandException("/rcmc line set <name> dwell <seconds> | headway <seconds|off>"
+                + " | maxspeed <blocks/s|off> | accel <blocks/s²|off> | decel <blocks/s²|off>");
         }
         com.micatechnologies.minecraft.rcmc.physics.transit.TransitLine line = transit.line(args[2]);
         if (line == null) {
@@ -1429,14 +1415,36 @@ public class CommandRcmc extends CommandBase {
                 ops = ops.withHeadwayTicks("off".equalsIgnoreCase(value)
                     ? 0 : ticks(parseDouble(value, 0.0D, maxSeconds)));
                 break;
+            case "maxspeed":
+                ops = ops.withMaxSpeed("off".equalsIgnoreCase(value)
+                    ? 0.0D : parseDouble(value, 1.0D, RcmcConfig.maxSpeed));
+                break;
+            case "accel":
+                ops = ops.withAcceleration("off".equalsIgnoreCase(value)
+                    ? 0.0D : parseDouble(value, 0.1D, 5.0D));
+                break;
+            case "decel":
+                ops = ops.withDeceleration("off".equalsIgnoreCase(value)
+                    ? 0.0D : parseDouble(value, 0.1D, 5.0D));
+                break;
             default:
-                throw new CommandException("Setting must be dwell or headway, got " + args[3]);
+                throw new CommandException("Setting must be dwell, headway, maxspeed, accel or decel, got "
+                    + args[3]);
         }
         transit.setOperations(line.name(), ops);
         state.markTrackDirty(world);
-        reply(sender, TextFormatting.GREEN, line.name() + ": dwell " + seconds(ops.dwellTicks())
+        reply(sender, TextFormatting.GREEN, line.name() + ": " + describe(ops)
+            + ". Dwell and headway apply to running trains from their next stop; speed and rates to"
+            + " trains entering service.");
+    }
+
+    /** A line's settings in one line of chat. */
+    private static String describe(com.micatechnologies.minecraft.rcmc.physics.transit.LineOperations ops) {
+        return "dwell " + seconds(ops.dwellTicks())
             + ", headway " + (ops.regulatesHeadway() ? seconds(ops.headwayTicks()) : "off")
-            + ". Trains already running pick it up at their next stop.");
+            + ", max speed " + (ops.maxSpeed() > 0.0D ? fmt(ops.maxSpeed()) + " b/s" : "default")
+            + ", accel " + (ops.acceleration() > 0.0D ? fmt(ops.acceleration()) : "default")
+            + ", decel " + (ops.deceleration() > 0.0D ? fmt(ops.deceleration()) : "default");
     }
 
     /**

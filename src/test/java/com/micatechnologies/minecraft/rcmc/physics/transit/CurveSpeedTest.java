@@ -63,6 +63,27 @@ class CurveSpeedTest {
     }
 
     @Test
+    @DisplayName("a signed speed limit holds inside its stretch and is braked for ahead of it")
+    void signedLimitIsHeldAndBrakedFor() {
+        TrackNetwork network = new TrackNetwork();
+        TrackSection track = stadium();
+        network.addSection(track);
+        SpeedLimits limits = new SpeedLimits();
+        limits.add(1, new SpeedLimits.Limit(100.0D, 140.0D, 5.0D));
+        double brake = 0.6D;
+
+        double inside = CurveSpeed.allowed(network, new TrackRef(1, 120.0D), 1.0D, 10.0D, brake, 300.0D, 0.0D, limits);
+        assertTrue(inside <= 5.0D + 1e-9D, "inside the stretch: " + inside);
+
+        double before = CurveSpeed.allowed(network, new TrackRef(1, 60.0D), 1.0D, 10.0D, brake, 300.0D, 0.0D, limits);
+        double expected = Math.sqrt(5.0D * 5.0D + 2.0D * brake * 40.0D);
+        assertEquals(expected, before, 0.2D, "40 blocks before it, only what braking to it allows");
+
+        double unsigned = CurveSpeed.allowed(network, new TrackRef(1, 60.0D), 1.0D, 10.0D, brake, 300.0D, 0.0D, null);
+        assertTrue(unsigned > before + 1.0D, "without the limit the cap is higher: " + unsigned);
+    }
+
+    @Test
     @DisplayName("a scan with a margin bounds every scan over the next margin of travel, so it can be reused")
     void marginBoundsTheStretchAhead() {
         TrackNetwork network = new TrackNetwork();

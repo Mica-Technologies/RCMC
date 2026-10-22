@@ -39,6 +39,7 @@ public final class TransitSystem {
     private final Map<String, LineSignals> signalsByLine = new LinkedHashMap<>();
     private final Map<Integer, LineService> services = new LinkedHashMap<>();
     private final Map<String, LineOperations> operationsByLine = new LinkedHashMap<>();
+    private final SpeedLimits speedLimits = new SpeedLimits();
 
     /**
      * When a train last left each platform in each direction, by {@link #departureKey}, in ticks of
@@ -194,6 +195,7 @@ public final class TransitSystem {
         signalsByLine.putAll(incoming.signals());
         operationsByLine.clear();
         operationsByLine.putAll(incoming.operationsByLine);
+        speedLimits.replaceWith(incoming.speedLimits);
     }
 
     /** {@link #serviceSnapshots} as of {@link #snapshotsAtTick}; {@code null} when not yet built. */
@@ -451,6 +453,7 @@ public final class TransitSystem {
             serviceDirectionFrom(line, network, train.reference(), bestFacing, bestIndex), bestFacing,
             this::station);
         controller.setDwellTicks(operationsFor(line.name()).dwellTicks());
+        service.setSpeedLimits(speedLimits);
         // A held train finishes its approach and boards as usual, then waits at the platform with
         // its doors open until released — the operator's hold, ahead of the line's own headway.
         service.setDepartureGate((l, stop, direction) -> !held.contains(trainId) && mayDepart(l, stop, direction));
@@ -723,7 +726,7 @@ public final class TransitSystem {
             }
             try {
                 enterService(trainId, train, network, old.line().name(),
-                    TransitDrives.metro(old.controller().cruiseSpeed(), tickSeconds), old.facing());
+                    driveFor(old.line().name(), old.controller().cruiseSpeed(), tickSeconds), old.facing());
                 long[] seen = previous.arrivals.get(trainId);
                 if (seen != null) {
                     arrivals.put(trainId, seen.clone());
@@ -745,6 +748,7 @@ public final class TransitSystem {
         services.clear();
         snapshotCache = null;
         operationsByLine.clear();
+        speedLimits.clearAll();
         lastDepartures.clear();
         timingsByLine.clear();
         arrivals.clear();
@@ -777,6 +781,32 @@ public final class TransitSystem {
     }
 
     // --- Operations: dwell and headway. ---------------------------------------------------------
+
+    /** Speed limits signed along the track, which every service holds to. */
+    public SpeedLimits speedLimits() {
+        return speedLimits;
+    }
+
+    /**
+     * The controller a train entering service on {@code lineName} drives with: the line's own
+     * acceleration and braking, at {@code cruiseSpeed} capped to the line's speed if it has one.
+     * Every way into service goes through here, so a train resumed from a save or an undo drives
+     * exactly as one started by hand.
+     */
+    /** Line speed for a train started without one: the line's own, or the stock 15 blocks/s. */
+    public double lineSpeed(String lineName) {
+        double speed = operationsFor(lineName).maxSpeed();
+        return speed > 0.0D ? speed : DEFAULT_LINE_SPEED;
+    }
+
+    /** Line speed when neither the operator nor the line names one, blocks/s. */
+    public static final double DEFAULT_LINE_SPEED = 15.0D;
+
+    public TransitStopController driveFor(String lineName, double cruiseSpeed, double tickSeconds) {
+        LineOperations ops = operationsFor(lineName);
+        double cruise = ops.maxSpeed() > 0.0D ? Math.min(cruiseSpeed, ops.maxSpeed()) : cruiseSpeed;
+        return TransitDrives.metro(cruise, tickSeconds, ops.acceleration(), ops.deceleration());
+    }
 
     /** How {@code lineName} is run; {@link LineOperations#DEFAULT} until someone sets it. */
     public LineOperations operationsFor(String lineName) {

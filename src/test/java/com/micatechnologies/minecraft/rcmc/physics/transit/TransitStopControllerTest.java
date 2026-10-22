@@ -110,6 +110,23 @@ class TransitStopControllerTest {
     }
 
     @Test
+    @DisplayName("a line speed above the old 22 b/s traction cut-out is reached, and the train still berths")
+    void fastLineReachesItsSpeed() {
+        TrackNetwork flat = flatNetwork(6000.0D);
+        TransitStopController controller = TransitDrives.metro(35.0D, 1.0D / 20.0D);
+        Train train = new Train(TrainSpec.metroTrain(3), realistic(), new TrackRef(1, 200.0D), 0.0D);
+        double top = 0.0D;
+        int guard = 0;
+        while (controller.stopsServed() == 0 && guard++ < 20000) {
+            tickWithController(train, flat, controller, 5000.0D);
+            top = Math.max(top, Math.abs(train.velocity()));
+        }
+        assertTrue(top > 33.0D, "reached line speed: " + top);
+        assertEquals(1, controller.stopsServed(), "berthed and served the stop");
+        assertEquals(5000.0D, train.reference().distance(), 0.75D, "berthed at the stop point");
+    }
+
+    @Test
     @DisplayName("the door rate predicts the next tick's fraction, so a client can run ahead of syncs")
     void doorRatePredictsNextFraction() {
         TrackNetwork flat = flatNetwork(1000.0D);

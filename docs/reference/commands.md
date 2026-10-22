@@ -397,6 +397,9 @@ change when a service reverses. Announcements convert it to the rider's own left
 /rcmc line signals <name> <count|off>               install or clear block signalling
 /rcmc line set <name> dwell <seconds>               how long the doors stay open at each stop
 /rcmc line set <name> headway <seconds|off>         least time between departures from a platform
+/rcmc line set <name> maxspeed <blocks/s|off>       line speed for trains entering service
+/rcmc line set <name> accel <blocks/s²|off>         traction acceleration (default 1.2)
+/rcmc line set <name> decel <blocks/s²|off>         service braking (default 1.2)
 /rcmc line trains [name]                            list trains in service, and what holds any up
 /rcmc line hold <trainId>                           hold it at its next platform, doors open
 /rcmc line release <trainId>                        let it go again
@@ -453,7 +456,12 @@ joint. It starts lined straight, so trains run through exactly as before until i
 
 ```
 /rcmc section split <sectionId> <distance | near <x> <y> <z>>
+/rcmc section speedlimit <sectionId> [<blocks/s> [from to] | off]
 ```
+
+`speedlimit` signs a limit metro trains hold to over the whole section, or from `from` to `to`
+blocks along it; `off` clears the section's limits, and no value lists them. See
+[Running a metro](../guide/running-a-metro.md#speed-acceleration-and-braking).
 
 Splits a section at a point, what the [track editor](items-and-blocks.md#track-editor)'s split does
 at a node. If no node is within a block of the point, one is added there on the curve first, so the

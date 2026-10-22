@@ -278,13 +278,67 @@ final class TrackCommands {
         throw new CommandException("Unknown segment type '@" + name + "' - one of " + names);
     }
 
+    /**
+     * {@code /rcmc section speedlimit <sectionId> [<blocks/s> [from to] | off]} — signs a speed limit
+     * on a whole section or a stretch of it, clears them, or lists them. Metro services brake in
+     * time for a lower limit and hold it until their last car has cleared it.
+     */
+    private static void speedLimit(ICommandSender sender, World world, RcmcWorldState state, String[] args)
+        throws CommandException {
+        int sectionId = CommandBase.parseInt(args[2]);
+        com.micatechnologies.minecraft.rcmc.track.TrackSection section = state.network().section(sectionId);
+        if (section == null) {
+            throw new CommandException("No section #" + sectionId + " — try /rcmc info");
+        }
+        com.micatechnologies.minecraft.rcmc.physics.transit.SpeedLimits limits = state.transit().speedLimits();
+        if (args.length == 3) {
+            if (limits.on(sectionId).isEmpty()) {
+                reply(sender, TextFormatting.YELLOW, "No speed limits signed on section #" + sectionId + ".");
+                return;
+            }
+            for (com.micatechnologies.minecraft.rcmc.physics.transit.SpeedLimits.Limit limit : limits.on(sectionId)) {
+                reply(sender, TextFormatting.AQUA, String.format("#%d %.1f to %.1f: %.1f blocks/s",
+                    sectionId, limit.from, limit.to, limit.speed));
+            }
+            return;
+        }
+        if ("off".equalsIgnoreCase(args[3])) {
+            int removed = limits.clear(sectionId);
+            state.markTrackDirty(world);
+            reply(sender, TextFormatting.GREEN, "Removed " + removed + " speed limit(s) from section #" + sectionId + ".");
+            return;
+        }
+        double speed = CommandBase.parseDouble(args[3], 1.0D, com.micatechnologies.minecraft.rcmc.RcmcConfig.maxSpeed);
+        double total = section.totalLength();
+        double from = 0.0D;
+        double to = total;
+        if (args.length >= 6) {
+            from = CommandBase.parseDouble(args[4], 0.0D, total);
+            to = CommandBase.parseDouble(args[5], 0.0D, total);
+        }
+        else if (args.length != 4) {
+            throw new CommandException("/rcmc section speedlimit <sectionId> <blocks/s> [from to]");
+        }
+        com.micatechnologies.minecraft.rcmc.physics.transit.SpeedLimits.Limit limit =
+            new com.micatechnologies.minecraft.rcmc.physics.transit.SpeedLimits.Limit(from, to, speed);
+        limits.add(sectionId, limit);
+        state.markTrackDirty(world);
+        reply(sender, TextFormatting.GREEN, String.format("Section #%d, %.1f to %.1f: limited to %.1f blocks/s.",
+            sectionId, limit.from, limit.to, speed));
+    }
+
     // ---- /rcmc section split, and switches at a point ----
 
     /** {@code /rcmc section split <sectionId> <distance | near <x> <y> <z>>}. */
     static void section(ICommandSender sender, World world, RcmcWorldState state, String[] args)
         throws CommandException {
+        if (args.length >= 3 && "speedlimit".equalsIgnoreCase(args[1])) {
+            speedLimit(sender, world, state, args);
+            return;
+        }
         if (args.length < 4 || !"split".equalsIgnoreCase(args[1])) {
-            throw new CommandException("/rcmc section split <sectionId> <distance | near <x> <y> <z>>");
+            throw new CommandException("/rcmc section split <sectionId> <distance | near <x> <y> <z>>"
+                + " | speedlimit <sectionId> [<blocks/s> [from to] | off]");
         }
         int sectionId = CommandBase.parseInt(args[2]);
         double distance = distanceAlong(state, sectionId, args, 3);

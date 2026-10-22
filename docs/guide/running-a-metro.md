@@ -92,6 +92,35 @@ a full trip divided by the number of trains.
 Both are saved with the line, can be undone like any edit, and reach trains already running at their
 next stop.
 
+## Speed, acceleration and braking
+
+```
+/rcmc line set <lineName> maxspeed <blocks/s|off>
+/rcmc line set <lineName> accel <blocks/s²|off>
+/rcmc line set <lineName> decel <blocks/s²|off>
+```
+
+**maxspeed** is the line speed trains run at between stations. It is the default when `line start`
+names no speed, and the cap when it does. It defaults to 15 blocks/s and can go up to the `maxSpeed`
+physics setting (60 by default). **accel** and **decel** are the traction and service-braking rates.
+Both default to 1.2 blocks/s². Trains still accelerate and brake at these rates, so on a short run
+between stations a fast line may never reach its full speed. Acceleration also tails off as a train
+gets faster, as on a real one. These settings apply to trains entering service, so take a train out
+and start it again to pick them up.
+
+Curves set their own limits. To slow trains anywhere else, such as through a station, over points
+or at a tunnel portal, sign a speed limit on the track:
+
+```
+/rcmc section speedlimit <sectionId> <blocks/s> [from to]
+/rcmc section speedlimit <sectionId> off
+/rcmc section speedlimit <sectionId>
+```
+
+With no `from to` the limit covers the whole section. Trains brake in time to be at the limit when
+they reach it, and hold it until their last car has cleared it. The last form lists the limits on a
+section. Limits are kept by distance along the section, so sign them again after reshaping one.
+
 ## Holding and removing trains
 
 ```

@@ -13,7 +13,6 @@ import com.micatechnologies.minecraft.rcmc.physics.transit.LineOperations;
 import com.micatechnologies.minecraft.rcmc.physics.transit.LineService;
 import com.micatechnologies.minecraft.rcmc.physics.transit.LineSignals;
 import com.micatechnologies.minecraft.rcmc.physics.transit.ServiceStatus;
-import com.micatechnologies.minecraft.rcmc.physics.transit.TransitDrives;
 import com.micatechnologies.minecraft.rcmc.physics.transit.TransitLine;
 import com.micatechnologies.minecraft.rcmc.physics.transit.TransitPlatform;
 import com.micatechnologies.minecraft.rcmc.physics.transit.TransitStation;
@@ -43,9 +42,6 @@ public final class LineControl {
 
     /** Dwell and headway move in steps of this many seconds. */
     private static final int STEP_SECONDS = 5;
-
-    /** Line speed a train added from the desk runs at, blocks/s: the same as {@code /rcmc line start}. */
-    private static final double CRUISE = 15.0D;
 
     private static final String TRAIN_TYPE = "metro";
 
@@ -186,7 +182,8 @@ public final class LineControl {
             berth.stopPoint().distance(), 0.0D);
         try {
             state.transit().enterService(trainId, state.trains().train(trainId), state.network(), line.name(),
-                TransitDrives.metro(CRUISE, RcmcConstants.SECONDS_PER_TICK));
+                state.transit().driveFor(line.name(), state.transit().lineSpeed(line.name()),
+                    RcmcConstants.SECONDS_PER_TICK));
         }
         catch (IllegalArgumentException e) {
             TrainSpawner.remove(world, state, trainId);

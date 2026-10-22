@@ -92,6 +92,11 @@ public final class PhysicsIntegrator {
         return gravityAlongTrack + drag + externalAcceleration;
     }
 
+    /** Quadratic drag coefficient, 1/block. */
+    public double airDrag() {
+        return airDrag;
+    }
+
     /** One symplectic velocity update, clamped to the configured speed ceiling. */
     public double advanceVelocity(double velocity, double gravityAlongTrack,
                                   double externalAcceleration, double dt) {
