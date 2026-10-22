@@ -54,6 +54,8 @@ Read by the server. Clients' values are not used.
 | `enableCameraRoll` | `true` | Whether the rider camera rolls with banked track and inversions |
 | `enableRideHud` | `true` | The live speed / G-force / height readout while riding |
 | `coasterSoundVolume` | `1.0` | Volume of coaster sounds — rolling, chain lift, wind, brakes, drive tyres, launches — from 0 to 1. `0` turns them off. They also follow Minecraft's *Blocks* volume slider |
+| `metroSoundVolume` | `1.0` | Volume of metro running sounds — the traction motor whine and the wheels on rail — from 0 to 1. `0` turns them off. Door chimes, brake release and announcements are not affected. They also follow Minecraft's *Blocks* volume slider |
+| `metroUndergroundBoost` | `true` | Make metro running sounds louder while the train is underground (little sky light where it is), as in a tunnel |
 
 ### G-force screen effects
 

@@ -40,6 +40,14 @@ public final class RcmcSounds {
     /** Air dumping from the brake pipe as a train releases and pulls away. */
     public static final SoundEvent METRO_BRAKE_RELEASE = create("metro_brake_release");
 
+    // --- Metro running loops. Synthesised by tools/audio/synth_metro_running_sounds.py. ---
+
+    /** VVVF traction motor whine. Looped, pitch following speed, louder under power or braking. */
+    public static final SoundEvent METRO_MOTOR = create("metro_motor");
+
+    /** A metro car's wheels on rail. Looped, pitch and volume following speed. */
+    public static final SoundEvent METRO_ROLLING = create("metro_rolling");
+
     // --- Coaster. Synthesised by tools/audio/synth_coaster_sounds.py; all but the launch loop. ---
 
     /** Wheels on rail. Looped, pitch and volume following the train's speed. */

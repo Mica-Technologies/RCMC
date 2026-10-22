@@ -9,6 +9,7 @@ import com.micatechnologies.minecraft.rcmc.physics.TrainSpec;
 import com.micatechnologies.minecraft.rcmc.sound.CoasterAudioMix;
 import com.micatechnologies.minecraft.rcmc.sound.CoasterAudioMix.Channel;
 import com.micatechnologies.minecraft.rcmc.sound.CoasterAudioMix.Level;
+import com.micatechnologies.minecraft.rcmc.sound.MetroAudioMix;
 import com.micatechnologies.minecraft.rcmc.sound.RcmcSounds;
 import com.micatechnologies.minecraft.rcmc.track.ElementSpan;
 import com.micatechnologies.minecraft.rcmc.track.TrackRef;
@@ -28,6 +29,8 @@ import net.minecraft.client.audio.SoundHandler;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.SoundCategory;
 import net.minecraft.util.SoundEvent;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.EnumSkyBlock;
 import net.minecraft.world.World;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
@@ -45,7 +48,11 @@ import net.minecraftforge.fml.relauncher.SideOnly;
  * {@link TrainLoopSound} per (train, channel, on board or not) playing with those levels.</p>
  *
  * <p>A rider hears their own train from inside it — no position, no falloff — while everyone else
- * hears it from where the train is. Metro trains are left alone; they have their own sounds.</p>
+ * hears it from where the train is.</p>
+ *
+ * <p>Metro trains get their running loops here too — traction motor and wheels on rail, mixed by
+ * {@link MetroAudioMix} — with the same earshot culling and loop bookkeeping. Their one-shots (door
+ * chimes, brake release) are played elsewhere.</p>
  */
 @SideOnly(Side.CLIENT)
 public final class CoasterSoundDirector {
@@ -88,8 +95,9 @@ public final class CoasterSoundDirector {
 
     private void direct(Minecraft mc, World world) {
         float master = (float) RcmcConfig.coasterSoundVolume;
+        float metroMaster = (float) RcmcConfig.metroSoundVolume;
         RcmcWorldState state = RcmcWorldState.of(world);
-        if (state == null || master <= 0.0F) {
+        if (state == null || (master <= 0.0F && metroMaster <= 0.0F)) {
             releaseAll();
             return;
         }
@@ -99,7 +107,9 @@ public final class CoasterSoundDirector {
         for (Map.Entry<Integer, Train> entry : state.trains().asMap().entrySet()) {
             int trainId = entry.getKey();
             Train train = entry.getValue();
-            if (train.spec().carStyle() != TrainSpec.CarStyle.COASTER) {
+            boolean metro = train.spec().carStyle() == TrainSpec.CarStyle.METRO;
+            if ((metro ? metroMaster : master) <= 0.0F) {
+                forget(trainId);
                 continue;
             }
             int middle = train.spec().carCount() / 2;
@@ -120,6 +130,11 @@ public final class CoasterSoundDirector {
                 forget(trainId);
                 continue;
             }
+            // Nothing for a train over chunks this client has not got: it cannot be seen either.
+            if (!world.isBlockLoaded(new BlockPos(x, y, z), false)) {
+                forget(trainId);
+                continue;
+            }
 
             double speed = train.speed();
             double previous = lastSpeed.getOrDefault(trainId, speed);
@@ -127,6 +142,19 @@ public final class CoasterSoundDirector {
             // one-tick jump would read as a spike of acceleration.
             double raw = (speed - previous) / RcmcConstants.SECONDS_PER_TICK;
             double acceleration = 0.6D * lastAcceleration.getOrDefault(trainId, 0.0D) + 0.4D * raw;
+            if (metro) {
+                lastSpeed.put(trainId, speed);
+                lastAcceleration.put(trainId, acceleration);
+                boolean underground = RcmcConfig.metroUndergroundBoost
+                    && world.getLightFor(EnumSkyBlock.SKY, new BlockPos(x, y + 1.0D, z)) < 8;
+                for (MetroAudioMix.Channel channel : MetroAudioMix.Channel.values()) {
+                    Level level = MetroAudioMix.level(channel, speed, acceleration, onBoard, underground);
+                    drive(mc, new Key(trainId, channel, onBoard), metroEventFor(channel), onBoard,
+                        MetroAudioMix.bystanderRange(speed), level.volume * metroMaster, level.pitch,
+                        x, y, z, wanted);
+                }
+                continue;
+            }
             String span = spanAt(state.elementSpans(), where);
 
             if (CoasterAudioMix.launchFires(lastSpan.get(trainId),
@@ -142,26 +170,9 @@ public final class CoasterSoundDirector {
 
             for (Channel channel : Channel.values()) {
                 Level level = CoasterAudioMix.level(channel, speed, acceleration, span, onBoard);
-                Key key = new Key(trainId, channel, onBoard);
-                TrainLoopSound loop = loops.get(key);
-                float volume = level.volume * master;
-                // Restarted if Minecraft dropped it (a sound reload, the channel limit) — but only
-                // once it has had time to start; see TrainLoopSound.age.
-                if (loop == null || loop.isReleased()
-                    || (loop.age() > 20 && !mc.getSoundHandler().isSoundPlaying(loop))) {
-                    if (loop != null) {
-                        loop.release();
-                    }
-                    if (volume <= 0.0F) {
-                        continue;
-                    }
-                    loop = new TrainLoopSound(eventFor(channel), onBoard,
-                        CoasterAudioMix.bystanderRange(speed), volume, level.pitch, x, y, z);
-                    loops.put(key, loop);
-                    mc.getSoundHandler().playSound(loop);
-                }
-                loop.target(volume, level.pitch, x, y, z);
-                wanted.add(key);
+                drive(mc, new Key(trainId, channel, onBoard), eventFor(channel), onBoard,
+                    CoasterAudioMix.bystanderRange(speed), level.volume * master, level.pitch,
+                    x, y, z, wanted);
             }
         }
 
@@ -178,6 +189,32 @@ public final class CoasterSoundDirector {
         lastSpeed.keySet().retainAll(state.trains().asMap().keySet());
         lastAcceleration.keySet().retainAll(state.trains().asMap().keySet());
         lastSpan.keySet().retainAll(state.trains().asMap().keySet());
+    }
+
+    /** Keeps one loop playing at this tick's level, starting (or restarting) it if needed. */
+    private void drive(Minecraft mc, Key key, SoundEvent event, boolean onBoard, float range,
+                       float volume, float pitch, double x, double y, double z, Set<Key> wanted) {
+        TrainLoopSound loop = loops.get(key);
+        // Restarted if Minecraft dropped it (a sound reload, the channel limit) — but only once it
+        // has had time to start; see TrainLoopSound.age.
+        if (loop == null || loop.isReleased()
+            || (loop.age() > 20 && !mc.getSoundHandler().isSoundPlaying(loop))) {
+            if (loop != null) {
+                loop.release();
+            }
+            if (volume <= 0.0F) {
+                return;
+            }
+            loop = new TrainLoopSound(event, onBoard, range, volume, pitch, x, y, z);
+            loops.put(key, loop);
+            mc.getSoundHandler().playSound(loop);
+        }
+        loop.target(volume, pitch, x, y, z);
+        wanted.add(key);
+    }
+
+    private static SoundEvent metroEventFor(MetroAudioMix.Channel channel) {
+        return channel == MetroAudioMix.Channel.MOTOR ? RcmcSounds.METRO_MOTOR : RcmcSounds.METRO_ROLLING;
     }
 
     /**
@@ -247,10 +284,11 @@ public final class CoasterSoundDirector {
 
     private static final class Key {
         final int trainId;
-        final Channel channel;
+        /** A {@link Channel} or a {@link MetroAudioMix.Channel}. */
+        final Enum<?> channel;
         final boolean onBoard;
 
-        Key(int trainId, Channel channel, boolean onBoard) {
+        Key(int trainId, Enum<?> channel, boolean onBoard) {
             this.trainId = trainId;
             this.channel = channel;
             this.onBoard = onBoard;

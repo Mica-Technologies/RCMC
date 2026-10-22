@@ -58,5 +58,15 @@
     "category": "block",
     "subtitle": "rcmc.subtitle.coaster_dispatch",
     "sounds": [ { "name": "rcmc:metro_brake_release", "stream": false, "pitch": 0.85 } ]
+  },
+  "metro_motor": {
+    "category": "block",
+    "subtitle": "rcmc.subtitle.metro_motor",
+    "sounds": [ { "name": "rcmc:metro_motor", "stream": false } ]
+  },
+  "metro_rolling": {
+    "category": "block",
+    "subtitle": "rcmc.subtitle.metro_rolling",
+    "sounds": [ { "name": "rcmc:metro_rolling", "stream": false } ]
   }
 }

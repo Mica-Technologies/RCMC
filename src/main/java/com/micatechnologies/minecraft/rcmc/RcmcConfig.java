@@ -81,6 +81,15 @@ public final class RcmcConfig {
     public static double coasterSoundVolume = 1.0D;
 
     /**
+     * Scales metro running sounds — traction motor and wheels on rail — on this client. Zero turns
+     * them off. Door chimes, brake release and announcements are not affected.
+     */
+    public static double metroSoundVolume = 1.0D;
+
+    /** Whether metro running sounds get louder when the train is underground (little sky light). */
+    public static boolean metroUndergroundBoost = true;
+
+    /**
      * Time constant, in seconds, of the low-pass filter {@code GForceSmoother} applies before
      * {@code GForceEffects} reacts to a G reading. Larger values make the screen effects slower
      * to ramp up (and slower to release) but more resistant to single-tick spikes; see
@@ -174,6 +183,12 @@ public final class RcmcConfig {
             "Volume of coaster sounds (rolling, chain lift, wind, brakes, tyres, launches), 0 to 1. "
                 + "0 turns them off. Also follows Minecraft's Blocks volume.", 0.0D, 1.0D)
             .getDouble();
+        metroSoundVolume = config.get(CATEGORY_CLIENT, "metroSoundVolume", metroSoundVolume,
+            "Volume of metro running sounds (traction motor, wheels on rail), 0 to 1. 0 turns them "
+                + "off. Also follows Minecraft's Blocks volume.", 0.0D, 1.0D).getDouble();
+        metroUndergroundBoost = config.get(CATEGORY_CLIENT, "metroUndergroundBoost",
+            metroUndergroundBoost, "Make metro running sounds louder when the train is underground "
+                + "(in a tunnel, with little sky light).").getBoolean();
         gForceSmoothingSeconds = config.get(CATEGORY_CLIENT, "gForceSmoothingSeconds",
             gForceSmoothingSeconds, "Time constant, in seconds, of the smoothing applied before "
                 + "G-force screen effects react. Higher is slower to ramp up and slower to "
