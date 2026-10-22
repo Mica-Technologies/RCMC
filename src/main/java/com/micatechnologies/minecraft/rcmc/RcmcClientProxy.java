@@ -51,6 +51,9 @@ public class RcmcClientProxy extends RcmcCommonProxy {
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(
             new com.micatechnologies.minecraft.rcmc.client.sound.CoasterSoundDirector());
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new RiderCamera());
+        // Lights passengers standing in a lit metro car to match the saloon around them.
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(
+            new com.micatechnologies.minecraft.rcmc.client.render.SaloonLighting());
         // Redraws the ridden train when vanilla's per-render-chunk entity loop skips it.
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(
             new com.micatechnologies.minecraft.rcmc.client.render.RiddenTrainRenderer());

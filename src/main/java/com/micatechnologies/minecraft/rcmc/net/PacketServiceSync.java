@@ -46,6 +46,7 @@ public class PacketServiceSync implements IMessage {
             boolean atPlatform = buf.readBoolean();
             boolean doorsOpen = buf.readBoolean();
             float doorFraction = buf.readFloat();
+            float doorRate = buf.readFloat();
             float distanceToNextStop = buf.readFloat();
             int doorSide = buf.readInt();
             String platformLabel = ByteBufUtils.readUTF8String(buf);
@@ -56,7 +57,7 @@ public class PacketServiceSync implements IMessage {
             }
             int facing = buf.readByte();
             snapshots.add(new ServiceSnapshot(trainId, lineName, direction, nextStop, atPlatform,
-                doorsOpen, doorFraction, distanceToNextStop, DoorSide.byOrdinal(doorSide),
+                doorsOpen, doorFraction, doorRate, distanceToNextStop, DoorSide.byOrdinal(doorSide),
                 platformLabel, seconds, facing));
         }
     }
@@ -72,6 +73,7 @@ public class PacketServiceSync implements IMessage {
             buf.writeBoolean(snapshot.atPlatform());
             buf.writeBoolean(snapshot.doorsOpen());
             buf.writeFloat((float) snapshot.doorFraction());
+            buf.writeFloat((float) snapshot.doorRate());
             buf.writeFloat((float) snapshot.distanceToNextStop());
             // Track-relative, which is the form the car model is drawn in — a client needs no
             // station registry and no facing arithmetic to know which doors to animate.

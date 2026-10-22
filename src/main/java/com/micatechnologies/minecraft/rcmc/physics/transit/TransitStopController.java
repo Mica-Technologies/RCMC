@@ -273,6 +273,21 @@ public final class TransitStopController {
         }
     }
 
+    /**
+     * How fast {@link #doorFraction} is changing, per tick: what a client needs to move the leaves
+     * between syncs in step with the cycle rather than lagging behind it.
+     */
+    public double doorRate() {
+        switch (phase) {
+            case DOORS_OPENING:
+                return doorOpenTicks == 0 ? 0.0D : 1.0D / doorOpenTicks;
+            case DOORS_CLOSING:
+                return doorCloseTicks == 0 ? 0.0D : -1.0D / doorCloseTicks;
+            default:
+                return 0.0D;
+        }
+    }
+
     public Phase phase() {
         return phase;
     }

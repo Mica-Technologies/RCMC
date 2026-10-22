@@ -110,6 +110,31 @@ class TransitStopControllerTest {
     }
 
     @Test
+    @DisplayName("the door rate predicts the next tick's fraction, so a client can run ahead of syncs")
+    void doorRatePredictsNextFraction() {
+        TrackNetwork flat = flatNetwork(1000.0D);
+        TransitStopController controller = controller();
+        Train train = new Train(TrainSpec.singleCar(), realistic(), new TrackRef(1, 400.0D), 0.0D);
+
+        int moving = 0;
+        int guard = 0;
+        while (controller.stopsServed() == 0 && guard++ < 2000) {
+            TransitStopController.Phase phase = controller.phase();
+            double fraction = controller.doorFraction();
+            double rate = controller.doorRate();
+            tickWithController(train, flat, controller, 400.0D);
+            if (controller.phase() == phase) {
+                assertEquals(controller.doorFraction(), fraction + rate, 1e-9D,
+                    "fraction + rate is next tick's fraction within a phase");
+                if (rate != 0.0D) {
+                    moving++;
+                }
+            }
+        }
+        assertTrue(moving > 0, "the doors must have been seen moving");
+    }
+
+    @Test
     @DisplayName("the door cycle runs open, boarding, close for exactly the configured tick counts")
     void doorCycleTimingIsExact() {
         TrackNetwork flat = flatNetwork(1000.0D);

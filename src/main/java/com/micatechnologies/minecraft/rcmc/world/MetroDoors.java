@@ -89,6 +89,27 @@ public final class MetroDoors {
     }
 
     /**
+     * How fast {@link #openFraction} is changing, per tick — positive opening, negative closing.
+     * What lets a client move the leaves between syncs in step with the server.
+     */
+    public static double openRate(World world, int trainId) {
+        RcmcWorldState state = RcmcWorldState.of(world);
+        if (state == null) {
+            return 0.0D;
+        }
+        LineService service = state.transit().serviceFor(trainId);
+        if (service != null) {
+            return service.controller().doorRate();
+        }
+        for (ServiceSnapshot snapshot : state.serviceSnapshots()) {
+            if (snapshot.trainId() == trainId) {
+                return snapshot.doorRate();
+            }
+        }
+        return 0.0D;
+    }
+
+    /**
      * Whether this world has any metro service running at all — a cheap guard for hot paths.
      *
      * <p>Deliberately checks <em>both</em> sides' notion of it. {@code TransitSystem.services} is

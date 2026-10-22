@@ -105,7 +105,7 @@ public class RenderCoasterCar extends Render<EntityCoasterCar> {
         // dimmed by the room it is in.
         boolean lit = specOf(entity) != null
             && specOf(entity).carStyle() == TrainSpec.CarStyle.METRO
-            && saloonLightsOn(entity);
+            && SaloonLighting.lit(entity);
         float lastBrightnessX = net.minecraft.client.renderer.OpenGlHelper.lastBrightnessX;
         float lastBrightnessY = net.minecraft.client.renderer.OpenGlHelper.lastBrightnessY;
         if (lit) {
@@ -229,8 +229,9 @@ public class RenderCoasterCar extends Render<EntityCoasterCar> {
             // Smoothed client-side: the synced value arrives a few times a second, and drawing it
             // raw makes the leaves jump between a handful of positions per close.
             float doorFraction = MetroDoorAnimation.fraction(entity.world, entity.trainId(),
-                MetroDoors.openFraction(entity.world, entity.trainId()), partialTicks);
-            boolean lightsOn = saloonLightsOn(entity);
+                MetroDoors.openFraction(entity.world, entity.trainId()),
+                MetroDoors.openRate(entity.world, entity.trainId()), partialTicks);
+            boolean lightsOn = SaloonLighting.lit(entity);
             // A car's outermost ends are the ones with nothing coupled beyond them.
             boolean outerFront = entity.carIndex() == 0;
             boolean outerRear = entity.carIndex() == spec.carCount() - 1;
@@ -291,49 +292,6 @@ public class RenderCoasterCar extends Render<EntityCoasterCar> {
             colourOf(spec, TrainSpec.Part.SEATS, 1)).emit(buffer);
         tessellator.draw();
     }
-
-    /**
-     * Whether this car's saloon lighting is lit: on below {@link #SALOON_LIGHT_THRESHOLD} of
-     * outside light, off above it.
-     *
-     * <p>A real metro's lights are on continuously, but a car lit identically at noon and at
-     * midnight has no lighting at all as far as a player can tell. Switching on the world's own
-     * light level is what makes the interior read as lit — and it means a train diving into a
-     * tunnel lights up, which is the moment the effect exists for.</p>
-     *
-     * <p>Sampled at the car's roof rather than its centre: the block the car body occupies is
-     * usually air, but sampling inside a tunnel bore or under a station canopy is exactly where the
-     * reading matters.</p>
-     */
-    private static boolean saloonLightsOn(EntityCoasterCar entity) {
-        net.minecraft.util.math.BlockPos at = new net.minecraft.util.math.BlockPos(
-            entity.posX, entity.posY + 2.0D, entity.posZ);
-        if (!entity.world.isBlockLoaded(at)) {
-            return false;
-        }
-        // Stored sky light is 15 outdoors at midnight exactly as at noon — time of day never
-        // touches it. Three ways of asking were tried before this one and all three failed
-        // identically, so the reasoning is recorded rather than the answer:
-        //
-        //   getLight(pos)          — stored light, no time term at all.
-        //   getLight(pos, true)    — the flag is checkNeighbors, not a time term either.
-        //   sky - getSkylightSubtracted() — the right idea, wrong field: World.skylightSubtracted
-        //                            is assigned only in calculateInitialSkylight() and through
-        //                            setSkylightSubtracted(), never from World.tick(), so on a
-        //                            CLIENT it is frozen at its construction value. 15 - 0 = 15.
-        //
-        // getSunBrightness is derived from the celestial angle on every call, which makes it the
-        // one form that is always current on the side that actually renders. Sky light scaled by it
-        // is how bright the sky genuinely is here and now; block light needs no correction, since a
-        // lamp is a lamp at any hour.
-        int blockLight = entity.world.getLightFor(net.minecraft.world.EnumSkyBlock.BLOCK, at);
-        int skyLight = entity.world.getLightFor(net.minecraft.world.EnumSkyBlock.SKY, at);
-        float sun = entity.world.getSunBrightness(1.0F);
-        return Math.max((double) blockLight, skyLight * sun) < SALOON_LIGHT_THRESHOLD;
-    }
-
-    /** Below this world light level the saloon lights come on. Dusk, roughly. */
-    private static final int SALOON_LIGHT_THRESHOLD = 10;
 
     /**
      * Height of the contact wire over the section this car is on, or {@code 0} where there is no

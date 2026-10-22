@@ -21,6 +21,13 @@ public final class ServiceSnapshot {
     private final boolean atPlatform;
     private final boolean doorsOpen;
     private final double doorFraction;
+
+    /**
+     * How fast {@link #doorFraction} is changing, per tick: positive while the doors open, negative
+     * while they close, zero otherwise. Lets a client carry the leaves forward between syncs exactly
+     * as the server moves them, instead of chasing a value that is already stale when it lands.
+     */
+    private final double doorRate;
     private final double distanceToNextStop;
 
     /**
@@ -94,6 +101,14 @@ public final class ServiceSnapshot {
                            boolean atPlatform, boolean doorsOpen, double doorFraction,
                            double distanceToNextStop, DoorSide doorSide, String platformLabel,
                            double[] secondsToStations, int facing) {
+        this(trainId, lineName, serviceDirection, nextStopIndex, atPlatform, doorsOpen, doorFraction,
+            0.0D, distanceToNextStop, doorSide, platformLabel, secondsToStations, facing);
+    }
+
+    public ServiceSnapshot(int trainId, String lineName, int serviceDirection, int nextStopIndex,
+                           boolean atPlatform, boolean doorsOpen, double doorFraction,
+                           double doorRate, double distanceToNextStop, DoorSide doorSide,
+                           String platformLabel, double[] secondsToStations, int facing) {
         if (lineName == null || lineName.isEmpty()) {
             throw new IllegalArgumentException("lineName is required");
         }
@@ -110,6 +125,7 @@ public final class ServiceSnapshot {
         this.atPlatform = atPlatform;
         this.doorsOpen = doorsOpen;
         this.doorFraction = Math.max(0.0D, Math.min(1.0D, doorFraction));
+        this.doorRate = doorRate;
         this.distanceToNextStop = distanceToNextStop;
         this.doorSide = doorSide == null ? DoorSide.BOTH : doorSide;
         this.platformLabel = platformLabel == null ? "" : platformLabel;
@@ -121,7 +137,8 @@ public final class ServiceSnapshot {
     /** This snapshot with arrival estimates attached. */
     public ServiceSnapshot withSecondsToStations(double[] seconds) {
         return new ServiceSnapshot(trainId, lineName, serviceDirection, nextStopIndex, atPlatform,
-            doorsOpen, doorFraction, distanceToNextStop, doorSide, platformLabel, seconds, facing);
+            doorsOpen, doorFraction, doorRate, distanceToNextStop, doorSide, platformLabel, seconds,
+            facing);
     }
 
     /** Which way the train runs or is about to, along its current section; {@code +1} or {@code -1}. */
@@ -164,7 +181,7 @@ public final class ServiceSnapshot {
             service.currentStopIndex(),
             service.controller().phase() != TransitStopController.Phase.APPROACHING,
             service.controller().doorsOpen(), service.controller().doorFraction(),
-            service.distanceToNextStop(), doorSide, platformLabel, new double[0],
+            service.controller().doorRate(), service.distanceToNextStop(), doorSide, platformLabel, new double[0],
             service.facing() >= 0.0D ? 1 : -1);
     }
 
@@ -197,6 +214,11 @@ public final class ServiceSnapshot {
      */
     public boolean doorsOpen() {
         return doorsOpen;
+    }
+
+    /** Change in {@link #doorFraction} per tick; see the field. */
+    public double doorRate() {
+        return doorRate;
     }
 
     /** How far the leaves have travelled, 0 shut to 1 open — what the car model animates. */
