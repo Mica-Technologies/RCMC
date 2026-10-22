@@ -32,6 +32,13 @@ public final class TrackSplits {
     /** A node this close to the requested point is used rather than another inserted beside it. */
     static final double SNAP_TO_NODE = 1.0D;
 
+    /**
+     * How close an existing node must be for a switch to cut there instead of at the exact point.
+     * Small, because the diverging track's end is checked against the exact point: snapping a
+     * whole block away left a siding start 0.5 from the joint and the join was refused.
+     */
+    private static final double SWITCH_SNAP = 0.05D;
+
     private TrackSplits() {
         throw new AssertionError("No instances.");
     }
@@ -61,6 +68,16 @@ public final class TrackSplits {
     /** Splits section {@code sectionId} at {@code distance} along it. */
     public static Split splitAt(World world, RcmcWorldState state, int sectionId, double distance)
         throws Refused {
+        return splitAt(world, state, sectionId, distance, SNAP_TO_NODE);
+    }
+
+    /**
+     * Splits section {@code sectionId} at {@code distance}, reusing an existing node only within
+     * {@code snap} of it — a switch wants its joint exactly where the diverging track starts, not at
+     * a node up to a block away from it.
+     */
+    static Split splitAt(World world, RcmcWorldState state, int sectionId, double distance,
+                         double snap) throws Refused {
         TrackNetwork network = state.network();
         TrackSection section = network.section(sectionId);
         if (section == null) {
@@ -75,7 +92,7 @@ public final class TrackSplits {
                 + "which needs no split", sectionId, total, distance));
         }
 
-        int node = nodeAt(section, distance);
+        int node = nodeAt(section, distance, snap);
         if (node < 0) {
             node = insertionIndex(section, distance);
             TrackNode inserted = new TrackNode(section.positionAtDistance(distance),
@@ -150,7 +167,27 @@ public final class TrackSplits {
         Vec3 leaving = diverge.exitDirectionAt(divergeEnd).scale(-1.0D);
         boolean forward = leaving.dot(through.tangentAtDistance(at)) >= 0.0D;
 
-        Split split = splitAt(world, state, throughId, at);
+        Split split;
+        boolean atStart = !through.isClosed() && at < SNAP_TO_NODE;
+        boolean atEnd = !through.isClosed() && at > total - SNAP_TO_NODE;
+        if (atStart || atEnd) {
+            // At a joint already: no split needed, the switch goes between this end and whatever it
+            // was joined to. Refusing here used to mean removing and re-laying a section to put
+            // points where two sections already met.
+            SectionEnd own = new SectionEnd(throughId, atStart ? End.START : End.END);
+            SectionEnd partner = network.joinedTo(own);
+            if (partner == null) {
+                throw new Refused(String.format("Section #%d ends at %.1f and is joined to nothing there; "
+                    + "use /rcmc switch create <throat> <start|end> <branch> <start|end> ... instead",
+                    throughId, at));
+            }
+            split = atStart
+                ? new Split(partner, own, "Using the joint between " + partner + " and " + own + ".")
+                : new Split(own, partner, "Using the joint between " + own + " and " + partner + ".");
+        }
+        else {
+            split = splitAt(world, state, throughId, at, SWITCH_SNAP);
+        }
         network.disconnect(split.arriving);
         SectionEnd throat = forward ? split.arriving : split.departing;
         SectionEnd straight = forward ? split.departing : split.arriving;
@@ -177,11 +214,11 @@ public final class TrackSplits {
         com.micatechnologies.minecraft.rcmc.net.PacketTrackSync.broadcast(state.network(), dimension);
     }
 
-    /** A node within {@link #SNAP_TO_NODE} of {@code distance} that the section can be split at, or -1. */
-    private static int nodeAt(TrackSection section, double distance) {
+    /** A node within {@code snap} of {@code distance} that the section can be split at, or -1. */
+    private static int nodeAt(TrackSection section, double distance, double snap) {
         int n = section.nodes().size();
         int best = -1;
-        double bestGap = SNAP_TO_NODE;
+        double bestGap = snap;
         for (int i = 0; i < n; i++) {
             if (!section.isClosed() && (i == 0 || i == n - 1)) {
                 continue;

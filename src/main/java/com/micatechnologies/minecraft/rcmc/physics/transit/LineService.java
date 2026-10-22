@@ -90,6 +90,17 @@ public final class LineService {
      */
     private TransitPlatform berth;
 
+    /**
+     * At a turnback terminus with more than one berth, the stop point of the arrival berth just
+     * served; {@code null} otherwise. While set, the train is running round the loop to the same
+     * terminus's <em>departure</em> berth, which is any of its other berths reachable ahead.
+     *
+     * <p>A balloon-loop terminus is normally built with an arrival platform before the loop and a
+     * departure platform after it. Reversing straight after the first stop ran the train through
+     * the departure platform without stopping, so nobody could board there.</p>
+     */
+    private TrackRef departureExclude;
+
     /** Remaining distance to the current target station, from the last {@link #tick}. */
     private double stationRemaining = Double.POSITIVE_INFINITY;
 
@@ -188,6 +199,14 @@ public final class LineService {
             facing = velocity >= 0.0D ? 1.0D : -1.0D;
         }
 
+        if (berth == null && departureExclude != null) {
+            berth = departureBerth(network, train.reference());
+            if (berth == null) {
+                // No other berth ahead: this terminus has only the one, so carry on down the line.
+                departureExclude = null;
+                stopIndex += serviceDirection;
+            }
+        }
         TransitStation target = currentStation();
         if (berth == null) {
             berth = target.platformFor(network, train.reference(), facing, ROUTE_HORIZON);
@@ -253,12 +272,36 @@ public final class LineService {
         return Math.max(-brake, Math.min(brake, wanted));
     }
 
+    /** The nearest berth of the current station ahead of {@code from}, other than the one just served. */
+    private TransitPlatform departureBerth(TrackNetwork network, TrackRef from) {
+        TransitPlatform best = null;
+        double bestDistance = Double.POSITIVE_INFINITY;
+        for (TransitPlatform platform : currentStation().platforms()) {
+            if (platform.stopPoint().equals(departureExclude)) {
+                continue;
+            }
+            double d = TrackWalk.distanceTo(network, from, facing, platform.stopPoint(), ROUTE_HORIZON);
+            if (d < bestDistance) {
+                bestDistance = d;
+                best = platform;
+            }
+        }
+        return best;
+    }
+
     /** Steps the target station after a completed stop cycle, reversing at a terminus. */
     private void advanceToNextStop() {
+        TransitPlatform served = berth;
         // The new target's berth is resolved on the next tick, from where the train stands as it
         // pulls away — far from the station it is now running to, which is the only position from
         // which "which berth would it reach" has one answer.
         berth = null;
+        if (departureExclude != null) {
+            // That was the departure berth at a turnback terminus; the direction already reversed.
+            departureExclude = null;
+            stopIndex += serviceDirection;
+            return;
+        }
         int next = stopIndex + serviceDirection;
         if (line.isLoop()) {
             stopIndex = Math.floorMod(next, line.stationCount());
@@ -272,6 +315,11 @@ public final class LineService {
                 // stationary with its doors just closed — by the time it moves, the flipped facing
                 // is what the controller commands and the velocity sign follows.
                 facing = -facing;
+            }
+            if (line.turnsBackOnLoop() && served != null && currentStation().platformCount() > 1) {
+                // Round the loop to this terminus's departure berth before the next station.
+                departureExclude = served.stopPoint();
+                return;
             }
             // On a turnback loop the facing deliberately does NOT flip. The train keeps driving
             // forward, round the loop, and comes back on the other track — which is the whole

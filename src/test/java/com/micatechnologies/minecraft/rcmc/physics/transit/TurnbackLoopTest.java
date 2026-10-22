@@ -121,6 +121,58 @@ class TurnbackLoopTest {
     }
 
     /**
+     * A balloon-loop terminus usually has an arrival platform before the loop and a departure
+     * platform after it. Reversing service the moment the first was served ran trains straight
+     * through the second without stopping.
+     */
+    @Test
+    @DisplayName("a turnback terminus with two berths stops at the arrival and the departure berth")
+    void servesBothTerminusBerths() {
+        TrackNetwork network = ring();
+        double length = network.section(1).totalLength();
+        TransitSystem transit = new TransitSystem();
+        TransitStation start = new TransitStation("Kingsway", Arrays.asList(
+            new TransitPlatform(new TrackRef(1, length * 0.95D), DoorSide.RIGHT, "1")));
+        TransitStation middle = new TransitStation("Guildhall", Arrays.asList(
+            new TransitPlatform(new TrackRef(1, length * 0.25D), DoorSide.RIGHT, "1"),
+            new TransitPlatform(new TrackRef(1, length * 0.75D), DoorSide.LEFT, "2")));
+        TransitStation end = new TransitStation("Lakeshore", Arrays.asList(
+            new TransitPlatform(new TrackRef(1, length * 0.45D), DoorSide.RIGHT, "arr"),
+            new TransitPlatform(new TrackRef(1, length * 0.55D), DoorSide.RIGHT, "dep")));
+        transit.addStation(start);
+        transit.addStation(middle);
+        transit.addStation(end);
+        transit.addLine(new TransitLine("Circle Line", Arrays.asList(start, middle, end),
+            false, true, "INBOUND", "OUTBOUND"));
+
+        Train train = runningTrain(length * 0.10D);
+        LineService service = transit.enterService(1, train, network, "Circle Line",
+            TransitDrives.metro(15.0D, TICK));
+
+        List<String> served = new ArrayList<>();
+        for (int t = 0; t < 20000; t++) {
+            double acceleration = service.tick(train, network, TrainDriver.NO_STOP);
+            train.setHeld(service.isHolding(train));
+            train.tick(network, acceleration, 4, TICK);
+            if (service.controller().phase() == TransitStopController.Phase.BOARDING
+                && service.currentBerth() != null) {
+                String berth = service.line().station(service.currentStopIndex()).name()
+                    + "/" + service.currentBerth().label();
+                if (served.isEmpty() || !served.get(served.size() - 1).equals(berth)) {
+                    served.add(berth);
+                }
+            }
+        }
+        int arrival = served.indexOf("Lakeshore/arr");
+        assertTrue(arrival >= 0, "the arrival berth is served — got " + served);
+        assertTrue(arrival + 2 < served.size(), "service carries on past the terminus — got " + served);
+        assertEquals("Lakeshore/dep", served.get(arrival + 1),
+            "the departure berth is the very next stop — got " + served);
+        assertEquals("Guildhall/2", served.get(arrival + 2),
+            "then back down the line on the other track — got " + served);
+    }
+
+    /**
      * The contrast, and the reason this is a line property rather than a global change: a stub
      * terminus is a dead end, and there the train genuinely does change ends.
      */

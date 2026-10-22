@@ -1546,6 +1546,12 @@ public class CommandRcmc extends CommandBase {
      * trains on N blocks deadlock. Unlike the coaster system this one is direction-free, so a
      * shuttle line running both ways over one track is safe.</p>
      */
+    /**
+     * Most blocks a line can be divided into. A coaster circuit never needs many, but a metro line
+     * is kilometres long with a block per station or more — 32 was too few for a 38-stop line.
+     */
+    private static final int MAX_LINE_SIGNALS = 256;
+
     private void signals(ICommandSender sender, World world, RcmcWorldState state,
                          com.micatechnologies.minecraft.rcmc.physics.transit.TransitSystem transit,
                          String[] args) throws CommandException {
@@ -1568,7 +1574,7 @@ public class CommandRcmc extends CommandBase {
             return;
         }
 
-        int count = parseInt(args[3], 2, 32);
+        int count = parseInt(args[3], 2, MAX_LINE_SIGNALS);
         // The line's stations are the only track we know for certain belongs to it; a route walk
         // could cross sections they never touch. Signalling what the line demonstrably occupies is
         // the honest subset — and for a single-alignment line, which is every line buildable

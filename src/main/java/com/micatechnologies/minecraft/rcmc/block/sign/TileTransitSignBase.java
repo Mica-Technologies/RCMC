@@ -30,6 +30,25 @@ public abstract class TileTransitSignBase extends TileEntity
     /** How far away a station may be and still count as "this platform's station". */
     private static final double LINK_RANGE = 48.0D;
 
+    /**
+     * How far either side of a berth's stop point its platform is taken to run, and how finely it
+     * is sampled. Either side because which way trains arrive is not recorded on the berth.
+     */
+    private static final double BERTH_REACH = 120.0D;
+    private static final double BERTH_STEP = 8.0D;
+
+    /** The frame {@code along} from {@code stop}, or null past the end of an open section. */
+    private static com.micatechnologies.minecraft.rcmc.track.math.TrackFrame frameNear(
+        TrackNetwork network, com.micatechnologies.minecraft.rcmc.track.TrackRef stop, double along) {
+        try {
+            return network.frameAt(new com.micatechnologies.minecraft.rcmc.track.TrackRef(
+                stop.sectionId(), stop.distance() + along));
+        }
+        catch (RuntimeException e) {
+            return null;
+        }
+    }
+
     /** How often an unlinked sign retries its link, in ticks. */
     private static final int RELINK_INTERVAL = 40;
 
@@ -68,21 +87,32 @@ public abstract class TileTransitSignBase extends TileEntity
         String nearest = "";
         Vec3 nearestForward = null;
         double best = LINK_RANGE * LINK_RANGE;
+        // Measured to the nearest point of any berth, not to the first berth's stop point. A stop
+        // point is where the lead car halts, at the far end of the platform, so a board hung at
+        // the middle of a 120-block platform was 60 away from it and linked to nothing.
         for (TransitStation station : state.transit().stations()) {
-            if (!network.hasSection(station.stopPoint().sectionId())) {
-                continue;
-            }
-            com.micatechnologies.minecraft.rcmc.track.math.TrackFrame frame =
-                network.frameAt(station.stopPoint());
-            Vec3 at = frame.position;
-            double dx = at.x - (pos.getX() + 0.5D);
-            double dy = at.y - (pos.getY() + 0.5D);
-            double dz = at.z - (pos.getZ() + 0.5D);
-            double distanceSq = dx * dx + dy * dy + dz * dz;
-            if (distanceSq < best) {
-                best = distanceSq;
-                nearest = station.name();
-                nearestForward = frame.forward;
+            for (com.micatechnologies.minecraft.rcmc.physics.transit.TransitPlatform platform
+                : station.platforms()) {
+                if (!network.hasSection(platform.stopPoint().sectionId())) {
+                    continue;
+                }
+                for (double along = -BERTH_REACH; along <= BERTH_REACH; along += BERTH_STEP) {
+                    com.micatechnologies.minecraft.rcmc.track.math.TrackFrame frame = frameNear(
+                        network, platform.stopPoint(), along);
+                    if (frame == null) {
+                        continue;
+                    }
+                    Vec3 at = frame.position;
+                    double dx = at.x - (pos.getX() + 0.5D);
+                    double dy = at.y - (pos.getY() + 0.5D);
+                    double dz = at.z - (pos.getZ() + 0.5D);
+                    double distanceSq = dx * dx + dy * dy + dz * dz;
+                    if (distanceSq < best) {
+                        best = distanceSq;
+                        nearest = station.name();
+                        nearestForward = frame.forward;
+                    }
+                }
             }
         }
         // Only announce a change — the periodic relink retry must not mark the world dirty

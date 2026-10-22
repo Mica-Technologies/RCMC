@@ -406,7 +406,13 @@ change when a service reverses. Announcements convert it to the rider's own left
 Dwell defaults to 10 seconds and headway to off; both accept up to 600 seconds, are saved with the
 line, and apply to running trains from their next stop. With a headway set, a train that would
 leave a platform sooner than that after the previous train in the same direction waits with its
-doors open. `line list` shows each line's settings.
+doors open. `line list` shows each line's settings. `line signals` divides a line into 2 to 256
+blocks.
+
+On a `turnback` line, a terminus with more than one berth is served twice: trains stop at the
+berth they arrive at, run round the loop, and stop again at the next berth ahead before setting
+off back down the line. A balloon-loop terminus can have a separate arrival and departure platform
+this way.
 
 A line stores its ordered **stations**; the route between them is discovered by walking the track
 graph, so it survives changes to the track underneath.
@@ -435,8 +441,9 @@ The second form puts a switch **partway along a section**, a circuit included, w
 spur leaves it. Lay the diverging track first, starting at the points; then name the through
 section, the point along it, and the diverging section. The through section is split there (see
 [`/rcmc section`](#rcmc-section)) and the join at the split becomes the switch. Which side is the
-throat follows from which way the diverging track leaves. It starts lined straight, so trains run
-through exactly as before until it is thrown:
+throat follows from which way the diverging track leaves. A point within a block of the section's
+end, where it is already joined to the next section, needs no split: the switch goes on that
+joint. It starts lined straight, so trains run through exactly as before until it is thrown:
 
 ```
 /rcmc switch create 13 18342.5 21      siding #21 leaves the Blue Line 18,342.5 blocks along

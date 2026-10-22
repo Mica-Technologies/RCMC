@@ -128,11 +128,15 @@ public final class PlatformSide {
         // At car-floor height, which is the whole point of a platform: the surface a passenger
         // walks in from is level with the saloon floor, so that is where it will be found.
         double y = frame.position.y + frame.up.y * CarSeating.METRO_FLOOR_HEIGHT;
+        // Rounded, not floored, exactly as PlatformBuilder places decking. A spline frame on track
+        // laid at y47 sits a hair under 47, so flooring put a floor of 48.999 at 48 and probed a
+        // block too low — where a median walkway between the tracks is, rather than the platform.
+        int deckY = (int) Math.round(y) - 1;
         for (double across = SEARCH_FROM; across <= SEARCH_TO; across += 1.0D) {
             double x = frame.position.x + frame.right.x * sign * across;
             double z = frame.position.z + frame.right.z * sign * across;
             // The block UNDER foot level: decking is the surface, so its own top is at floor height.
-            BlockPos pos = new BlockPos(Math.floor(x), Math.floor(y) - 1, Math.floor(z));
+            BlockPos pos = new BlockPos(Math.floor(x), deckY, Math.floor(z));
             if (!world.isBlockLoaded(pos)) {
                 continue;
             }

@@ -301,6 +301,10 @@ public class TileStationSpeaker extends TileTransitSignBase {
                     TtsTrace.stage("SKIP", traceSource(), "rider=" + player.getName(), text);
                     continue;
                 }
+                if (!firstToSay(player, text)) {
+                    TtsTrace.stage("SKIP", traceSource(), "dup=" + player.getName(), text);
+                    continue;
+                }
                 // Empty voice: the client uses the TTS engine's default. Announcements are one
                 // voice for now; a per-line voice could ride the packet later.
                 RcmcNetwork.sendTo(new PacketStationAnnounce(text, ""), (EntityPlayerMP) player);
@@ -308,6 +312,33 @@ public class TileStationSpeaker extends TileTransitSignBase {
             }
         }
     }
+
+    /**
+     * Whether this is the first speaker to send {@code text} to {@code player} recently.
+     *
+     * <p>A long platform needs several speakers to cover it, and a player standing between two of
+     * them was sent every call twice, a moment apart. Every speaker of a station makes the same
+     * call at the same tick, so whichever gets there first says it and the rest stay quiet.</p>
+     */
+    private boolean firstToSay(EntityPlayer player, String text) {
+        long now = world.getTotalWorldTime();
+        String key = player.getUniqueID() + "|" + text;
+        Long last = RECENTLY_SAID.get(key);
+        if (last != null && now - last < DUPLICATE_WINDOW_TICKS) {
+            return false;
+        }
+        if (RECENTLY_SAID.size() > 256) {
+            RECENTLY_SAID.values().removeIf(t -> now - t >= DUPLICATE_WINDOW_TICKS);
+        }
+        RECENTLY_SAID.put(key, now);
+        return true;
+    }
+
+    /** How long after one speaker says something another stays quiet with the same words. */
+    private static final long DUPLICATE_WINDOW_TICKS = 40L;
+
+    /** "player uuid|text" -> world tick it was last sent, across every speaker. */
+    private static final java.util.Map<String, Long> RECENTLY_SAID = new java.util.HashMap<>();
 
     private String traceSource() {
         return "speaker@" + pos.getX() + "," + pos.getY() + "," + pos.getZ();
