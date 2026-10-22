@@ -63,6 +63,30 @@ class CurveSpeedTest {
     }
 
     @Test
+    @DisplayName("a scan with a margin bounds every scan over the next margin of travel, so it can be reused")
+    void marginBoundsTheStretchAhead() {
+        TrackNetwork network = new TrackNetwork();
+        TrackSection track = stadium();
+        network.addSection(track);
+        double margin = 20.0D;
+        double brake = 0.6D;
+        int checked = 0;
+        for (double s = 0.0D; s < track.totalLength(); s += 7.0D) {
+            double reused = CurveSpeed.allowed(network, new TrackRef(1, s), 1.0D, 30.0D, brake, 300.0D,
+                margin);
+            for (double d = 0.0D; d <= margin; d += 2.0D) {
+                double fresh = CurveSpeed.allowed(network,
+                    new TrackRef(1, (s + d) % track.totalLength()), 1.0D, 30.0D, brake, 300.0D);
+                assertTrue(reused <= fresh + 1e-9D, String.format(
+                    "reused cap %.3f from %.1f must not exceed the fresh cap %.3f %.1f further on",
+                    reused, s, fresh, d));
+                checked++;
+            }
+        }
+        assertTrue(checked > 100);
+    }
+
+    @Test
     @DisplayName("a service keeps to the curve limits round the ends and runs faster on the straights")
     void serviceObeysCurves() {
         TrackNetwork network = new TrackNetwork();

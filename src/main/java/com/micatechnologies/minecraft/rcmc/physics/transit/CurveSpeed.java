@@ -69,9 +69,19 @@ public final class CurveSpeed {
      */
     public static double allowed(TrackNetwork network, TrackRef lead, double facing, double length,
                                  double brake, double lookAhead) {
+        return allowed(network, lead, facing, length, brake, lookAhead, 0.0D);
+    }
+
+    /**
+     * {@link #allowed}, made safe to reuse while the train covers up to {@code margin} more blocks:
+     * every limit ahead is treated as {@code margin} nearer than it is. The answer is then a bound
+     * for every position over that stretch, so a caller need not rescan every tick.
+     */
+    public static double allowed(TrackNetwork network, TrackRef lead, double facing, double length,
+                                 double brake, double lookAhead, double margin) {
         // The cars trail the lead reference toward -s whichever way the train runs, so the body is
         // always that stretch; running -s it is the tail that leads, and the look ahead starts there.
-        double underTrain = scan(network, lead, -1.0D, length, brake, false);
+        double underTrain = scan(network, lead, -1.0D, length, brake, false, 0.0D);
         TrackRef front = lead;
         double dir = 1.0D;
         if (facing < 0.0D) {
@@ -80,7 +90,7 @@ public final class CurveSpeed {
             // Past a join that flips the axis, carrying on the same way is +s on the tail's section.
             dir = tail.reversed ? 1.0D : -1.0D;
         }
-        double ahead = scan(network, front, dir, lookAhead, brake, true);
+        double ahead = scan(network, front, dir, lookAhead + margin, brake, true, margin);
         return Math.min(underTrain, ahead);
     }
 
@@ -89,7 +99,7 @@ public final class CurveSpeed {
      * — raised, when {@code braking}, by what braking over the distance to it buys.
      */
     private static double scan(TrackNetwork network, TrackRef from, double dir, double horizon,
-                               double brake, boolean braking) {
+                               double brake, boolean braking, double margin) {
         double lowest = Double.POSITIVE_INFINITY;
         int sectionId = from.sectionId();
         double position = from.distance();
@@ -118,7 +128,7 @@ public final class CurveSpeed {
                     continue;
                 }
                 double permitted = braking
-                    ? Math.sqrt(limit * limit + 2.0D * brake * (walked + x))
+                    ? Math.sqrt(limit * limit + 2.0D * brake * Math.max(0.0D, walked + x - margin))
                     : limit;
                 lowest = Math.min(lowest, permitted);
             }

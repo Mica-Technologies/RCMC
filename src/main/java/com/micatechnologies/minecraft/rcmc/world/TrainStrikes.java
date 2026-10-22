@@ -65,11 +65,35 @@ public final class TrainStrikes {
             }
             TrainSpec spec = train.spec();
             TrainStrike.Body body = TrainStrike.bodyOf(spec);
+            TrackFrame lead = train.bodyFrameOfCar(state.network(), 0);
+            // Entities exist only in loaded chunks. A train running through unloaded country has
+            // nothing to strike, and working out every car's frame to find that out cost more than
+            // the rest of its tick.
+            if (!anyChunkLoaded(world, lead.position.x, lead.position.z,
+                spec.totalLength() + body.halfLength + 2.0D)) {
+                continue;
+            }
             for (int car = 0; car < spec.carCount(); car++) {
-                TrackFrame frame = train.bodyFrameOfCar(state.network(), car);
+                TrackFrame frame = car == 0 ? lead : train.bodyFrameOfCar(state.network(), car);
                 strikeAround(world, entry.getKey(), frame, body, velocity, now);
             }
         }
+    }
+
+    /** Whether any chunk within {@code radius} blocks of (x, z) is loaded. */
+    private static boolean anyChunkLoaded(World world, double x, double z, double radius) {
+        int minX = (int) Math.floor((x - radius) / 16.0D);
+        int maxX = (int) Math.floor((x + radius) / 16.0D);
+        int minZ = (int) Math.floor((z - radius) / 16.0D);
+        int maxZ = (int) Math.floor((z + radius) / 16.0D);
+        for (int cx = minX; cx <= maxX; cx++) {
+            for (int cz = minZ; cz <= maxZ; cz++) {
+                if (world.getChunkProvider().getLoadedChunk(cx, cz) != null) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private static void strikeAround(World world, int trainId, TrackFrame frame, TrainStrike.Body body,

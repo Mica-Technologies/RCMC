@@ -180,6 +180,8 @@ public final class LineService {
      * is what picks the one across an island.</p>
      */
     public void refreshBerth() {
+        // The track changed, so a cached curve scan may describe track that is no longer there.
+        curveCapAge = CURVE_CACHE_TICKS;
         if (berth == null) {
             return;
         }
@@ -246,14 +248,40 @@ public final class LineService {
      */
     private static final double CURVE_BRAKE_FRACTION = 0.6D;
 
+    /**
+     * How many ticks one curve scan is reused for. The scan walks the whole braking distance ahead
+     * every time, and at line speed that is hundreds of samples for every train every tick.
+     */
+    private static final int CURVE_CACHE_TICKS = 10;
+
+    /** Seconds per server tick; the tick rate is fixed at 20 a second. */
+    private static final double TICK_SECONDS = 0.05D;
+
+    /** The most a train is taken to gain in speed while a cached scan is in use, blocks/s. */
+    private static final double CURVE_CACHE_SPEED_SLACK = 5.0D;
+
+    private double cachedCurveCap = Double.POSITIVE_INFINITY;
+    private int curveCapAge = CURVE_CACHE_TICKS;
+    private double curveCapFacing;
+
     /** The speed the curves under and ahead of the train allow; see {@link CurveSpeed}. */
     private double curveCap(Train train, TrackNetwork network) {
+        if (curveCapAge < CURVE_CACHE_TICKS && curveCapFacing == facing) {
+            curveCapAge++;
+            return cachedCurveCap;
+        }
         double brake = controller.serviceBrakeDeceleration() * CURVE_BRAKE_FRACTION;
         double cruise = controller.cruiseSpeed();
         // Far enough to slow from cruise to the lowest limit there is, and a little more.
         double lookAhead = cruise * cruise / (2.0D * brake) + 10.0D;
-        return CurveSpeed.allowed(network, train.reference(), facing, train.spec().totalLength(),
-            brake, lookAhead);
+        // As far as the train can get before the next scan, so the reused answer stays a bound.
+        double margin = (Math.abs(train.velocity()) + CURVE_CACHE_SPEED_SLACK)
+            * CURVE_CACHE_TICKS * TICK_SECONDS;
+        cachedCurveCap = CurveSpeed.allowed(network, train.reference(), facing,
+            train.spec().totalLength(), brake, lookAhead, margin);
+        curveCapAge = 1;
+        curveCapFacing = facing;
+        return cachedCurveCap;
     }
 
     /**
