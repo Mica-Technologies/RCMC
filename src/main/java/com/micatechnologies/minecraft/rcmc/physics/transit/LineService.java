@@ -70,7 +70,7 @@ public final class LineService {
         TransitStation station(String name);
     }
 
-    private final TransitLine line;
+    private TransitLine line;
     private final TransitStopController controller;
     private final StationLookup stations;
 
@@ -382,6 +382,20 @@ public final class LineService {
     public void setDepartureGate(DepartureGate gate) {
         controller.setDepartureGate(gate == null ? null
             : () -> gate.mayDepart(line, stopIndex, serviceDirection));
+    }
+
+    /**
+     * Swaps in a new copy of the same route — same stations in the same order — after one of its
+     * stations was renamed or renamed for display. The service carries on exactly where it was.
+     */
+    public void relink(TransitLine updated) {
+        if (updated.stationCount() != line.stationCount()) {
+            throw new IllegalArgumentException("relink needs the same route, got " + updated);
+        }
+        line = updated;
+        if (berth != null) {
+            refreshBerth();
+        }
     }
 
     public TransitLine line() {

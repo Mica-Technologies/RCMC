@@ -40,6 +40,7 @@ public final class TransitSystem {
     private final Map<Integer, LineService> services = new LinkedHashMap<>();
     private final Map<String, LineOperations> operationsByLine = new LinkedHashMap<>();
     private final SpeedLimits speedLimits = new SpeedLimits();
+    private final Map<String, String> renamedStations = new LinkedHashMap<>();
 
     /**
      * When a train last left each platform in each direction, by {@link #departureKey}, in ticks of
@@ -91,6 +92,73 @@ public final class TransitSystem {
     }
 
     /** Removes a station. Lines already created keep their own snapshot — see {@link TransitLine}. */
+    /**
+     * Replaces station {@code oldName} with {@code updated} everywhere: in the registry, in every
+     * line serving it, and in every running service on those lines, without stopping a train. When
+     * the id changes the old one is remembered, so a board or speaker in an unloaded chunk still
+     * bound to it follows on when it next loads.
+     *
+     * @return false if there is no station {@code oldName}
+     */
+    public boolean replaceStation(String oldName, TransitStation updated) {
+        TransitStation existing = station(oldName);
+        if (existing == null) {
+            return false;
+        }
+        if (!existing.name().equalsIgnoreCase(updated.name()) && station(updated.name()) != null) {
+            throw new IllegalArgumentException("a station named " + updated.name() + " already exists");
+        }
+        removeStation(existing.name());
+        addStation(updated);
+        for (TransitLine line : new java.util.ArrayList<>(lines.values())) {
+            TransitLine relinked = line.withStation(existing.name(), updated);
+            if (relinked == line) {
+                continue;
+            }
+            lines.put(key(line.name()), relinked);
+            for (LineService service : services.values()) {
+                if (service.line().name().equalsIgnoreCase(line.name())) {
+                    service.relink(relinked);
+                }
+            }
+        }
+        if (!existing.name().equalsIgnoreCase(updated.name())) {
+            renamedStations.put(key(existing.name()), updated.name());
+            // A name reused after a rename is the new station's, not a forwarding address.
+            renamedStations.remove(key(updated.name()));
+        }
+        snapshotCache = null;
+        return true;
+    }
+
+    /** The station {@code name} was renamed to, following chains of renames; null if never. */
+    public String renamedTo(String name) {
+        String current = renamedStations.get(key(name));
+        for (int hops = 0; current != null && hops < 16; hops++) {
+            String next = renamedStations.get(key(current));
+            if (next == null) {
+                return current;
+            }
+            current = next;
+        }
+        return current;
+    }
+
+    /** Old station id -> the id it was renamed to, for signs bound to the old one. */
+    public Map<String, String> renamedStations() {
+        return Collections.unmodifiableMap(renamedStations);
+    }
+
+    public void addRename(String oldName, String newName) {
+        renamedStations.put(key(oldName), newName);
+    }
+
+    /** What signage shows for station {@code name}: its display name, or the id if unknown. */
+    public String displayNameOf(String name) {
+        TransitStation station = station(name);
+        return station == null ? name : station.displayName();
+    }
+
     public TransitStation removeStation(String name) {
         return stations.remove(key(name));
     }
@@ -196,6 +264,8 @@ public final class TransitSystem {
         operationsByLine.clear();
         operationsByLine.putAll(incoming.operationsByLine);
         speedLimits.replaceWith(incoming.speedLimits);
+        renamedStations.clear();
+        renamedStations.putAll(incoming.renamedStations);
     }
 
     /** {@link #serviceSnapshots} as of {@link #snapshotsAtTick}; {@code null} when not yet built. */
@@ -749,6 +819,7 @@ public final class TransitSystem {
         snapshotCache = null;
         operationsByLine.clear();
         speedLimits.clearAll();
+        renamedStations.clear();
         lastDepartures.clear();
         timingsByLine.clear();
         arrivals.clear();

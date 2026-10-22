@@ -133,7 +133,8 @@ public class CommandRcmc extends CommandBase {
             return getListOfStringsMatchingLastWord(args, "start", "end");
         }
         if (args.length == 2 && "station".equalsIgnoreCase(args[0])) {
-            return getListOfStringsMatchingLastWord(args, "list", "remove", "doors", "platform");
+            return getListOfStringsMatchingLastWord(args, "list", "remove", "doors", "platform", "rename",
+                "display", "spoken");
         }
         if (args.length == 4 && "station".equalsIgnoreCase(args[0])
             && "doors".equalsIgnoreCase(args[1])) {
@@ -1054,12 +1055,89 @@ public class CommandRcmc extends CommandBase {
      * {@code /rcmc station <name>} — creates (or moves) a named transit station at the track
      * point nearest the player. Also {@code list} and {@code remove <name>}.
      */
+    /**
+     * {@code /rcmc station rename <id> <newId>}, {@code display <id> <name…|off>} and
+     * {@code spoken <id> <name…|off>}. A rename changes the id everywhere at once — lines, running
+     * trains, and the boards and speakers bound to it — without stopping anything. The display name
+     * is what signage shows and may contain spaces; the spoken name is what announcements say.
+     */
+    private void stationNames(ICommandSender sender, World world, RcmcWorldState state,
+                              com.micatechnologies.minecraft.rcmc.physics.transit.TransitSystem transit,
+                              String[] args) throws CommandException {
+        String verb = args[1].toLowerCase(java.util.Locale.ROOT);
+        if (args.length < 4) {
+            throw new CommandException("rename".equals(verb)
+                ? "/rcmc station rename <id> <newId>"
+                : "/rcmc station " + verb + " <id> <name…|off>");
+        }
+        com.micatechnologies.minecraft.rcmc.physics.transit.TransitStation station = transit.station(args[2]);
+        if (station == null) {
+            throw new CommandException("No station named " + args[2]);
+        }
+        com.micatechnologies.minecraft.rcmc.physics.transit.TransitStation updated;
+        String message;
+        if ("rename".equals(verb)) {
+            if (args.length != 4) {
+                throw new CommandException("A station id is one word; give the name with spaces as its"
+                    + " display name: /rcmc station display " + args[2] + " <name…>");
+            }
+            updated = station.withName(args[3]);
+            message = "Renamed " + station.name() + " to " + args[3] + ".";
+        }
+        else {
+            String text = unquote(joinFrom(args, 3));
+            boolean off = "off".equalsIgnoreCase(text);
+            if ("display".equals(verb)) {
+                updated = station.withDisplayName(off ? "" : text);
+                message = station.name() + " is shown as \"" + updated.displayName() + "\".";
+            }
+            else {
+                updated = station.withSpokenName(off ? "" : text);
+                message = station.name() + " is announced as \"" + updated.spokenName() + "\".";
+            }
+        }
+        try {
+            transit.replaceStation(station.name(), updated);
+        }
+        catch (IllegalArgumentException e) {
+            throw new CommandException(e.getMessage());
+        }
+        if (!station.name().equals(updated.name())) {
+            int relinked = 0;
+            for (net.minecraft.tileentity.TileEntity tile : new ArrayList<>(world.loadedTileEntityList)) {
+                if (tile instanceof com.micatechnologies.minecraft.rcmc.block.sign.TileTransitSignBase
+                    && ((com.micatechnologies.minecraft.rcmc.block.sign.TileTransitSignBase) tile)
+                        .stationName().equalsIgnoreCase(station.name())) {
+                    ((com.micatechnologies.minecraft.rcmc.block.sign.TileTransitSignBase) tile)
+                        .relinkTo(updated.name());
+                    relinked++;
+                }
+            }
+            message += " " + relinked + " loaded sign(s) and speaker(s) relinked; any in unloaded chunks"
+                + " follow when they load.";
+        }
+        state.markTrackDirty(world);
+        RcmcNetwork.sendToAllIn(new com.micatechnologies.minecraft.rcmc.net.PacketTransitSync(transit),
+            world.provider.getDimension());
+        reply(sender, TextFormatting.GREEN, message);
+    }
+
+    /** {@code text} without one pair of surrounding double quotes, if it has them. */
+    private static String unquote(String text) {
+        String trimmed = text.trim();
+        if (trimmed.length() >= 2 && trimmed.startsWith("\"") && trimmed.endsWith("\"")) {
+            return trimmed.substring(1, trimmed.length() - 1).trim();
+        }
+        return trimmed;
+    }
+
     private void station(ICommandSender sender, World world, RcmcWorldState state, String[] args)
         throws CommandException {
         if (args.length < 2) {
             throw new CommandException("/rcmc station <name> | list | remove <name> | "
                 + "doors <name> [platform] <left|right|both|auto> | "
-                + "platform <name> <add|remove|list|label> [label]");
+                + "platform <name> <add|remove|list|label> [label] | rename <id> <newId> | "
+                + "display <id> <name…|off> | spoken <id> <name…|off>");
         }
         com.micatechnologies.minecraft.rcmc.physics.transit.TransitSystem transit = state.transit();
         switch (args[1].toLowerCase(java.util.Locale.ROOT)) {
@@ -1089,6 +1167,12 @@ public class CommandRcmc extends CommandBase {
             }
             case "platform": {
                 stationPlatform(sender, world, state, transit, args);
+                return;
+            }
+            case "rename":
+            case "display":
+            case "spoken": {
+                stationNames(sender, world, state, transit, args);
                 return;
             }
             case "doors": {

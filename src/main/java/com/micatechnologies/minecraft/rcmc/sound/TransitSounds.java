@@ -187,7 +187,7 @@ public final class TransitSounds {
         if (stopIndex < 0 || stopIndex >= line.stationCount()) {
             return "the next station";
         }
-        return line.station(stopIndex).name();
+        return line.station(stopIndex).spokenName();
     }
 
     /** Counts down queued announcements and, when one comes due, chimes and/or speaks it. */

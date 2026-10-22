@@ -158,11 +158,11 @@ public class RenderArrivalBoard extends TileEntitySpecialRenderer<TileArrivalBoa
         }
         List<TransitLine> serving = state.transit().linesServing(board.stationName());
         if (serving.isEmpty()) {
-            out.add(board.stationName());
+            out.add(state.transit().displayNameOf(board.stationName()));
             out.add("NO SERVICE");
             return;
         }
-        out.add(board.stationName());
+        out.add(state.transit().displayNameOf(board.stationName()));
 
         // Group arrivals by direction-and-destination across every line serving this station —
         // "OUTBOUND/Alewife" — so a rider sees where each train is bound, not just which way. The

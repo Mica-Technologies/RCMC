@@ -205,8 +205,27 @@ public final class TransitLine {
             return null;
         }
         return serviceDirection >= 0
-            ? stations.get(stations.size() - 1).name()
-            : stations.get(0).name();
+            ? stations.get(stations.size() - 1).displayName()
+            : stations.get(0).displayName();
+    }
+
+    /**
+     * This line with every stop at station {@code oldName} replaced by {@code updated}, or this
+     * line itself if it does not serve that station. The route is unchanged; only the copy of the
+     * station it carries is — which is how a rename or a new display name reaches the signage.
+     */
+    public TransitLine withStation(String oldName, TransitStation updated) {
+        List<TransitStation> replaced = new java.util.ArrayList<>(stations);
+        boolean changed = false;
+        for (int i = 0; i < replaced.size(); i++) {
+            if (replaced.get(i).name().equalsIgnoreCase(oldName)) {
+                replaced.set(i, updated);
+                changed = true;
+            }
+        }
+        return changed
+            ? new TransitLine(name, replaced, loop, turnbackLoop, inboundLabel, outboundLabel)
+            : this;
     }
 
     @Override

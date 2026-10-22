@@ -329,7 +329,21 @@ retrieved from the ride's operator panel — see
 /rcmc station platform <name> remove <label|number>
 /rcmc station platform <name> list
 /rcmc station platform <name> label <label|number> <new label>    rename a berth; 'none' clears it
+/rcmc station rename <name> <newName>                change the station's id everywhere
+/rcmc station display <name> <display name…|off>     what boards and signs show; spaces allowed
+/rcmc station spoken <name> <spoken name…|off>       what announcements say
 ```
+
+A station's name is its **id**: one word, used by commands, lines, and the boards and speakers linked
+to it. `display` gives it the name people see, which can contain spaces and punctuation, for example
+`/rcmc station display GrandCentral Grand Central`. Arrival boards, station signs, in-car signs and
+the line's destinations all show the display name. `spoken` sets what the "Next stop", "This is" and
+"Entering" announcements say, such as `Forty-first Street` for a station shown as `41st St`. Without
+one they say the display name.
+
+`rename` changes the id itself while the line keeps running. Every line serving the station and every
+train on those lines pick up the new name immediately, and loaded boards and speakers are relinked.
+Ones in unloaded chunks follow the rename when they next load.
 
 Where a station or berth goes is the train's lead car's stopping point, given as `<point>`:
 

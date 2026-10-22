@@ -29,6 +29,16 @@ public final class TransitStation {
     private final String name;
     private final List<TransitPlatform> platforms;
 
+    /**
+     * What signage shows, spaces and punctuation allowed: "Grand Central" for the id
+     * {@code GrandCentral}. Empty means the id is shown. The id stays what commands, lines and
+     * linked boards use, so the name people see can change without re-binding anything.
+     */
+    private final String displayName;
+
+    /** What announcements say, where it should differ from the display name ("Forty-first Street"). */
+    private final String spokenName;
+
     public TransitStation(String name, TrackRef stopPoint) {
         this(name, stopPoint, DoorSide.BOTH);
     }
@@ -38,6 +48,11 @@ public final class TransitStation {
     }
 
     public TransitStation(String name, List<TransitPlatform> platforms) {
+        this(name, platforms, "", "");
+    }
+
+    public TransitStation(String name, List<TransitPlatform> platforms, String displayName,
+                          String spokenName) {
         if (name == null || name.isEmpty()) {
             throw new IllegalArgumentException("a station needs a name — the signage renders it");
         }
@@ -52,10 +67,48 @@ public final class TransitStation {
         }
         this.name = name;
         this.platforms = Collections.unmodifiableList(new ArrayList<>(platforms));
+        this.displayName = displayName == null ? "" : displayName.trim();
+        this.spokenName = spokenName == null ? "" : spokenName.trim();
     }
 
+    /** The station's id: what commands, lines and linked signs refer to it by. */
     public String name() {
         return name;
+    }
+
+    /** What signage shows: the display name, or the id where none is set. */
+    public String displayName() {
+        return displayName.isEmpty() ? name : displayName;
+    }
+
+    /** What announcements say: the spoken name, or the display name where none is set. */
+    public String spokenName() {
+        return spokenName.isEmpty() ? displayName() : spokenName;
+    }
+
+    /** The display name as authored, empty when none is set. */
+    public String authoredDisplayName() {
+        return displayName;
+    }
+
+    /** The spoken name as authored, empty when none is set. */
+    public String authoredSpokenName() {
+        return spokenName;
+    }
+
+    /** A copy with the id {@code newName}, everything else kept. */
+    public TransitStation withName(String newName) {
+        return new TransitStation(newName, platforms, displayName, spokenName);
+    }
+
+    /** A copy shown as {@code display}; empty shows the id. */
+    public TransitStation withDisplayName(String display) {
+        return new TransitStation(name, platforms, display, spokenName);
+    }
+
+    /** A copy announced as {@code spoken}; empty says the display name. */
+    public TransitStation withSpokenName(String spoken) {
+        return new TransitStation(name, platforms, displayName, spoken);
     }
 
     /** Every berth at this station, in authoring order. Never empty. */
@@ -183,25 +236,25 @@ public final class TransitStation {
         for (TransitPlatform platform : platforms) {
             updated.add(platform.withDoorSide(side));
         }
-        return new TransitStation(name, updated);
+        return new TransitStation(name, updated, displayName, spokenName);
     }
 
     /** A copy with {@code platform} appended. */
     public TransitStation withPlatform(TransitPlatform platform) {
         List<TransitPlatform> updated = new ArrayList<>(platforms);
         updated.add(platform);
-        return new TransitStation(name, updated);
+        return new TransitStation(name, updated, displayName, spokenName);
     }
 
     /** A copy with {@code platform} replacing the one at {@code index}. */
     public TransitStation withPlatformAt(int index, TransitPlatform platform) {
         List<TransitPlatform> updated = new ArrayList<>(platforms);
         updated.set(index, platform);
-        return new TransitStation(name, updated);
+        return new TransitStation(name, updated, displayName, spokenName);
     }
 
     public TransitStation withPlatforms(TransitPlatform... replacements) {
-        return new TransitStation(name, Arrays.asList(replacements));
+        return new TransitStation(name, Arrays.asList(replacements), displayName, spokenName);
     }
 
     @Override

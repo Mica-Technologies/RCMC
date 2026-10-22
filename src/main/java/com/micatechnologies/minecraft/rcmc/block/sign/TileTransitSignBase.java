@@ -65,12 +65,33 @@ public abstract class TileTransitSignBase extends TileEntity
      */
     @Override
     public void update() {
-        if (world == null || world.isRemote || isLinked()) {
+        if (world == null || world.isRemote) {
             return;
         }
-        if (++relinkCountdown >= RELINK_INTERVAL) {
-            relinkCountdown = 0;
+        if (++relinkCountdown < RELINK_INTERVAL) {
+            return;
+        }
+        relinkCountdown = 0;
+        if (!isLinked()) {
             linkToNearestStation();
+            return;
+        }
+        // A sign bound to a station that has since been renamed follows the rename — this is how
+        // one in a chunk that was unloaded at the time catches up.
+        RcmcWorldState state = RcmcWorldState.of(world);
+        if (state != null && state.transit().station(stationName) == null) {
+            String renamed = state.transit().renamedTo(stationName);
+            if (renamed != null && state.transit().station(renamed) != null) {
+                relinkTo(renamed);
+            }
+        }
+    }
+
+    /** Binds this sign to station {@code name}, keeping its facing. */
+    public void relinkTo(String name) {
+        if (!name.equals(stationName)) {
+            stationName = name;
+            pushUpdate();
         }
     }
 

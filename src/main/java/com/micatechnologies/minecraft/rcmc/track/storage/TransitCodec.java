@@ -75,6 +75,11 @@ public final class TransitCodec {
 
     private static final String KEY_SIGNALS = "TransitSignals";
     private static final String KEY_SPEED_LIMITS = "SpeedLimits";
+    private static final String KEY_DISPLAY_NAME = "DisplayName";
+    private static final String KEY_SPOKEN_NAME = "SpokenName";
+    private static final String KEY_RENAMES = "StationRenames";
+    private static final String KEY_FROM = "From";
+    private static final String KEY_TO = "To";
     private static final String KEY_MAX_SPEED = "MaxSpeed";
     private static final String KEY_ACCEL = "Acceleration";
     private static final String KEY_DECEL = "Deceleration";
@@ -156,6 +161,15 @@ public final class TransitCodec {
             }
         }
         root.setTag(KEY_SPEED_LIMITS, limitList);
+
+        NBTTagList renames = new NBTTagList();
+        for (Map.Entry<String, String> entry : transit.renamedStations().entrySet()) {
+            NBTTagCompound tag = new NBTTagCompound();
+            tag.setString(KEY_FROM, entry.getKey());
+            tag.setString(KEY_TO, entry.getValue());
+            renames.appendTag(tag);
+        }
+        root.setTag(KEY_RENAMES, renames);
     }
 
     /** Reads authored transit into a fresh system. Malformed entries are skipped, not fatal. */
@@ -226,6 +240,13 @@ public final class TransitCodec {
             transit.setSignals(tag.getString(KEY_LINE),
                 new LineSignals(sections, tag.getDouble(KEY_MARGIN), tag.getDouble(KEY_HORIZON)));
         }
+        NBTTagList renames = root.getTagList(KEY_RENAMES, 10);
+        for (int i = 0; i < renames.tagCount(); i++) {
+            NBTTagCompound tag = renames.getCompoundTagAt(i);
+            if (!tag.getString(KEY_FROM).isEmpty() && !tag.getString(KEY_TO).isEmpty()) {
+                transit.addRename(tag.getString(KEY_FROM), tag.getString(KEY_TO));
+            }
+        }
         NBTTagList limitList = root.getTagList(KEY_SPEED_LIMITS, 10);
         for (int i = 0; i < limitList.tagCount(); i++) {
             NBTTagCompound tag = limitList.getCompoundTagAt(i);
@@ -242,6 +263,12 @@ public final class TransitCodec {
     private static NBTTagCompound writeStation(TransitStation station) {
         NBTTagCompound tag = new NBTTagCompound();
         tag.setString(KEY_NAME, station.name());
+        if (!station.authoredDisplayName().isEmpty()) {
+            tag.setString(KEY_DISPLAY_NAME, station.authoredDisplayName());
+        }
+        if (!station.authoredSpokenName().isEmpty()) {
+            tag.setString(KEY_SPOKEN_NAME, station.authoredSpokenName());
+        }
         // The primary platform is also written in the pre-v4 shape. Not for this mod to read back —
         // readStation prefers the list — but so that a save opened by anything reading the old
         // format still finds a station where it expects one, rather than a name with no position.
@@ -285,9 +312,12 @@ public final class TransitCodec {
             // Pre-v4: the station's one stop point IS its one platform, unlabelled because there
             // was never anything to disambiguate it from.
             return new TransitStation(name,
-                new TrackRef(tag.getInteger(KEY_SECTION), tag.getDouble(KEY_DISTANCE)), side);
+                new TrackRef(tag.getInteger(KEY_SECTION), tag.getDouble(KEY_DISTANCE)), side)
+                .withDisplayName(tag.getString(KEY_DISPLAY_NAME))
+                .withSpokenName(tag.getString(KEY_SPOKEN_NAME));
         }
-        return new TransitStation(name, platforms);
+        return new TransitStation(name, platforms, tag.getString(KEY_DISPLAY_NAME),
+            tag.getString(KEY_SPOKEN_NAME));
     }
 
     private static String orDefault(String value, String fallback) {

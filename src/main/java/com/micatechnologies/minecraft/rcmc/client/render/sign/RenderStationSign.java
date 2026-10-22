@@ -58,7 +58,7 @@ public class RenderStationSign extends TileEntitySpecialRenderer<TileStationSign
         }
         List<TransitLine> serving = state.transit().linesServing(sign.stationName());
         if (serving.isEmpty()) {
-            lines[0] = sign.stationName();
+            lines[0] = state.transit().displayNameOf(sign.stationName());
             colours[0] = HEADER_COLOUR;
             lines[1] = "no lines serve";
             colours[1] = MUTED_COLOUR;
@@ -86,7 +86,7 @@ public class RenderStationSign extends TileEntitySpecialRenderer<TileStationSign
         }
         for (int i = window[0]; i <= window[1]; i++) {
             TransitStation stop = line.station(i);
-            lines[row] = (i == here ? "> " : "- ") + stop.name();
+            lines[row] = (i == here ? "> " : "- ") + stop.displayName();
             colours[row] = i == here ? HERE_COLOUR : STOP_COLOUR;
             row++;
         }

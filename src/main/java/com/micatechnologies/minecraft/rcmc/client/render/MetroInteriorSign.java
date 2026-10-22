@@ -85,7 +85,7 @@ public final class MetroInteriorSign {
             // a stale destination — a wrong stop name is worse than no sign.
             return;
         }
-        String stop = line.station(snapshot.nextStopIndex()).name();
+        String stop = line.station(snapshot.nextStopIndex()).displayName();
         String label = snapshot.atPlatform() ? "Now at" : "Next stop";
         // "Red Line  OUTBOUND/Alewife" — line, direction and terminus, from the shared text layer
         // so the in-car sign, the platform board and the announcement speaker never disagree.
