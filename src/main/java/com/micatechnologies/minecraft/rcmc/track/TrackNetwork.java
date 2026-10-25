@@ -559,6 +559,24 @@ public final class TrackNetwork {
         return section.frameAtDistance(ref.distance());
     }
 
+    /** {@code frameAt(ref).position}, without building the frame. */
+    public com.micatechnologies.minecraft.rcmc.track.math.Vec3 positionAt(TrackRef ref) {
+        TrackSection section = sections.get(ref.sectionId());
+        if (section == null) {
+            throw new IllegalArgumentException("No section with id " + ref.sectionId());
+        }
+        return section.framePositionAtDistance(ref.distance());
+    }
+
+    /** {@code frameAt(ref).forward}, without building the frame; see {@link TrackSection#forwardAtDistance}. */
+    public com.micatechnologies.minecraft.rcmc.track.math.Vec3 forwardAt(TrackRef ref) {
+        TrackSection section = sections.get(ref.sectionId());
+        if (section == null) {
+            throw new IllegalArgumentException("No section with id " + ref.sectionId());
+        }
+        return section.forwardAtDistance(ref.distance());
+    }
+
     /**
      * Removes every section, join and switch. The id counter is deliberately NOT reset: blocks in
      * the world (operator panels, boards) name track by section id, and a cleared park's ids

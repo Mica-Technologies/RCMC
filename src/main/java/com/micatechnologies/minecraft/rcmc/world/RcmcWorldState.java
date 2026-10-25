@@ -432,7 +432,7 @@ public final class RcmcWorldState {
                 return;
             }
             com.micatechnologies.minecraft.rcmc.track.math.Vec3 at =
-                state.network.frameAt(train.reference()).position;
+                state.network.positionAt(train.reference());
             for (net.minecraft.entity.player.EntityPlayer player : world.playerEntities) {
                 if (player instanceof net.minecraft.entity.player.EntityPlayerMP
                     && player.getDistanceSq(at.x, at.y, at.z) <= NEAR_SYNC_DISTANCE * NEAR_SYNC_DISTANCE) {

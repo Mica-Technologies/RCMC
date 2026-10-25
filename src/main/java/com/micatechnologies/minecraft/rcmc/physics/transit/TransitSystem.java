@@ -571,7 +571,7 @@ public final class TransitSystem {
             for (Map.Entry<Integer, Train> entry : tickTrains.asMap().entrySet()) {
                 TrackRef at = entry.getValue().reference();
                 if (at != null && tickNetwork.section(at.sectionId()) != null) {
-                    tickPositions.put(entry.getKey(), tickNetwork.frameAt(at).position);
+                    tickPositions.put(entry.getKey(), tickNetwork.positionAt(at));
                 }
             }
         }

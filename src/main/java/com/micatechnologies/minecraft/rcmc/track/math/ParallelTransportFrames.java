@@ -141,4 +141,35 @@ public final class ParallelTransportFrames {
         Vec3 up = a.up.lerp(b.up, frac).normalize();
         return new TrackFrame(position, forward, up);
     }
+
+    /**
+     * {@code frameAtDistance(s).position}, without building the frame.
+     *
+     * <p>Gravity along the track needs only the direction of travel, for every car on every
+     * sub-step, and spacing trains needs only where each one is; the transported up and the
+     * orthonormalisation that a whole frame costs were most of a background train's tick. Same
+     * branches as {@link #frameAtDistance}, so the answers never disagree.</p>
+     */
+    public Vec3 positionAtDistance(double s) {
+        if (spacing <= 0.0D) {
+            return frames[0].position;
+        }
+        double clamped = Math.max(0.0D, Math.min(totalLength(), s));
+        if ((int) (clamped / spacing) >= frames.length - 1) {
+            return frames[frames.length - 1].position;
+        }
+        return arcLength.positionAtDistance(clamped);
+    }
+
+    /** {@code frameAtDistance(s).forward}; see {@link #positionAtDistance} for why this exists. */
+    public Vec3 forwardAtDistance(double s) {
+        if (spacing <= 0.0D) {
+            return frames[0].forward;
+        }
+        double clamped = Math.max(0.0D, Math.min(totalLength(), s));
+        if ((int) (clamped / spacing) >= frames.length - 1) {
+            return frames[frames.length - 1].forward;
+        }
+        return arcLength.tangentAtDistance(clamped).normalize();
+    }
 }

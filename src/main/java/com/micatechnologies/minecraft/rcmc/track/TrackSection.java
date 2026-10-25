@@ -294,6 +294,22 @@ public final class TrackSection {
     }
 
     /**
+     * {@code frameAtDistance(s).forward}, without building the frame. Banking rolls a frame about
+     * its forward axis, so it never moves forward and is not applied here.
+     */
+    public Vec3 forwardAtDistance(double s) {
+        return frames.forwardAtDistance(clampDistance(s));
+    }
+
+    /**
+     * {@code frameAtDistance(s).position}, without building the frame. Unlike
+     * {@link #positionAtDistance} it agrees with the frame on a degenerate section too.
+     */
+    public Vec3 framePositionAtDistance(double s) {
+        return frames.positionAtDistance(clampDistance(s));
+    }
+
+    /**
      * The frame at {@code s} before the authored bank is applied: transported, and corrected for a
      * circuit's residual. What a section continuing this one must start its own frames from.
      */

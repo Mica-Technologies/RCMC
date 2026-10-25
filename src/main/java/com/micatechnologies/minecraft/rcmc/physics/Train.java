@@ -200,12 +200,14 @@ public final class Train {
      * <p>See the class javadoc: this is the whole reason train length affects how a coaster runs.</p>
      */
     public double averageGravityAlongTrack(TrackNetwork network) {
+        // Only each car's direction of travel matters here, so no car's whole frame is built: this
+        // runs for every car on every sub-step, near a player or not.
         if (spec.carCount() == 1) {
-            return integrator.gravityAlong(network.frameAt(reference).forward);
+            return integrator.gravityAlong(network.forwardAt(reference));
         }
         double sum = 0.0D;
         for (int i = 0; i < spec.carCount(); i++) {
-            sum += integrator.gravityAlong(frameOfCar(network, i).forward);
+            sum += integrator.gravityAlong(network.forwardAt(refOfCar(network, i)));
         }
         return sum / spec.carCount();
     }

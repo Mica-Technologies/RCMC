@@ -62,10 +62,25 @@ public final class TrainFloors {
     private long cachedAtTime = Long.MIN_VALUE;
     private List<TrainBoxes> cached = Collections.emptyList();
 
+    /**
+     * Each standing train's boxes from the tick they were last built, by train id.
+     *
+     * <p>A standing train is exactly the one whose boxes do not change: one held at a red or
+     * berthed for a minute had them rebuilt, every car's frame and all, twenty times a second.
+     * They are reused while it stands where it stood, on the same track; see {@link TrainBoxes#key}.</p>
+     */
+    private final Map<Integer, TrainBoxes> byTrain = new java.util.HashMap<>();
+
     /** One train's boxes and the box around them all, so a query far from it costs one test. */
     private static final class TrainBoxes {
         final List<AxisAlignedBB> boxes;
         final AxisAlignedBB around;
+        /**
+         * What the boxes were built from: the lead and tail references, the section objects they
+         * lie on (an edit replaces a section, so a changed one is a different object), and whether
+         * the doors were open.
+         */
+        Object[] key;
 
         TrainBoxes(List<AxisAlignedBB> boxes) {
             this.boxes = boxes;
@@ -111,8 +126,9 @@ public final class TrainFloors {
         return cached;
     }
 
-    private static List<TrainBoxes> build(World world, RcmcWorldState state) {
+    private List<TrainBoxes> build(World world, RcmcWorldState state) {
         List<TrainBoxes> trains = null;
+        byTrain.keySet().retainAll(state.trains().asMap().keySet());
         for (Map.Entry<Integer, Train> entry : state.trains().asMap().entrySet()) {
             Train train = entry.getValue();
             TrainSpec spec = train.spec();
@@ -125,6 +141,20 @@ public final class TrainFloors {
             // inside it. TrainStrikes throws them clear instead.
             boolean standing = Math.abs(train.velocity()) < TrainStrikes.STANDING_SPEED;
             if (!open && !standing) {
+                byTrain.remove(entry.getKey());
+                continue;
+            }
+            com.micatechnologies.minecraft.rcmc.track.TrackRef lead = train.reference();
+            com.micatechnologies.minecraft.rcmc.track.TrackRef tail =
+                train.refOfCar(state.network(), spec.carCount() - 1);
+            Object[] key = {lead, tail, state.network().section(lead.sectionId()),
+                state.network().section(tail.sectionId()), open};
+            TrainBoxes reused = byTrain.get(entry.getKey());
+            if (reused != null && java.util.Arrays.equals(reused.key, key)) {
+                if (trains == null) {
+                    trains = new ArrayList<>();
+                }
+                trains.add(reused);
                 continue;
             }
             List<AxisAlignedBB> boxes = new ArrayList<>();
@@ -144,7 +174,10 @@ public final class TrainFloors {
             if (trains == null) {
                 trains = new ArrayList<>();
             }
-            trains.add(new TrainBoxes(boxes));
+            TrainBoxes built = new TrainBoxes(boxes);
+            built.key = key;
+            byTrain.put(entry.getKey(), built);
+            trains.add(built);
         }
         return trains == null ? Collections.<TrainBoxes>emptyList() : trains;
     }
