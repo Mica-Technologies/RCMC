@@ -1621,7 +1621,8 @@ public class CommandRcmc extends CommandBase {
             com.micatechnologies.minecraft.rcmc.physics.transit.ServiceStatus status =
                 com.micatechnologies.minecraft.rcmc.physics.transit.ServiceStatus.of(transit, entry.getKey(),
                     service, state.trains(), state.network());
-            reply(sender, status.headOnWith >= 0 ? TextFormatting.RED : TextFormatting.AQUA,
+            reply(sender, status.headOnWith >= 0 ? TextFormatting.RED
+                    : status.minutesWithoutStop > 0 ? TextFormatting.YELLOW : TextFormatting.AQUA,
                 "#" + entry.getKey() + " " + line.name() + " " + status.direction + ": " + status.doing
                 + ", " + fmt(status.speed) + " blocks/s" + status.why());
             shown++;

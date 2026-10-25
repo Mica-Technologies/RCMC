@@ -440,6 +440,13 @@ the nearest station either way. `forward` or `reverse` (along the track's own di
 distances increase) overrides that; if no station of the line can be reached that way, it says so
 and runs the other way.
 
+**A train that loses its place.** A line serves every station it lists, in order, so a train in
+service checks once a second that the station it is running to is the next one of the line ahead
+of it. If another station comes first, the train runs to that one instead, and the server log
+says so. `line trains` shows `NO STOP for N min` against a train that has gone ten minutes or more
+without serving a stop, and `not reachable ahead` when the track to its next stop is cut or a
+switch is set against it.
+
 ### `/rcmc signal`
 
 ```

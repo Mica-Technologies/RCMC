@@ -682,6 +682,9 @@ public final class RcmcWorldState {
                 }
                 state.trains.tick(state.network, control,
                     RcmcConfig.physicsSubSteps, RcmcConstants.SECONDS_PER_TICK);
+                for (String note : state.transit.takeRouteNotes()) {
+                    Rcmc.LOGGER.warn("{}", note);
+                }
 
                 if (!state.remote && state.trains.count() > 1) {
                     stopCollidedRides(event.world, state);

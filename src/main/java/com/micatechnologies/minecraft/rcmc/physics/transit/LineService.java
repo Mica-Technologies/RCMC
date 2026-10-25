@@ -41,8 +41,34 @@ public final class LineService {
      */
     static final double FACING_SPEED = 0.1D;
 
-    /** How far ahead the route walk will look for the target station before giving up. */
-    private static final double ROUTE_HORIZON = 10_000.0D;
+    /**
+     * How far ahead the route walk will look for the target station before giving up.
+     *
+     * <p>Far past any line anyone will build, on purpose. A {@link TrackWalk} costs one step per
+     * section crossed, not per block, so the horizon buys nothing in speed; all it can do is hide a
+     * station that is genuinely ahead. It used to be 10,000 blocks, and a 22,900-block turnback
+     * line has stations further away than that from the far leg: a train there could not see its
+     * next stop, fell back to the station's first platform, which was the wrong-direction one, and
+     * ran a whole lap without stopping (#28).</p>
+     *
+     * <p>Package-visible because {@link TransitSystem} chooses a service's first stop and direction
+     * by the same walks, and a shorter horizon there makes the same mistake earlier.</p>
+     */
+    static final double ROUTE_HORIZON = 10_000_000.0D;
+
+    /**
+     * Ticks between checks that the station being run to is still the next one ahead; see
+     * {@link #checkRoute}. The check walks to every station of the line, so it is not done every
+     * tick, but once a second is ample: at line speed a train covers a few tens of blocks.
+     */
+    private static final int ROUTE_CHECK_TICKS = 20;
+
+    /**
+     * A route check only looks once the target is at least this far ahead. Nearer, the train is
+     * braking into its berth and may slide just past the stop point, from where the nearest
+     * station ahead is honestly the next one — which is not a reason to give up this one.
+     */
+    private static final double ROUTE_CHECK_MIN_REMAINING = 64.0D;
 
     /**
      * How far behind the train the target station is still recognised as "just overshot" rather
@@ -103,6 +129,18 @@ public final class LineService {
 
     /** Remaining distance to the current target station, from the last {@link #tick}. */
     private double stationRemaining = Double.POSITIVE_INFINITY;
+
+    /** Ticks until the next {@link #checkRoute}. */
+    private int routeCheckCountdown = ROUTE_CHECK_TICKS;
+
+    /** Consecutive route checks that found another station ahead of the target; see {@link #checkRoute}. */
+    private int routeMismatches;
+
+    /** Ticks since this service last served a stop, or since it entered service. */
+    private long ticksSinceStop;
+
+    /** What the last route correction did, for the log; {@code null} once taken. */
+    private String routeNote;
 
     /**
      * @param line             the line being served
@@ -211,9 +249,12 @@ public final class LineService {
         }
         TransitStation target = currentStation();
         if (berth == null) {
-            berth = target.platformFor(network, train.reference(), facing, ROUTE_HORIZON);
+            // Only a berth genuinely ahead is kept. Caching the primary as a stand-in locked the
+            // service onto it for the whole leg, and on a turnback station that is the platform on
+            // the other track (#28); unresolved, it is simply asked again next tick.
+            berth = target.reachablePlatform(network, train.reference(), facing, ROUTE_HORIZON);
         }
-        TrackRef stop = berth.stopPoint();
+        TrackRef stop = berth == null ? target.stopPoint() : berth.stopPoint();
         // Overshoot first — see OVERSHOOT_WINDOW. On a ring the two probes find the same point
         // from both sides, and the behind reading is the honest one.
         double behind = TrackWalk.distanceTo(
@@ -222,6 +263,15 @@ public final class LineService {
             ? TrackWalk.distanceTo(network, train.reference(), facing, stop, ROUTE_HORIZON)
             : -behind;
         this.stationRemaining = stationRemaining;
+        ticksSinceStop++;
+        if (--routeCheckCountdown <= 0) {
+            routeCheckCountdown = ROUTE_CHECK_TICKS;
+            if (checkRoute(train, network)) {
+                // Retargeted: measure the new stop next tick rather than drive this one on the old.
+                this.stationRemaining = Double.POSITIVE_INFINITY;
+                stationRemaining = Double.POSITIVE_INFINITY;
+            }
+        }
 
         controller.setSpeedCap(curveCap(train, network));
         double acceleration = controller.acceleration(
@@ -232,6 +282,8 @@ public final class LineService {
 
         if (controller.stopsServed() != servedSeen) {
             servedSeen = controller.stopsServed();
+            ticksSinceStop = 0L;
+            routeMismatches = 0;
             advanceToNextStop();
             // The distance above was measured to the stop just served. Left in place it reads as
             // the new target's for the rest of this tick: about zero, so an "Entering <next>" call
@@ -324,6 +376,125 @@ public final class LineService {
             }
         }
         return best;
+    }
+
+    /**
+     * Checks that the station being run to is the next of the line's stations ahead, and puts the
+     * service back on its route when it is not. Returns whether it changed the target.
+     *
+     * <p>A line serves every station it lists, in order, so from a train on its way to a stop no
+     * other station of the line can come first. If one does, the stop index has slipped — a
+     * service re-entered on a loop or a switch, say — and left alone the train drives past every
+     * station until it happens to reach the one it is counting on, which on a long turnback line
+     * is a whole lap (#28). The repair is the one {@link TransitSystem#enterService} makes: the
+     * nearest station ahead is the next stop, and the direction is whichever way along the line
+     * its neighbours lie.</p>
+     *
+     * <p>Two checks in a row must agree before anything changes, and none is made while the train
+     * is braking into its berth, standing, or running round a turnback terminus to the departure
+     * berth — the cases where "nearest ahead" is honestly some other station.</p>
+     *
+     * <p>Also re-resolves the berth: if another platform of the target station is now nearer than
+     * the one this leg was given, that is the one the train reaches first.</p>
+     */
+    private boolean checkRoute(Train train, TrackNetwork network) {
+        if (departureExclude != null
+            || controller.phase() != TransitStopController.Phase.APPROACHING
+            || Math.abs(train.velocity()) <= FACING_SPEED
+            || stationRemaining < ROUTE_CHECK_MIN_REMAINING) {
+            routeMismatches = 0;
+            return false;
+        }
+        TrackRef from = train.reference();
+        int nearest = -1;
+        double nearestDistance = Double.POSITIVE_INFINITY;
+        for (int i = 0; i < line.stationCount(); i++) {
+            double d = live(line.station(i)).distanceToNearestPlatform(network, from, facing, ROUTE_HORIZON);
+            if (d < nearestDistance) {
+                nearestDistance = d;
+                nearest = i;
+            }
+        }
+        if (nearest < 0) {
+            routeMismatches = 0;
+            return false;
+        }
+        if (nearest == stopIndex || nearestDistance >= stationRemaining - 1.0D) {
+            routeMismatches = 0;
+            TransitPlatform reached = currentStation().reachablePlatform(network, from, facing, ROUTE_HORIZON);
+            if (reached != null && berth != null && !reached.stopPoint().equals(berth.stopPoint())) {
+                routeNote = "was running to " + currentStation().name() + " platform " + berth.label()
+                    + ", but platform " + reached.label() + " comes first; now running to that";
+                berth = reached;
+                return true;
+            }
+            return false;
+        }
+        if (++routeMismatches < 2) {
+            return false;
+        }
+        routeMismatches = 0;
+        String was = currentStation().name();
+        stopIndex = nearest;
+        serviceDirection = serviceDirectionFrom(line, this::live, network, from, facing, nearest);
+        berth = null;
+        routeNote = "was running to " + was + " but " + currentStation().name() + " is the next station"
+            + " ahead; now running to it, " + line.labelFor(serviceDirection);
+        return true;
+    }
+
+    /**
+     * Which way along the line's station order a train at {@code from}, driving {@code facing},
+     * runs once it has served the station at {@code index}: {@code +1} or {@code -1}.
+     *
+     * <p>Whichever neighbour of that station the train would reach sooner is the stop after it.
+     * Shared with {@link TransitSystem#enterService}, which chooses a new service's direction the
+     * same way; see its notes there for the stub-terminus case.</p>
+     */
+    static int serviceDirectionFrom(TransitLine line, java.util.function.UnaryOperator<TransitStation> live,
+                                    TrackNetwork network, TrackRef from, double facing, int index) {
+        if (line.stationCount() < 2) {
+            return 1;
+        }
+        double toNext = neighbourDistance(line, live, network, from, facing, index + 1);
+        double toPrevious = neighbourDistance(line, live, network, from, facing, index - 1);
+        if (Double.isInfinite(toNext) && Double.isInfinite(toPrevious)) {
+            // Neither neighbour is ahead: the train is running into the end of a stub line — the
+            // buffer stop is ahead, the rest of the line behind. The service direction is the one
+            // it arrived in, which is the way AWAY from the neighbour behind it; the terminus
+            // turnback then reverses it on the way out. Defaulting to +1 here was what sent a
+            // train reloaded at its first terminus straight on into the buffers.
+            double behindNext = neighbourDistance(line, live, network, from, -facing, index + 1);
+            double behindPrevious = neighbourDistance(line, live, network, from, -facing, index - 1);
+            if (Double.isInfinite(behindNext) && Double.isInfinite(behindPrevious)) {
+                return 1;
+            }
+            return behindNext <= behindPrevious ? -1 : 1;
+        }
+        return toNext <= toPrevious ? 1 : -1;
+    }
+
+    /** Distance to the station at {@code index}, wrapping on a loop; infinite if there is none. */
+    private static double neighbourDistance(TransitLine line, java.util.function.UnaryOperator<TransitStation> live,
+                                            TrackNetwork network, TrackRef from, double facing, int index) {
+        int resolved = index;
+        if (line.isLoop()) {
+            resolved = Math.floorMod(index, line.stationCount());
+        }
+        else if (index < 0 || index >= line.stationCount()) {
+            return Double.POSITIVE_INFINITY;
+        }
+        return live.apply(line.station(resolved))
+            .distanceToNearestPlatform(network, from, facing, ROUTE_HORIZON);
+    }
+
+    /** {@code snapshot} as the registry has it now; see {@link #currentStation}. */
+    private TransitStation live(TransitStation snapshot) {
+        if (stations == null) {
+            return snapshot;
+        }
+        TransitStation current = stations.station(snapshot.name());
+        return current == null ? snapshot : current;
     }
 
     /** Steps the target station after a completed stop cycle, reversing at a terminus. */
@@ -456,6 +627,21 @@ public final class LineService {
      */
     public double distanceToNextStop() {
         return stationRemaining;
+    }
+
+    /** Ticks since this service last served a stop, or since it entered service if it has not. */
+    public long ticksSinceStop() {
+        return ticksSinceStop;
+    }
+
+    /**
+     * What the last route correction changed, worded for the server log, and clears it; {@code null}
+     * when there has been none since the last call. See {@link #checkRoute}.
+     */
+    public String takeRouteNote() {
+        String note = routeNote;
+        routeNote = null;
+        return note;
     }
 
     @Override

@@ -508,7 +508,7 @@ public final class TransitSystem {
                 // Nearest berth of this station, not the primary's: an island's two platforms are
                 // on different tracks, and only one of them is the one this train can pull into.
                 double d = live(line.station(i)).distanceToNearestPlatform(
-                    network, train.reference(), facing, 10_000.0D);
+                    network, train.reference(), facing, LineService.ROUTE_HORIZON);
                 if (d < bestDistance) {
                     bestDistance = d;
                     bestIndex = i;
@@ -693,39 +693,7 @@ public final class TransitSystem {
 
     private int serviceDirectionFrom(TransitLine line, TrackNetwork network, TrackRef from,
                                      double facing, int index) {
-        if (line.stationCount() < 2) {
-            return 1;
-        }
-        double toNext = neighbourDistance(line, network, from, facing, index + 1);
-        double toPrevious = neighbourDistance(line, network, from, facing, index - 1);
-        if (Double.isInfinite(toNext) && Double.isInfinite(toPrevious)) {
-            // Neither neighbour is ahead: the train is running into the end of a stub line — the
-            // buffer stop is ahead, the rest of the line behind. The service direction is the one
-            // it arrived in, which is the way AWAY from the neighbour behind it; the terminus
-            // turnback in LineService then reverses it on the way out. Defaulting to +1 here was
-            // what sent a train reloaded at its first terminus straight on into the buffers.
-            double behindNext = neighbourDistance(line, network, from, -facing, index + 1);
-            double behindPrevious = neighbourDistance(line, network, from, -facing, index - 1);
-            if (Double.isInfinite(behindNext) && Double.isInfinite(behindPrevious)) {
-                return 1;
-            }
-            return behindNext <= behindPrevious ? -1 : 1;
-        }
-        return toNext <= toPrevious ? 1 : -1;
-    }
-
-    /** Distance to the station at {@code index}, wrapping on a loop; infinite if there is none. */
-    private double neighbourDistance(TransitLine line, TrackNetwork network, TrackRef from,
-                                     double facing, int index) {
-        int resolved = index;
-        if (line.isLoop()) {
-            resolved = Math.floorMod(index, line.stationCount());
-        }
-        else if (index < 0 || index >= line.stationCount()) {
-            return Double.POSITIVE_INFINITY;
-        }
-        return live(line.station(resolved))
-            .distanceToNearestPlatform(network, from, facing, 10_000.0D);
+        return LineService.serviceDirectionFrom(line, this::live, network, from, facing, index);
     }
 
     /** Takes a train out of service. The train keeps rolling under whatever else controls it. */
@@ -955,6 +923,23 @@ public final class TransitSystem {
 
     // --- Tick. ---------------------------------------------------------------------------------
 
+    /** Route corrections made by services since {@link #takeRouteNotes} was last called. */
+    private final java.util.List<String> routeNotes = new java.util.ArrayList<>();
+
+    /**
+     * Every route correction a service made since the last call, worded for the server log, and
+     * clears them. A correction means a train had lost its place on its line; see
+     * {@code LineService.checkRoute}.
+     */
+    public java.util.List<String> takeRouteNotes() {
+        if (routeNotes.isEmpty()) {
+            return Collections.emptyList();
+        }
+        java.util.List<String> taken = new java.util.ArrayList<>(routeNotes);
+        routeNotes.clear();
+        return taken;
+    }
+
     /** Once per tick, before {@link #composedWith}'s result is used — see the class javadoc. */
     public void beginTick(TrainManager trains, TrackNetwork network) {
         this.tickNetwork = network;
@@ -1016,6 +1001,10 @@ public final class TransitSystem {
                     authority = Math.min(authority, sight.authority);
                 }
                 double acceleration = service.tick(train, tickNetwork, authority);
+                String routeNote = service.takeRouteNote();
+                if (routeNote != null) {
+                    routeNotes.add("Train #" + trainId + " on " + service.line().name() + " " + routeNote);
+                }
                 observeArrival(trainId, service);
                 return acceleration;
             }

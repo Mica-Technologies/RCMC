@@ -159,6 +159,20 @@ public final class TransitStation {
      */
     public TransitPlatform platformFor(TrackNetwork network, TrackRef from, double facing,
                                        double horizon) {
+        TransitPlatform best = reachablePlatform(network, from, facing, horizon);
+        return best == null ? primary() : best;
+    }
+
+    /**
+     * {@link #platformFor} without the fallback: the nearest berth ahead, or {@code null} when none
+     * is reachable within {@code horizon}.
+     *
+     * <p>For a caller that caches the answer. The primary is a guess, and a cached guess is how a
+     * metro train whose target was beyond the horizon locked onto the far platform of a turnback
+     * station and drove past every stop for a whole lap.</p>
+     */
+    public TransitPlatform reachablePlatform(TrackNetwork network, TrackRef from, double facing,
+                                             double horizon) {
         TransitPlatform best = null;
         double bestDistance = Double.POSITIVE_INFINITY;
         for (TransitPlatform platform : platforms) {
@@ -168,7 +182,7 @@ public final class TransitStation {
                 best = platform;
             }
         }
-        return best == null ? primary() : best;
+        return best;
     }
 
     /**

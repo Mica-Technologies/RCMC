@@ -23,9 +23,19 @@ public final class ServiceStatus {
     public final int stoppingFor;
     /** Held at its platform by an operator. */
     public final boolean held;
+    /**
+     * Whole minutes it has been running without serving a stop, when that is long enough to be
+     * wrong; 0 otherwise. A train that has lost its place on its line drives past every station,
+     * and nothing else on the status line says so (#28).
+     */
+    public final int minutesWithoutStop;
+
+    /** Ten minutes: longer than any sane gap between two stations at line speed. */
+    private static final long NO_STOP_WARNING_TICKS = 20L * 60L * 10L;
 
     private ServiceStatus(String direction, String doing, double speed, int headOnWith, int stoppingFor,
-                          boolean held) {
+                          boolean held, int minutesWithoutStop) {
+        this.minutesWithoutStop = minutesWithoutStop;
         this.direction = direction;
         this.doing = doing;
         this.speed = speed;
@@ -44,8 +54,14 @@ public final class ServiceStatus {
         switch (controller.phase()) {
             case APPROACHING:
                 // Not yet measured on the tick a stop is left; see LineService.distanceToNextStop.
-                doing = Double.isInfinite(service.distanceToNextStop()) ? "to " + next
-                    : "to " + next + ", " + whole(Math.max(0.0D, service.distanceToNextStop())) + " blocks";
+                if (Double.isInfinite(service.distanceToNextStop())) {
+                    // Infinite past the first tick of a leg means the walk found no way there: a
+                    // dead end, or a switch set against it.
+                    doing = service.ticksSinceStop() > 0 && service.currentBerth() == null
+                        ? "to " + next + ", not reachable ahead" : "to " + next;
+                    break;
+                }
+                doing = "to " + next + ", " + whole(Math.max(0.0D, service.distanceToNextStop())) + " blocks";
                 break;
             case BOARDING:
                 if (controller.phaseTicksRemaining() == 0) {
@@ -70,7 +86,10 @@ public final class ServiceStatus {
             train == null ? 0.0D : Math.abs(train.velocity()),
             transit.headOnWith(trainId, trains, network),
             transit.stoppingFor(trainId),
-            held);
+            held,
+            controller.phase() == TransitStopController.Phase.APPROACHING
+                && service.ticksSinceStop() >= NO_STOP_WARNING_TICKS
+                ? (int) (service.ticksSinceStop() / (20L * 60L)) : 0);
     }
 
     /** Why it is not simply running, if it is not: ", HEAD-ON with train #4 …", or empty. */
@@ -80,6 +99,9 @@ public final class ServiceStatus {
         }
         if (stoppingFor >= 0) {
             return ", stopping for train #" + stoppingFor + " ahead";
+        }
+        if (minutesWithoutStop > 0) {
+            return ", NO STOP for " + minutesWithoutStop + " min";
         }
         return "";
     }
