@@ -450,16 +450,29 @@ switch is set against it.
 ### `/rcmc signal`
 
 ```
-/rcmc signal heads <line> [both]     place a linked signal head at every block boundary of a line
+/rcmc signal heads <line> [both] [dry]   place a linked signal head at every block boundary of a line
+/rcmc signal pending [line] [clear]      heads queued for unloaded chunks: count them, or drop them
 ```
 
-Needs the line to be signalled first (`/rcmc line signals`). Each head is an LED three-aspect head on
-a post, linked to its signal, standing 2.8 blocks out from the track's centre line on the right of a
-train running with the track (the way its distances increase), and facing that train. `both` also
-places the heads for trains running the other way, on their right. A head goes at rail level, or one
-block up if rail level is taken. A spot in an unloaded chunk, or where both are taken, is skipped;
-the command reports how many heads it placed and how many it skipped. There is no undo: break the
-heads by hand. See `rcmc:signal_head` in [Items and blocks](items-and-blocks.md#blocks).
+Needs the line to be signalled first (`/rcmc line signals`). Each head is an LED three-aspect head,
+linked to its signal, standing 2.8 blocks out from the track's centre line on the right of a train
+running with the track (the way its distances increase), and facing that train. `both` also places
+the heads for trains running the other way, on their right.
+
+When that spot is taken, the command tries others nearby, in this order: higher up, nearer the
+track or further out, one or two blocks along the track, and then the other side. A head must stay
+clear of a metro car body (1.9 blocks either side of the centre line), and it needs something to
+stand on (a post), a wall beside it (a bracket) or a ceiling above it (a hanger). It never replaces
+a block. Running the command again places only the heads that are missing.
+
+A head in an unloaded chunk is queued, saved with the world, and placed when its chunk next loads,
+so nobody has to force-load the line. `signal pending` shows how many heads are still waiting.
+Boundaries with no room for a head are listed, with section, distance and coordinates; the first
+few are in chat and all of them are in the server log. `dry` places nothing: it lists where each
+head would go and which boundaries have no room.
+
+There is no undo: break the heads by hand. See `rcmc:signal_head` in
+[Items and blocks](items-and-blocks.md#blocks).
 
 ### `/rcmc switch`
 

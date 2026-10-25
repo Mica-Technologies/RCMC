@@ -87,6 +87,9 @@ public class Rcmc {
         // platform, so there has to be something under them before they are a passenger.
         MinecraftForge.EVENT_BUS.register(
             new com.micatechnologies.minecraft.rcmc.world.TrainFloorCollision());
+        // Server only in effect: places signal heads queued for chunks that were not loaded.
+        MinecraftForge.EVENT_BUS.register(
+            new com.micatechnologies.minecraft.rcmc.world.SignalHeadPlacer.Hooks());
         com.micatechnologies.minecraft.rcmc.net.RcmcNetwork.init();
         com.micatechnologies.minecraft.rcmc.block.RcmcBlocks.init();
         com.micatechnologies.minecraft.rcmc.item.RcmcItems.init();

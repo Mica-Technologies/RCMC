@@ -43,6 +43,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.text.TextComponentString;
 import net.minecraft.util.text.TextFormatting;
 import net.minecraft.world.World;
+import com.micatechnologies.minecraft.rcmc.world.SignalHeadPlacer;
 
 /**
  * {@code /rcmc} — operator and debug commands.
@@ -103,7 +104,11 @@ public class CommandRcmc extends CommandBase {
                 "stop", "signals", "set", "trains", "check", "hold", "release");
         }
         if (args.length == 2 && "signal".equalsIgnoreCase(args[0])) {
-            return getListOfStringsMatchingLastWord(args, "heads");
+            return getListOfStringsMatchingLastWord(args, "heads", "pending");
+        }
+        if (args.length >= 4 && "signal".equalsIgnoreCase(args[0])) {
+            return getListOfStringsMatchingLastWord(args,
+                "heads".equalsIgnoreCase(args[1]) ? new String[] {"both", "dry"} : new String[] {"clear"});
         }
         if (args.length == 3 && "signal".equalsIgnoreCase(args[0])) {
             RcmcWorldState state = RcmcWorldState.of(sender.getEntityWorld());
@@ -2430,23 +2435,31 @@ public class CommandRcmc extends CommandBase {
         return String.format("%.2f", value);
     }
 
-    /** How far to the side of the track centre line an auto-placed signal head stands, blocks. */
-    private static final double SIGNAL_HEAD_OFFSET = 2.8D;
+    /** Boundaries left without a head that are named in the reply; the rest go to the log. */
+    private static final int SIGNAL_HEAD_LIST_LIMIT = 8;
 
     /**
-     * {@code /rcmc signal heads <line> [both]} — places a linked LED signal head at every block
+     * {@code /rcmc signal heads <line> [both] [dry]} — places a linked signal head at every block
      * boundary of a signalled line, on the right of a train running with the track ({@code both}
-     * adds the heads for trains running against it, on their right).
+     * adds the heads for trains running against it, on their right). {@code dry} places nothing
+     * and lists where each head would go.
      *
-     * <p>Each head goes {@value #SIGNAL_HEAD_OFFSET} blocks out from the centre line, which clears
-     * a metro car body, at rail level, or one block up when rail level is taken (a platform edge,
-     * say). Positions in unloaded chunks, or where both are taken, are skipped and counted, never
-     * forced: this must not load chunks or overwrite what a builder put there.</p>
+     * <p>Where the first-choice spot is taken the placer tries others nearby; see
+     * {@link com.micatechnologies.minecraft.rcmc.world.SignalHeadPlacer}. A head in an unloaded
+     * chunk is queued and placed when that chunk next loads. Running it again places only what is
+     * missing.</p>
+     *
+     * <p>{@code /rcmc signal pending [line] [clear]} shows, or drops, the queued heads.</p>
      */
     private void signal(ICommandSender sender, World world, RcmcWorldState state, String[] args)
         throws CommandException {
+        if (args.length >= 2 && "pending".equalsIgnoreCase(args[1])) {
+            signalPending(sender, world, args);
+            return;
+        }
         if (args.length < 3 || !"heads".equalsIgnoreCase(args[1])) {
-            throw new CommandException("/rcmc signal heads <line> [both]");
+            throw new CommandException(
+                "/rcmc signal heads <line> [both] [dry]  |  /rcmc signal pending [line] [clear]");
         }
         com.micatechnologies.minecraft.rcmc.physics.transit.TransitSystem transit = state.transit();
         com.micatechnologies.minecraft.rcmc.physics.transit.TransitLine line = transit.line(args[2]);
@@ -2459,56 +2472,104 @@ public class CommandRcmc extends CommandBase {
             throw new CommandException("Line " + line.name()
                 + " has no signalling — add it with /rcmc line signals " + line.name() + " <count>");
         }
-        boolean both = args.length > 3 && "both".equalsIgnoreCase(args[3]);
+        boolean both = false;
+        boolean dry = false;
+        for (int i = 3; i < args.length; i++) {
+            if ("both".equalsIgnoreCase(args[i])) {
+                both = true;
+            }
+            else if ("dry".equalsIgnoreCase(args[i])) {
+                dry = true;
+            }
+            else {
+                throw new CommandException("/rcmc signal heads <line> [both] [dry]");
+            }
+        }
 
-        TrackNetwork network = state.network();
         int placed = 0;
-        int unloaded = 0;
-        int blocked = 0;
+        int existing = 0;
+        int queued = 0;
+        java.util.List<String> noRoom = new java.util.ArrayList<>();
         for (com.micatechnologies.minecraft.rcmc.physics.transit.SignalHeads.Boundary boundary
             : com.micatechnologies.minecraft.rcmc.physics.transit.SignalHeads.boundaries(
                 signals.blocks())) {
             if (boundary.direction < 0 && !both) {
                 continue;
             }
-            if (!network.hasSection(boundary.sectionId)) {
-                blocked++;
-                continue;
+            SignalHeadPlacer.Result result = SignalHeadPlacer.place(world, state, line.name(), boundary, dry);
+            String where = SignalHeadPlacer.describe(
+                boundary, result.spot != null ? result.spot.pos : result.preferred);
+            switch (result.outcome) {
+                case PLACED:
+                    placed++;
+                    if (dry) {
+                        reply(sender, TextFormatting.GRAY, "  " + where + ": " + result.spot.mount.getName());
+                    }
+                    break;
+                case ALREADY_THERE:
+                    existing++;
+                    break;
+                case QUEUED:
+                    queued++;
+                    if (dry) {
+                        reply(sender, TextFormatting.GRAY, "  " + where + ": chunk not loaded");
+                    }
+                    break;
+                default:
+                    noRoom.add(where);
+                    break;
             }
-            TrackFrame frame = network.frameAt(new TrackRef(boundary.sectionId, boundary.distance));
-            Vec3 travel = frame.forward.scale(boundary.direction);
-            Vec3 right = frame.right.scale(boundary.direction);
-            Vec3 at = frame.position.add(right.scale(SIGNAL_HEAD_OFFSET));
-            BlockPos pos = new BlockPos(Math.floor(at.x), Math.floor(at.y + 0.01D),
-                Math.floor(at.z));
-            if (!world.isBlockLoaded(pos)) {
-                unloaded++;
-                continue;
+        }
+        String scope = line.name() + (both ? " (both directions)" : "");
+        if (dry) {
+            reply(sender, TextFormatting.AQUA, "Dry run on " + scope + ": " + placed + " would be placed, "
+                + existing + " already there, " + queued + " in unloaded chunks, " + noRoom.size()
+                + " with no room.");
+        }
+        else {
+            reply(sender, placed > 0 ? TextFormatting.GREEN : TextFormatting.YELLOW, "Placed " + placed
+                + " signal head(s) on " + scope + "; " + existing + " already there.");
+            if (queued > 0) {
+                reply(sender, TextFormatting.GRAY, "  " + queued + " in unloaded chunks are queued and"
+                    + " will be placed when their chunks load (/rcmc signal pending).");
             }
-            if (!world.isAirBlock(pos)) {
-                pos = pos.up();
-                if (!world.isAirBlock(pos)) {
-                    blocked++;
-                    continue;
+        }
+        if (!noRoom.isEmpty()) {
+            reply(sender, TextFormatting.YELLOW, "  " + noRoom.size() + " boundary(s) have no room for a"
+                + " head nearby (no free, supported spot clear of the cars):");
+            for (int i = 0; i < noRoom.size(); i++) {
+                if (i < SIGNAL_HEAD_LIST_LIMIT) {
+                    reply(sender, TextFormatting.GRAY, "    " + noRoom.get(i));
                 }
+                com.micatechnologies.minecraft.rcmc.Rcmc.LOGGER.info(
+                    "No room for a signal head on line {} at {}", line.name(), noRoom.get(i));
             }
-            world.setBlockState(pos, RcmcBlocks.signalHead.getDefaultState());
-            net.minecraft.tileentity.TileEntity tile = world.getTileEntity(pos);
-            if (tile instanceof com.micatechnologies.minecraft.rcmc.block.signal.TileSignalHead) {
-                com.micatechnologies.minecraft.rcmc.block.signal.TileSignalHead head =
-                    (com.micatechnologies.minecraft.rcmc.block.signal.TileSignalHead) tile;
-                head.setFacingDegrees(
-                    com.micatechnologies.minecraft.rcmc.block.signal.TileSignalHead.yawOf(travel));
-                head.bindTo(line.name(), boundary.sectionId, boundary.distance, boundary.direction);
+            if (noRoom.size() > SIGNAL_HEAD_LIST_LIMIT) {
+                reply(sender, TextFormatting.GRAY, "    and " + (noRoom.size() - SIGNAL_HEAD_LIST_LIMIT)
+                    + " more, listed in the server log.");
             }
-            placed++;
         }
-        reply(sender, placed > 0 ? TextFormatting.GREEN : TextFormatting.YELLOW, "Placed " + placed
-            + " signal head(s) on " + line.name() + (both ? " (both directions)" : "") + ".");
-        if (unloaded > 0 || blocked > 0) {
-            reply(sender, TextFormatting.GRAY, "  Skipped " + unloaded + " in unloaded chunks and "
-                + blocked + " where the spot was taken.");
+    }
+
+    /** {@code /rcmc signal pending [line] [clear]}. */
+    private void signalPending(ICommandSender sender, World world, String[] args) {
+        SignalHeadPlacer.Queue queue = SignalHeadPlacer.Queue.of(world);
+        String only = null;
+        boolean clear = false;
+        for (int i = 2; i < args.length; i++) {
+            if ("clear".equalsIgnoreCase(args[i])) {
+                clear = true;
+            }
+            else {
+                only = args[i];
+            }
         }
+        if (clear) {
+            reply(sender, TextFormatting.GREEN, "Dropped " + queue.clear(only) + " queued signal head(s).");
+            return;
+        }
+        reply(sender, TextFormatting.AQUA, queue.count(only) + " signal head(s) queued"
+            + (only == null ? "" : " on " + only) + ", waiting for their chunks to load.");
     }
 
     private static void reply(ICommandSender sender, TextFormatting colour, String message) {
