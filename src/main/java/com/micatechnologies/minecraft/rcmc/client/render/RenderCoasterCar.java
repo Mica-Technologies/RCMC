@@ -92,34 +92,12 @@ public class RenderCoasterCar extends Render<EntityCoasterCar> {
         // both key off it — not a change to make casually alongside a rendering fix.
         GlStateManager.disableCull();
 
-        // Force the lightmap full-bright for a lit saloon.
-        //
-        // This is what "the interior lighting does not work" actually was. The car is drawn with
-        // DefaultVertexFormats.POSITION_COLOR, which carries NO lightmap element, so every vertex
-        // inherits whatever lightmap coordinate was last set — i.e. the ambient light of wherever
-        // the car happens to be. At night that multiplies the whole model, light strips included,
-        // down to darkness, and no vertex colour can climb back out of it. Tuning which world
-        // light level trips the switch was fixing the wrong layer entirely.
-        //
-        // SignPanels already does this, and for the same reason: a lit display must not be
-        // dimmed by the room it is in.
-        boolean lit = specOf(entity) != null
-            && specOf(entity).carStyle() == TrainSpec.CarStyle.METRO
-            && SaloonLighting.lit(entity);
-        float lastBrightnessX = net.minecraft.client.renderer.OpenGlHelper.lastBrightnessX;
-        float lastBrightnessY = net.minecraft.client.renderer.OpenGlHelper.lastBrightnessY;
-        if (lit) {
-            net.minecraft.client.renderer.OpenGlHelper.setLightmapTextureCoords(
-                net.minecraft.client.renderer.OpenGlHelper.lightmapTexUnit, 240.0F, 240.0F);
-        }
-
+        // A lit saloon is drawn full-bright, the rest of the car in the world's light: see
+        // emitModel. The full-bright part must be forced through the lightmap, not the colours —
+        // the car is drawn with DefaultVertexFormats.POSITION_COLOR, which carries no lightmap
+        // element, so every vertex takes whatever lightmap coordinate was last set, the ambient
+        // light of wherever the car is, and no vertex colour can climb back out of a dark one.
         emitModel(entity, partialTicks);
-
-        if (lit) {
-            net.minecraft.client.renderer.OpenGlHelper.setLightmapTextureCoords(
-                net.minecraft.client.renderer.OpenGlHelper.lightmapTexUnit,
-                lastBrightnessX, lastBrightnessY);
-        }
         GlStateManager.enableCull();
         GlStateManager.enableLighting();
         GlStateManager.enableTexture2D();
@@ -245,13 +223,33 @@ public class RenderCoasterCar extends Render<EntityCoasterCar> {
                     entity.world, entity.trainId());
             float rightFraction = side.opensRight() ? doorFraction : 0.0F;
             float leftFraction = side.opensLeft() ? doorFraction : 0.0F;
-            MetroCarModel.emit(buffer, length, drawCoupling, entity.carIndex() % 2 == 0,
-                (float) wireHeightFor(entity), onThirdRail(entity), rightFraction, leftFraction,
-                lightsOn, outerFront, outerRear,
-                colourOf(spec, TrainSpec.Part.BODY, 3),
-                colourOf(spec, TrainSpec.Part.TRIM, 4),
-                colourOf(spec, TrainSpec.Part.SEATS, 1));
-            tessellator.draw();
+            // Two passes: the outside of the car in the light of wherever it is, then the saloon,
+            // full-bright while its lights are on. Drawing the whole car full-bright made a train
+            // in a dark tunnel glow from end to end like a toy; a real one is dark outside with
+            // its windows lit.
+            float worldX = net.minecraft.client.renderer.OpenGlHelper.lastBrightnessX;
+            float worldY = net.minecraft.client.renderer.OpenGlHelper.lastBrightnessY;
+            for (MetroCarModel.Pass pass : new MetroCarModel.Pass[] {
+                MetroCarModel.Pass.EXTERIOR, MetroCarModel.Pass.INTERIOR}) {
+                if (pass == MetroCarModel.Pass.INTERIOR) {
+                    buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_COLOR);
+                    if (lightsOn) {
+                        net.minecraft.client.renderer.OpenGlHelper.setLightmapTextureCoords(
+                            net.minecraft.client.renderer.OpenGlHelper.lightmapTexUnit, 240.0F, 240.0F);
+                    }
+                }
+                MetroCarModel.setPass(pass);
+                MetroCarModel.emit(buffer, length, drawCoupling, entity.carIndex() % 2 == 0,
+                    (float) wireHeightFor(entity), onThirdRail(entity), rightFraction, leftFraction,
+                    lightsOn, outerFront, outerRear,
+                    colourOf(spec, TrainSpec.Part.BODY, 3),
+                    colourOf(spec, TrainSpec.Part.TRIM, 4),
+                    colourOf(spec, TrainSpec.Part.SEATS, 1));
+                MetroCarModel.setPass(MetroCarModel.Pass.ALL);
+                tessellator.draw();
+            }
+            net.minecraft.client.renderer.OpenGlHelper.setLightmapTextureCoords(
+                net.minecraft.client.renderer.OpenGlHelper.lightmapTexUnit, worldX, worldY);
 
             // Head and tail lamps, full-bright whatever the light around the car: a lamp is a
             // light, and at night is the one part of the train that must not go dark.

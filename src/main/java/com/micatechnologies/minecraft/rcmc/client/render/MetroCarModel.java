@@ -262,6 +262,7 @@ final class MetroCarModel {
                      float[] bodyColour, float[] trimColour, float[] seatColour) {
         float bodyLength = bogieSpacing / TRUCK_CENTRE_RATIO;
         float half = bodyLength * 0.5F;
+        passHalf = half;
         // Unlit, the interior is not black — it is dim. Everything inside is drawn through this
         // factor so switching the lights off dims the saloon rather than only dulling the fittings.
         float shade = lightsOn ? 1.0F : 0.55F;
@@ -857,12 +858,85 @@ final class MetroCarModel {
         float r = color[0];
         float g = color[1];
         float b = color[2];
-        quad(buffer, x1, y1, z1, x1, y2, z1, x2, y2, z1, x2, y1, z1, r, g, b, 0.82F, alpha);
-        quad(buffer, x2, y1, z2, x2, y2, z2, x1, y2, z2, x1, y1, z2, r, g, b, 0.86F, alpha);
-        quad(buffer, x1, y1, z2, x1, y2, z2, x1, y2, z1, x1, y1, z1, r, g, b, 0.72F, alpha);
-        quad(buffer, x2, y1, z1, x2, y2, z1, x2, y2, z2, x2, y1, z2, r, g, b, 0.72F, alpha);
-        quad(buffer, x1, y2, z1, x1, y2, z2, x2, y2, z2, x2, y2, z1, r, g, b, 1.0F, alpha);
-        quad(buffer, x1, y1, z2, x1, y1, z1, x2, y1, z1, x2, y1, z2, r, g, b, 0.55F, alpha);
+        float cx = (x1 + x2) * 0.5F;
+        float cy = (y1 + y2) * 0.5F;
+        float cz = (z1 + z2) * 0.5F;
+        // Each face with the way it faces out of the box: the low face of an axis faces down it.
+        float sx = x1 <= x2 ? 1.0F : -1.0F;
+        float sy = y1 <= y2 ? 1.0F : -1.0F;
+        float sz = z1 <= z2 ? 1.0F : -1.0F;
+        if (wanted(cx, cy, z1, 2, -sz)) {
+            quad(buffer, x1, y1, z1, x1, y2, z1, x2, y2, z1, x2, y1, z1, r, g, b, 0.82F, alpha);
+        }
+        if (wanted(cx, cy, z2, 2, sz)) {
+            quad(buffer, x2, y1, z2, x2, y2, z2, x1, y2, z2, x1, y1, z2, r, g, b, 0.86F, alpha);
+        }
+        if (wanted(x1, cy, cz, 0, -sx)) {
+            quad(buffer, x1, y1, z2, x1, y2, z2, x1, y2, z1, x1, y1, z1, r, g, b, 0.72F, alpha);
+        }
+        if (wanted(x2, cy, cz, 0, sx)) {
+            quad(buffer, x2, y1, z1, x2, y2, z1, x2, y2, z2, x2, y1, z2, r, g, b, 0.72F, alpha);
+        }
+        if (wanted(cx, y2, cz, 1, sy)) {
+            quad(buffer, x1, y2, z1, x1, y2, z2, x2, y2, z2, x2, y2, z1, r, g, b, 1.0F, alpha);
+        }
+        if (wanted(cx, y1, cz, 1, -sy)) {
+            quad(buffer, x1, y1, z2, x1, y1, z1, x2, y1, z1, x2, y1, z2, r, g, b, 0.55F, alpha);
+        }
+    }
+
+    /** Which faces {@link #emit} draws: all of them, or only the outside or inside of the car. */
+    enum Pass {
+        ALL, EXTERIOR, INTERIOR
+    }
+
+    private static Pass pass = Pass.ALL;
+    /** Half the body length of the car being emitted, for telling inside from out. */
+    private static float passHalf = Float.MAX_VALUE;
+
+    /**
+     * Restricts what the next {@link #emit} draws, so the renderer can light the saloon apart
+     * from the outside of the car. Render thread only; set it back to {@link Pass#ALL} after.
+     */
+    static void setPass(Pass value) {
+        pass = value;
+    }
+
+    /**
+     * Whether a face at {@code (x, y, z)}, facing along {@code axis} (0 x, 1 y, 2 z) in direction
+     * {@code sign}, belongs to the current pass.
+     *
+     * <p>A face is the inside of the car when it is within the body shell, between floor and
+     * ceiling, and either lies inside the walls or faces in toward the middle: the inner skin of a
+     * wall faces in, its outer skin out. Everything else — the outer skin, the roof, the
+     * underframe and trucks — is the outside. A door leaf's inner face, standing proud of the wall,
+     * still faces in, so a lit saloon's doors are lit from inside too.</p>
+     */
+    private static boolean wanted(float x, float y, float z, int axis, float sign) {
+        if (pass == Pass.ALL) {
+            return true;
+        }
+        return interior(x, y, z, axis, sign, passHalf) == (pass == Pass.INTERIOR);
+    }
+
+    static boolean interior(float x, float y, float z, int axis, float sign, float half) {
+        float eps = 0.01F;
+        float inner = BODY_HALF_WIDTH - WALL_THICKNESS;
+        if (y < FLOOR_TOP - eps || y > ROOF_BASE + eps || Math.abs(z) > half + eps
+            || Math.abs(x) > BODY_HALF_WIDTH + DOOR_PROUD + eps) {
+            return false;
+        }
+        switch (axis) {
+            case 0:
+                return Math.abs(x) < inner - 0.001F || sign * x < 0.0F;
+            case 1:
+                return Math.abs(x) <= BODY_HALF_WIDTH;
+            default:
+                if (Math.abs(x) > inner + 0.001F) {
+                    return false;
+                }
+                return Math.abs(z) < half - WALL_THICKNESS - 0.001F || sign * z < 0.0F;
+        }
     }
 
     private static void quad(BufferBuilder buffer,

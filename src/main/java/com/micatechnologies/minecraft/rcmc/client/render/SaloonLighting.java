@@ -149,6 +149,20 @@ public final class SaloonLighting {
         }
     }
 
+    /**
+     * The first-person arms and held item. Vanilla lights them from the world at the eye
+     * ({@code ItemRenderer.setLightmap}), apart from any living-entity render, so a player standing
+     * in a lit car in a tunnel saw their own hands black. This fires per hand after that lightmap
+     * is set, so it overrides it for the hands alone; nothing drawn after the hands reads it.
+     */
+    @SubscribeEvent
+    public void onRenderHand(net.minecraftforge.client.event.RenderSpecificHandEvent event) {
+        Entity viewer = net.minecraft.client.Minecraft.getMinecraft().getRenderViewEntity();
+        if (viewer != null && insideLitCar(viewer)) {
+            OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit, 240.0F, 240.0F);
+        }
+    }
+
     private static boolean insideLitCar(Entity entity) {
         if (entity.getRidingEntity() instanceof EntityCoasterCar) {
             EntityCoasterCar car = (EntityCoasterCar) entity.getRidingEntity();
