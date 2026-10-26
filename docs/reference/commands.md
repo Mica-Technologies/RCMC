@@ -450,11 +450,13 @@ switch is set against it.
 ### `/rcmc signal`
 
 ```
-/rcmc signal heads <line> [both] [dry]   place a linked signal head at every block boundary of a line
-/rcmc signal pending [line] [clear]      heads queued for unloaded chunks: count them, or drop them
+/rcmc signal heads <line> [both] [dry] [style]   place a linked signal head at every block boundary of a line
+/rcmc signal pending [line] [clear]              heads queued for unloaded chunks: count them, or drop them
+/rcmc signal set <x> <y> <z> <what> [value]      set one signal head, as its screen does
 ```
 
-Needs the line to be signalled first (`/rcmc line signals`). Each head is an LED three-aspect head,
+Needs the line to be signalled first (`/rcmc line signals`). Each head is an LED three-aspect head
+(or the `style` given, by its item name: `colour_light_four`, `semaphore_upper_home`, `dwarf` ...),
 linked to its signal, standing 2.8 blocks out from the track's centre line on the right of a train
 running with the track (the way its distances increase), and facing that train. `both` also places
 the heads for trains running the other way, on their right.
@@ -471,8 +473,23 @@ Boundaries with no room for a head are listed, with section, distance and coordi
 few are in chat and all of them are in the server log. `dry` places nothing: it lists where each
 head would go and which boundaries have no room.
 
-There is no undo: break the heads by hand. See `rcmc:signal_head` in
-[Items and blocks](items-and-blocks.md#blocks).
+There is no undo: break the heads by hand. See [Signal heads](items-and-blocks.md#signal-heads).
+
+`signal set` changes the head at `<x> <y> <z>`, from a command or a command block:
+
+| `<what> [value]` | Effect |
+| --- | --- |
+| `red`, `yellow`, `double_yellow`, `green` | Show that aspect, under manual control |
+| `manual`, `redstone`, `linked` | Switch control mode; `linked` links to the nearest signal within 16 blocks if it is not linked yet |
+| `subsidiary on\|off` | Light the subsidiary lamp (lunar white, call-on, departure, route) under manual control |
+| `approach on\|off` | Approach lighting for a linked head |
+| `style <name>` | Change style, by item name |
+| `mount <name>` | `post`, `wall`, `ceiling`, `ground`, `mast`, `gantry`, `cantilever` or `platform` |
+| `facing <degrees>` | Turn it; at 0 it faces trains running south (+z), at 90 trains running west |
+| `hand left\|right` | Which side a cantilever mast, semaphore arm or route feather is on |
+| `span <n>` | Gantry width or cantilever arm length, 2 to 15 blocks |
+| `route <branch>` | The switch branch a route feather lights for, or a theatre is edited at |
+| `text <branch> <text>` | What a theatre shows for that branch, up to three characters |
 
 ### `/rcmc switch`
 

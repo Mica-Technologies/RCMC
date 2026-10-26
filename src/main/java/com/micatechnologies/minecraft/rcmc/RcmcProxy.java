@@ -53,4 +53,7 @@ public interface RcmcProxy {
 
     /** Opens or refreshes the track editor screen. Client only; a no-op on a server. */
     void showTrackEditor(com.micatechnologies.minecraft.rcmc.net.TrackEditView view, boolean open);
+
+    /** Opens the screen of the signal head at {@code pos}. Client only; a no-op on a server. */
+    void openSignalHead(net.minecraft.util.math.BlockPos pos);
 }

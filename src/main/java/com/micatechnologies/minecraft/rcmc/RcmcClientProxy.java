@@ -115,16 +115,24 @@ public class RcmcClientProxy extends RcmcCommonProxy {
             com.micatechnologies.minecraft.rcmc.block.RcmcBlocks.rideSign));
         bindModel(net.minecraft.item.Item.getItemFromBlock(
             com.micatechnologies.minecraft.rcmc.block.RcmcBlocks.lineDesk));
-        // One item model per signal head style, keyed by the item damage.
+        // Every signal head style is drawn by the head renderer itself, through one builtin/entity
+        // item model; see ItemSignalHeadRenderer.
         net.minecraft.item.Item signalHead = net.minecraft.item.Item.getItemFromBlock(
             com.micatechnologies.minecraft.rcmc.block.RcmcBlocks.signalHead);
+        signalHead.setTileEntityItemStackRenderer(
+            new com.micatechnologies.minecraft.rcmc.client.render.sign.ItemSignalHeadRenderer());
         for (com.micatechnologies.minecraft.rcmc.block.signal.SignalHeadStyle style
             : com.micatechnologies.minecraft.rcmc.block.signal.SignalHeadStyle.values()) {
             net.minecraftforge.client.model.ModelLoader.setCustomModelResourceLocation(signalHead,
                 style.ordinal(), new net.minecraft.client.renderer.block.model.ModelResourceLocation(
-                    com.micatechnologies.minecraft.rcmc.RcmcConstants.MOD_NAMESPACE + ":signal_head_"
-                        + style.getName(), "inventory"));
+                    com.micatechnologies.minecraft.rcmc.RcmcConstants.MOD_NAMESPACE + ":signal_head_item",
+                    "inventory"));
         }
+        // The block's one property only migrates old heads; it never changes the hit-box model.
+        net.minecraftforge.client.model.ModelLoader.setCustomStateMapper(
+            com.micatechnologies.minecraft.rcmc.block.RcmcBlocks.signalHead,
+            new net.minecraft.client.renderer.block.statemap.StateMap.Builder()
+                .ignore(com.micatechnologies.minecraft.rcmc.block.signal.BlockSignalHead.LEGACY).build());
     }
 
     private static void bindModel(net.minecraft.item.Item item) {
@@ -174,6 +182,13 @@ public class RcmcClientProxy extends RcmcCommonProxy {
                 mc.displayGuiScreen(new com.micatechnologies.minecraft.rcmc.client.gui.GuiTrackEditor(view));
             }
         });
+    }
+
+    @Override
+    public void openSignalHead(net.minecraft.util.math.BlockPos pos) {
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getMinecraft();
+        mc.addScheduledTask(() -> mc.displayGuiScreen(
+            new com.micatechnologies.minecraft.rcmc.client.gui.GuiSignalHead(pos)));
     }
 
     @Override

@@ -115,13 +115,45 @@ public final class SignalHeads {
      */
     public static SignalAspect aspect(List<BlockSection> blocks, IntPredicate occupied, int index,
                                       int direction, double sectionLength, boolean closed) {
+        return aspect(blocks, occupied, index, direction, sectionLength, closed, 3);
+    }
+
+    /**
+     * {@link #aspect} for a head that can show {@code aspects} of them. Two-aspect is stop or
+     * clear, on the protected block alone. Four-aspect adds double yellow, preliminary caution,
+     * when the two blocks ahead are clear and the third is occupied. Fewer blocks ahead than a rule
+     * looks at (the end of the line) count as clear, as they do for three.
+     */
+    public static SignalAspect aspect(List<BlockSection> blocks, IntPredicate occupied, int index,
+                                      int direction, double sectionLength, boolean closed,
+                                      int aspects) {
         if (index < 0 || index >= blocks.size() || occupied.test(index)) {
             return SignalAspect.RED;
+        }
+        if (aspects <= 2) {
+            return SignalAspect.GREEN;
         }
         int next = nextBlock(blocks, index, direction, sectionLength, closed);
         if (next >= 0 && occupied.test(next)) {
             return SignalAspect.YELLOW;
         }
+        if (aspects >= 4 && next >= 0) {
+            int after = nextBlock(blocks, next, direction, sectionLength, closed);
+            if (after >= 0 && after != index && occupied.test(after)) {
+                return SignalAspect.DOUBLE_YELLOW;
+            }
+        }
         return SignalAspect.GREEN;
+    }
+
+    /**
+     * Whether a train is approaching the head protecting block {@code index}: the block a train
+     * travelling in {@code direction} is in just before it reaches the head is occupied. What an
+     * approach-lit head lights up for; the rest of the time it stays dark.
+     */
+    public static boolean approached(List<BlockSection> blocks, IntPredicate occupied, int index,
+                                     int direction, double sectionLength, boolean closed) {
+        int behind = nextBlock(blocks, index, -direction, sectionLength, closed);
+        return behind >= 0 && occupied.test(behind);
     }
 }

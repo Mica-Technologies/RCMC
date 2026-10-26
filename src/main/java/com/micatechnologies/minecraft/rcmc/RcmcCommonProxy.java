@@ -52,4 +52,9 @@ public class RcmcCommonProxy implements RcmcProxy {
     public void showTrackEditor(com.micatechnologies.minecraft.rcmc.net.TrackEditView view, boolean open) {
         // Server side there is no screen to show.
     }
+
+    @Override
+    public void openSignalHead(net.minecraft.util.math.BlockPos pos) {
+        // Server side there is no screen to show.
+    }
 }

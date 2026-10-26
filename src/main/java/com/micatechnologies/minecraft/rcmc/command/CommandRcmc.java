@@ -104,7 +104,37 @@ public class CommandRcmc extends CommandBase {
                 "stop", "signals", "set", "trains", "check", "hold", "release");
         }
         if (args.length == 2 && "signal".equalsIgnoreCase(args[0])) {
-            return getListOfStringsMatchingLastWord(args, "heads", "pending");
+            return getListOfStringsMatchingLastWord(args, "heads", "pending", "set");
+        }
+        if (args.length > 2 && "signal".equalsIgnoreCase(args[0]) && "set".equalsIgnoreCase(args[1])) {
+            if (args.length <= 5) {
+                return getTabCompletionCoordinate(args, 2, targetPos);
+            }
+            if (args.length == 6) {
+                return getListOfStringsMatchingLastWord(args, "red", "yellow", "double_yellow", "green",
+                    "manual", "redstone", "linked", "subsidiary", "approach", "style", "mount", "facing",
+                    "hand", "span", "route", "text");
+            }
+            if (args.length == 7 && "style".equalsIgnoreCase(args[5])) {
+                List<String> names = new ArrayList<>();
+                for (com.micatechnologies.minecraft.rcmc.block.signal.SignalHeadStyle style
+                    : com.micatechnologies.minecraft.rcmc.block.signal.SignalHeadStyle.values()) {
+                    names.add(style.getName());
+                }
+                return getListOfStringsMatchingLastWord(args, names);
+            }
+            if (args.length == 7 && "mount".equalsIgnoreCase(args[5])) {
+                List<String> names = new ArrayList<>();
+                for (com.micatechnologies.minecraft.rcmc.block.signal.SignalHeadMount mount
+                    : com.micatechnologies.minecraft.rcmc.block.signal.SignalHeadMount.values()) {
+                    names.add(mount.getName());
+                }
+                return getListOfStringsMatchingLastWord(args, names);
+            }
+            if (args.length == 7) {
+                return getListOfStringsMatchingLastWord(args, "on", "off", "left", "right");
+            }
+            return java.util.Collections.emptyList();
         }
         if (args.length >= 4 && "signal".equalsIgnoreCase(args[0])) {
             return getListOfStringsMatchingLastWord(args,
@@ -2457,9 +2487,13 @@ public class CommandRcmc extends CommandBase {
             signalPending(sender, world, args);
             return;
         }
+        if (args.length >= 2 && "set".equalsIgnoreCase(args[1])) {
+            signalSet(sender, world, args);
+            return;
+        }
         if (args.length < 3 || !"heads".equalsIgnoreCase(args[1])) {
-            throw new CommandException(
-                "/rcmc signal heads <line> [both] [dry]  |  /rcmc signal pending [line] [clear]");
+            throw new CommandException("/rcmc signal heads <line> [both] [dry] [style]  |  "
+                + "/rcmc signal pending [line] [clear]  |  /rcmc signal set <x> <y> <z> <what> [value]");
         }
         com.micatechnologies.minecraft.rcmc.physics.transit.TransitSystem transit = state.transit();
         com.micatechnologies.minecraft.rcmc.physics.transit.TransitLine line = transit.line(args[2]);
@@ -2474,6 +2508,8 @@ public class CommandRcmc extends CommandBase {
         }
         boolean both = false;
         boolean dry = false;
+        com.micatechnologies.minecraft.rcmc.block.signal.SignalHeadStyle style =
+            com.micatechnologies.minecraft.rcmc.block.signal.SignalHeadStyle.LED;
         for (int i = 3; i < args.length; i++) {
             if ("both".equalsIgnoreCase(args[i])) {
                 both = true;
@@ -2481,8 +2517,11 @@ public class CommandRcmc extends CommandBase {
             else if ("dry".equalsIgnoreCase(args[i])) {
                 dry = true;
             }
+            else if (com.micatechnologies.minecraft.rcmc.block.signal.SignalHeadStyle.byName(args[i]) != null) {
+                style = com.micatechnologies.minecraft.rcmc.block.signal.SignalHeadStyle.byName(args[i]);
+            }
             else {
-                throw new CommandException("/rcmc signal heads <line> [both] [dry]");
+                throw new CommandException("/rcmc signal heads <line> [both] [dry] [style]");
             }
         }
 
@@ -2496,7 +2535,8 @@ public class CommandRcmc extends CommandBase {
             if (boundary.direction < 0 && !both) {
                 continue;
             }
-            SignalHeadPlacer.Result result = SignalHeadPlacer.place(world, state, line.name(), boundary, dry);
+            SignalHeadPlacer.Result result = SignalHeadPlacer.place(world, state, line.name(), boundary,
+                style, dry);
             String where = SignalHeadPlacer.describe(
                 boundary, result.spot != null ? result.spot.pos : result.preferred);
             switch (result.outcome) {
@@ -2549,6 +2589,99 @@ public class CommandRcmc extends CommandBase {
                     + " more, listed in the server log.");
             }
         }
+    }
+
+    /**
+     * {@code /rcmc signal set <x> <y> <z> <what> [value]} — sets one signal head from a command or
+     * a command block: an aspect ({@code red}, {@code yellow}, {@code double_yellow},
+     * {@code green}, which also puts it under manual control), {@code manual}, {@code redstone} or
+     * {@code linked}, {@code subsidiary on|off}, {@code approach on|off}, {@code style <name>},
+     * {@code mount <name>}, {@code facing <degrees>}, {@code hand left|right}, {@code span <n>},
+     * {@code route <branch>} or {@code text <branch> <text>}.
+     */
+    private void signalSet(ICommandSender sender, World world, String[] args) throws CommandException {
+        String usage = "/rcmc signal set <x> <y> <z> <red|yellow|double_yellow|green|manual|redstone|linked"
+            + "|subsidiary|approach|style|mount|facing|hand|span|route|text> [value]";
+        if (args.length < 6) {
+            throw new CommandException(usage);
+        }
+        BlockPos pos = parseBlockPos(sender, args, 2, false);
+        net.minecraft.tileentity.TileEntity tile = world.getTileEntity(pos);
+        if (!(tile instanceof com.micatechnologies.minecraft.rcmc.block.signal.TileSignalHead)) {
+            throw new CommandException("No signal head at " + pos.getX() + " " + pos.getY() + " " + pos.getZ());
+        }
+        com.micatechnologies.minecraft.rcmc.block.signal.TileSignalHead head =
+            (com.micatechnologies.minecraft.rcmc.block.signal.TileSignalHead) tile;
+        String what = args[5].toLowerCase(java.util.Locale.ROOT);
+        String value = args.length > 6 ? args[6] : "";
+        switch (what) {
+            case "red":
+            case "yellow":
+            case "double_yellow":
+            case "green":
+                head.setManualAspect(com.micatechnologies.minecraft.rcmc.physics.transit.SignalAspect
+                    .valueOf(what.toUpperCase(java.util.Locale.ROOT)));
+                break;
+            case "manual":
+            case "redstone":
+            case "linked":
+                head.setControl(com.micatechnologies.minecraft.rcmc.block.signal.TileSignalHead.Control
+                    .valueOf(what.toUpperCase(java.util.Locale.ROOT)));
+                if (head.control().name().equalsIgnoreCase(what)) {
+                    break;
+                }
+                throw new CommandException("No signalled line within "
+                    + (int) com.micatechnologies.minecraft.rcmc.block.signal.TileSignalHead.LINK_RANGE
+                    + " blocks to link to.");
+            case "subsidiary":
+                head.setManualSubsidiary("on".equalsIgnoreCase(value) || "true".equalsIgnoreCase(value));
+                break;
+            case "approach":
+                head.setApproachLit("on".equalsIgnoreCase(value) || "true".equalsIgnoreCase(value));
+                break;
+            case "style": {
+                com.micatechnologies.minecraft.rcmc.block.signal.SignalHeadStyle style =
+                    com.micatechnologies.minecraft.rcmc.block.signal.SignalHeadStyle.byName(value);
+                if (style == null) {
+                    throw new CommandException("No signal style " + value);
+                }
+                head.setStyle(style);
+                break;
+            }
+            case "mount": {
+                com.micatechnologies.minecraft.rcmc.block.signal.SignalHeadMount mount =
+                    com.micatechnologies.minecraft.rcmc.block.signal.SignalHeadMount.byName(value);
+                if (mount == null) {
+                    throw new CommandException("No signal mount " + value);
+                }
+                head.setMount(mount);
+                break;
+            }
+            case "facing":
+                head.setFacingDegrees((float) parseDouble(value));
+                break;
+            case "hand":
+                head.setHand("left".equalsIgnoreCase(value) ? -1 : 1);
+                break;
+            case "span":
+                head.setSpan(parseInt(value));
+                break;
+            case "route":
+                head.setRouteBranch(parseInt(value));
+                break;
+            case "text":
+                if (args.length < 8) {
+                    throw new CommandException("/rcmc signal set <x> <y> <z> text <branch> <text>");
+                }
+                head.setRouteText(parseInt(value), args[7]);
+                break;
+            default:
+                throw new CommandException(usage);
+        }
+        reply(sender, TextFormatting.GREEN, "Signal head at " + pos.getX() + " " + pos.getY() + " "
+            + pos.getZ() + ": " + head.style().getName() + " on " + head.mount().getName() + ", "
+            + head.control().name().toLowerCase(java.util.Locale.ROOT) + ", showing "
+            + com.micatechnologies.minecraft.rcmc.block.signal.BlockSignalHead.name(head.aspect()) + ".");
     }
 
     /** {@code /rcmc signal pending [line] [clear]}. */

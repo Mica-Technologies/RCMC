@@ -3,8 +3,8 @@ package com.micatechnologies.minecraft.rcmc.world;
 import com.micatechnologies.minecraft.rcmc.Rcmc;
 import com.micatechnologies.minecraft.rcmc.RcmcConstants;
 import com.micatechnologies.minecraft.rcmc.block.RcmcBlocks;
-import com.micatechnologies.minecraft.rcmc.block.signal.BlockSignalHead;
 import com.micatechnologies.minecraft.rcmc.block.signal.SignalHeadMount;
+import com.micatechnologies.minecraft.rcmc.block.signal.SignalHeadStyle;
 import com.micatechnologies.minecraft.rcmc.block.signal.TileSignalHead;
 import com.micatechnologies.minecraft.rcmc.physics.CarSeating;
 import com.micatechnologies.minecraft.rcmc.physics.transit.LineSignals;
@@ -115,7 +115,8 @@ public final class SignalHeadPlacer {
      * Queues it when its chunk is not loaded, unless {@code dry}.
      */
     public static Result place(World world, RcmcWorldState state, String lineName,
-                               SignalHeads.Boundary boundary, boolean dry) {
+                               SignalHeads.Boundary boundary, SignalHeadStyle style,
+                               boolean dry) {
         TrackNetwork network = state.network();
         if (!network.hasSection(boundary.sectionId)) {
             return new Result(Outcome.NO_TRACK, null, null);
@@ -125,7 +126,7 @@ public final class SignalHeadPlacer {
             frame.right.scale(boundary.direction * PREFERRED_OFFSET)));
         if (!world.isAreaLoaded(preferred, 6)) {
             if (!dry) {
-                Queue.of(world).add(lineName, boundary);
+                Queue.of(world).add(lineName, boundary, style);
             }
             return new Result(Outcome.QUEUED, null, preferred);
         }
@@ -133,15 +134,19 @@ public final class SignalHeadPlacer {
             return new Result(Outcome.ALREADY_THERE, null, preferred);
         }
         Spot spot = findSpot(world, network, boundary);
+        if (spot != null && spot.mount == SignalHeadMount.POST
+            && style.defaultMount() == SignalHeadMount.GROUND) {
+            spot = new Spot(spot.pos, SignalHeadMount.GROUND, -1, spot.facing);
+        }
         if (spot == null) {
             return new Result(Outcome.NO_ROOM, null, preferred);
         }
         if (!dry) {
-            world.setBlockState(spot.pos, RcmcBlocks.signalHead.getDefaultState()
-                .withProperty(BlockSignalHead.MOUNT, spot.mount));
+            world.setBlockState(spot.pos, RcmcBlocks.signalHead.getDefaultState());
             TileEntity tile = world.getTileEntity(spot.pos);
             if (tile instanceof TileSignalHead) {
                 TileSignalHead head = (TileSignalHead) tile;
+                head.initialise(style, spot.mount);
                 head.setFacingDegrees(spot.facing);
                 if (spot.mount == SignalHeadMount.WALL) {
                     head.setWallSide(spot.wallSide);
@@ -202,6 +207,17 @@ public final class SignalHeadPlacer {
         }
         if (world.isSideSolid(pos.up(), EnumFacing.DOWN, false)) {
             return new Spot(pos, SignalHeadMount.CEILING, -1, facing);
+        }
+        // Beside an elevated line there is nothing to stand on, bolt to or hang from: a mast down
+        // to the ground, if the ground is within a mast's reach.
+        BlockPos below = pos.down();
+        for (int depth = 1; depth <= TileSignalHead.MAX_REACH; depth++, below = below.down()) {
+            if (world.isSideSolid(below, EnumFacing.UP, false)) {
+                return new Spot(pos, SignalHeadMount.MAST, -1, facing);
+            }
+            if (!world.isAirBlock(below)) {
+                return null;
+            }
         }
         return null;
     }
@@ -266,13 +282,13 @@ public final class SignalHeadPlacer {
             return queue;
         }
 
-        void add(String line, SignalHeads.Boundary boundary) {
+        void add(String line, SignalHeads.Boundary boundary, SignalHeadStyle style) {
             for (Entry entry : entries) {
                 if (entry.matches(line, boundary)) {
                     return;
                 }
             }
-            entries.add(new Entry(line, boundary.sectionId, boundary.distance, boundary.direction));
+            entries.add(new Entry(line, boundary.sectionId, boundary.distance, boundary.direction, style));
             markDirty();
         }
 
@@ -312,12 +328,12 @@ public final class SignalHeadPlacer {
                     changed = true;
                     continue;
                 }
-                Result result = place(world, state, entry.line, boundary, true);
+                Result result = place(world, state, entry.line, boundary, entry.style, true);
                 if (result.outcome == Outcome.QUEUED) {
                     continue;
                 }
                 if (result.outcome == Outcome.PLACED) {
-                    result = place(world, state, entry.line, boundary, false);
+                    result = place(world, state, entry.line, boundary, entry.style, false);
                 }
                 if (result.outcome == Outcome.NO_ROOM) {
                     Rcmc.LOGGER.warn("No room for a signal head on line {} at {}", entry.line,
@@ -338,7 +354,8 @@ public final class SignalHeadPlacer {
             for (int i = 0; i < list.tagCount(); i++) {
                 NBTTagCompound tag = list.getCompoundTagAt(i);
                 entries.add(new Entry(tag.getString("Line"), tag.getInteger("Section"),
-                    tag.getDouble("Distance"), tag.getByte("Direction") < 0 ? -1 : 1));
+                    tag.getDouble("Distance"), tag.getByte("Direction") < 0 ? -1 : 1,
+                    SignalHeadStyle.fromOrdinal(tag.getByte("Style"))));
             }
         }
 
@@ -351,6 +368,7 @@ public final class SignalHeadPlacer {
                 tag.setInteger("Section", entry.sectionId);
                 tag.setDouble("Distance", entry.distance);
                 tag.setByte("Direction", (byte) entry.direction);
+                tag.setByte("Style", (byte) entry.style.ordinal());
                 list.appendTag(tag);
             }
             compound.setTag("Heads", list);
@@ -362,8 +380,10 @@ public final class SignalHeadPlacer {
             final int sectionId;
             final double distance;
             final int direction;
+            final SignalHeadStyle style;
 
-            Entry(String line, int sectionId, double distance, int direction) {
+            Entry(String line, int sectionId, double distance, int direction, SignalHeadStyle style) {
+                this.style = style;
                 this.line = line;
                 this.sectionId = sectionId;
                 this.distance = distance;
