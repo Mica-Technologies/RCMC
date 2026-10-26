@@ -153,6 +153,7 @@ public final class CoasterSoundDirector {
                         MetroAudioMix.bystanderRange(speed), level.volume * metroMaster, level.pitch,
                         x, y, z, wanted);
                 }
+                playJointClacks(mc, state, trainId, train, onBoard, underground, metroMaster);
                 continue;
             }
             String span = spanAt(state.elementSpans(), where);
@@ -186,6 +187,7 @@ public final class CoasterSoundDirector {
                 it.remove();
             }
         }
+        lastLead.keySet().retainAll(state.trains().asMap().keySet());
         lastSpeed.keySet().retainAll(state.trains().asMap().keySet());
         lastAcceleration.keySet().retainAll(state.trains().asMap().keySet());
         lastSpan.keySet().retainAll(state.trains().asMap().keySet());
@@ -211,6 +213,70 @@ public final class CoasterSoundDirector {
         }
         loop.target(volume, pitch, x, y, z);
         wanted.add(key);
+    }
+
+    /** Each metro train's lead position on the last tick, for finding which axles crossed a joint. */
+    private final Map<Integer, TrackRef> lastLead = new java.util.HashMap<>();
+
+    /** Only axles this near the listener clack; the rest of a long train is lost in its rumble. */
+    private static final double JOINT_EARSHOT = 28.0D;
+
+    private final java.util.Random jointJitter = new java.util.Random();
+
+    /**
+     * The rhythmic clack of a metro train's wheels on jointed rail: every axle that crossed a rail
+     * joint since the last tick plays one, from where that axle is. Two axles to a bogie and two
+     * bogies to a car is what makes the "da-dum ... da-dum" of a real train, and its tempo follows
+     * the speed on its own: nothing about the rhythm is in the sound itself.
+     */
+    private void playJointClacks(Minecraft mc, RcmcWorldState state, int trainId, Train train,
+                                 boolean onBoard, boolean underground, float master) {
+        TrackRef now = train.reference();
+        TrackRef before = lastLead.put(trainId, now);
+        double spacing = RcmcConfig.metroRailJointSpacing;
+        if (before == null || spacing <= 0.0D || master <= 0.0F || now == null
+            || before.sectionId() != now.sectionId()) {
+            return;
+        }
+        double moved = now.distance() - before.distance();
+        // More than a tick's travel means the train was out of earshot, or wrapped round a ring:
+        // there is no telling which joints it crossed, and a burst of every axle at once is worse
+        // than a missed beat.
+        if (Math.abs(moved) > Math.max(2.0D, train.speed() * 0.12D)) {
+            return;
+        }
+        Level level = MetroAudioMix.jointClick(train.speed(), onBoard, underground);
+        com.micatechnologies.minecraft.rcmc.track.TrackSection section = state.network().section(now.sectionId());
+        if (level.isSilent() || section == null) {
+            return;
+        }
+        TrainSpec spec = train.spec();
+        double[] cars = new double[spec.carCount()];
+        for (int i = 0; i < cars.length; i++) {
+            cars[i] = spec.offsetOfCar(i);
+        }
+        double length = section.totalLength();
+        for (double offset : MetroAudioMix.axleOffsets(cars, spec.carLength())) {
+            // Cars trail the lead toward -s whichever way the train runs.
+            double was = before.distance() - offset;
+            double is = now.distance() - offset;
+            if (!section.isClosed() && (is < 0.0D || is > length)) {
+                continue;   // On the next section along; its joints are not this section's.
+            }
+            if (!MetroAudioMix.crossesJoint(was, is, spacing)) {
+                continue;
+            }
+            double at = section.isClosed() ? ((is % length) + length) % length : is;
+            com.micatechnologies.minecraft.rcmc.track.math.Vec3 p =
+                state.network().positionAt(new TrackRef(now.sectionId(), at));
+            if (mc.player.getDistanceSq(p.x, p.y, p.z) > JOINT_EARSHOT * JOINT_EARSHOT) {
+                continue;
+            }
+            // A few percent either way, so a run of identical wheels is not a machine gun.
+            float pitch = level.pitch * (0.97F + 0.06F * jointJitter.nextFloat());
+            mc.getSoundHandler().playSound(new PositionedSoundRecord(RcmcSounds.METRO_JOINT,
+                SoundCategory.BLOCKS, level.volume * master, pitch, (float) p.x, (float) p.y, (float) p.z));
+        }
     }
 
     private static SoundEvent metroEventFor(MetroAudioMix.Channel channel) {

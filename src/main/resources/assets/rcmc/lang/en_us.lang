@@ -51,6 +51,7 @@ rcmc.subtitle.metro_door_close=Doors close
 rcmc.subtitle.metro_brake_release=Brakes release
 rcmc.subtitle.metro_motor=Train motor whines
 rcmc.subtitle.metro_rolling=Train rumbles
+rcmc.subtitle.metro_joint=Wheels clack over rail joints
 rcmc.subtitle.coaster_roll=Coaster rolls
 rcmc.subtitle.coaster_chain=Chain lift clanks
 rcmc.subtitle.coaster_wind=Wind rushes

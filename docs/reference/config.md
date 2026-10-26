@@ -54,8 +54,9 @@ Read by the server. Clients' values are not used.
 | `enableCameraRoll` | `true` | Whether the rider camera rolls with banked track and inversions |
 | `enableRideHud` | `true` | The live speed / G-force / height readout while riding |
 | `coasterSoundVolume` | `1.0` | Volume of coaster sounds — rolling, chain lift, wind, brakes, drive tyres, launches — from 0 to 1. `0` turns them off. They also follow Minecraft's *Blocks* volume slider |
-| `metroSoundVolume` | `1.0` | Volume of metro running sounds — the traction motor whine and the wheels on rail — from 0 to 1. `0` turns them off. Door chimes, brake release and announcements are not affected. They also follow Minecraft's *Blocks* volume slider |
+| `metroSoundVolume` | `1.0` | Volume of metro running sounds — the traction motor, the wheels on rail and their clack over rail joints — from 0 to 1. `0` turns them off. Door chimes, brake release and announcements are not affected. They also follow Minecraft's *Blocks* volume slider |
 | `metroUndergroundBoost` | `true` | Make metro running sounds louder while the train is underground (little sky light where it is), as in a tunnel |
+| `metroRailJointSpacing` | `18.0` | Distance between rail joints, in blocks, for the rhythmic clack of metro wheels crossing them: two quick clacks as each bogie passes a joint, at a tempo that follows the train's speed. `0` is continuous welded rail, with no clacks. 0 to 200 |
 
 ### G-force screen effects
 

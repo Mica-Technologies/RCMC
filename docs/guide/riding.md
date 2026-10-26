@@ -111,9 +111,12 @@ Riders hear their own train from inside it; everyone else hears it from where it
 follow Minecraft's **Blocks** volume slider, and `coasterSoundVolume` in the
 [client config](../reference/config.md#client) scales or silences them.
 
-Metro trains have their own sounds. While moving you hear the traction motor whine, rising in
-pitch with speed and loudest while the train accelerates or brakes, over the rumble of the wheels;
-both are louder in tunnels. `metroSoundVolume` scales or silences them. There is also a door chime before the doors close, the doors themselves, the
+Metro trains have their own sounds. While moving you hear the traction motor, rising in pitch
+with speed and loudest while the train accelerates or brakes, over the rumble of the wheels and
+the rhythmic clack of each wheel crossing a rail joint: two quick clacks as each bogie passes, at
+a tempo that follows the speed. All are louder in tunnels. `metroSoundVolume` scales or silences
+them, and `metroRailJointSpacing` sets how far apart the joints are (`0` for welded rail, with no
+clacks). There is also a door chime before the doors close, the doors themselves, the
 brakes releasing as they leave, and **announcements** with a chime: *"Next stop: X"* after leaving a
 station and *"This is X"* on arrival. Station speakers announce approaching trains. If
 **City Super Mod** is installed, announcements are spoken aloud; otherwise they appear as subtitles.

@@ -90,6 +90,12 @@ public final class RcmcConfig {
     public static boolean metroUndergroundBoost = true;
 
     /**
+     * Distance between rail joints, in blocks, for the clack of metro wheels crossing them. 0 is
+     * continuous welded rail: no clacks. Presentation only, so it is not synced.
+     */
+    public static double metroRailJointSpacing = 18.0D;
+
+    /**
      * Time constant, in seconds, of the low-pass filter {@code GForceSmoother} applies before
      * {@code GForceEffects} reacts to a G reading. Larger values make the screen effects slower
      * to ramp up (and slower to release) but more resistant to single-tick spikes; see
@@ -189,6 +195,10 @@ public final class RcmcConfig {
         metroUndergroundBoost = config.get(CATEGORY_CLIENT, "metroUndergroundBoost",
             metroUndergroundBoost, "Make metro running sounds louder when the train is underground "
                 + "(in a tunnel, with little sky light).").getBoolean();
+        metroRailJointSpacing = config.get(CATEGORY_CLIENT, "metroRailJointSpacing",
+            metroRailJointSpacing, "Distance between rail joints, in blocks, for the rhythmic clack of "
+                + "metro wheels crossing them. 0 is continuous welded rail, with no clacks.", 0.0D, 200.0D)
+            .getDouble();
         gForceSmoothingSeconds = config.get(CATEGORY_CLIENT, "gForceSmoothingSeconds",
             gForceSmoothingSeconds, "Time constant, in seconds, of the smoothing applied before "
                 + "G-force screen effects react. Higher is slower to ramp up and slower to "

@@ -68,5 +68,14 @@
     "category": "block",
     "subtitle": "rcmc.subtitle.metro_rolling",
     "sounds": [ { "name": "rcmc:metro_rolling", "stream": false } ]
+  },
+  "metro_joint": {
+    "category": "block",
+    "subtitle": "rcmc.subtitle.metro_joint",
+    "sounds": [
+      { "name": "rcmc:metro_joint_1", "stream": false },
+      { "name": "rcmc:metro_joint_2", "stream": false },
+      { "name": "rcmc:metro_joint_3", "stream": false }
+    ]
   }
 }

@@ -48,6 +48,9 @@ public final class RcmcSounds {
     /** A metro car's wheels on rail. Looped, pitch and volume following speed. */
     public static final SoundEvent METRO_ROLLING = create("metro_rolling");
 
+    /** A wheel crossing a rail joint: one shot per axle per joint, three variants. */
+    public static final SoundEvent METRO_JOINT = create("metro_joint");
+
     // --- Coaster. Synthesised by tools/audio/synth_coaster_sounds.py; all but the launch loop. ---
 
     /** Wheels on rail. Looped, pitch and volume following the train's speed. */
