@@ -1,0 +1,8 @@
+{
+  "forge_marker": 1,
+  "defaults": { "model": "rcmc:tunnel_exit_sign" },
+  "variants": {
+    "facing": { "north": {}, "south": {}, "west": {}, "east": {} },
+    "variant": { "both": {}, "left": {}, "right": {} }
+  }
+}

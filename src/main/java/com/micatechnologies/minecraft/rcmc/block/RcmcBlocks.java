@@ -30,6 +30,7 @@ public final class RcmcBlocks {
     public static BlockRideSign rideSign;
     public static BlockLineDesk lineDesk;
     public static com.micatechnologies.minecraft.rcmc.block.signal.BlockSignalHead signalHead;
+    public static com.micatechnologies.minecraft.rcmc.block.sign.BlockTunnelExitSign tunnelExitSign;
 
     private RcmcBlocks() {
         throw new AssertionError("No instances.");
@@ -53,6 +54,8 @@ public final class RcmcBlocks {
         lineDesk = RcmcRegistry.addBlock(new BlockLineDesk());
         signalHead = RcmcRegistry.addBlock(
             new com.micatechnologies.minecraft.rcmc.block.signal.BlockSignalHead());
+        tunnelExitSign = RcmcRegistry.addBlock(
+            new com.micatechnologies.minecraft.rcmc.block.sign.BlockTunnelExitSign());
 
         // An ItemBlock carries the block's registry name, not its own — they share a namespace and
         // Forge matches them by name when binding models.
@@ -83,8 +86,26 @@ public final class RcmcBlocks {
         RcmcRegistry.addItem(new com.micatechnologies.minecraft.rcmc.block.signal.ItemSignalHead(
             signalHead).setRegistryName(RcmcConstants.MOD_NAMESPACE,
             com.micatechnologies.minecraft.rcmc.block.signal.BlockSignalHead.NAME));
+        // Three variants (both ways, left, right) on the item damage, which is also the block metadata.
+        RcmcRegistry.addItem(new ItemBlock(tunnelExitSign) {
+            @Override
+            public int getMetadata(int damage) {
+                return damage;
+            }
+
+            @Override
+            public String getTranslationKey(net.minecraft.item.ItemStack stack) {
+                return super.getTranslationKey() + "." + com.micatechnologies.minecraft.rcmc.block.sign
+                    .BlockTunnelExitSign.Variant.fromOrdinal(stack.getMetadata()).getName();
+            }
+        }.setHasSubtypes(true).setRegistryName(RcmcConstants.MOD_NAMESPACE,
+            com.micatechnologies.minecraft.rcmc.block.sign.BlockTunnelExitSign.NAME));
 
         // Tile entities travel with their blocks. Registry-namespaced ids, per convention.
+        net.minecraftforge.fml.common.registry.GameRegistry.registerTileEntity(
+            com.micatechnologies.minecraft.rcmc.block.sign.TileTunnelExitSign.class,
+            new net.minecraft.util.ResourceLocation(RcmcConstants.MOD_NAMESPACE,
+                com.micatechnologies.minecraft.rcmc.block.sign.BlockTunnelExitSign.NAME));
         net.minecraftforge.fml.common.registry.GameRegistry.registerTileEntity(
             com.micatechnologies.minecraft.rcmc.block.sign.TileStationSign.class,
             new net.minecraft.util.ResourceLocation(RcmcConstants.MOD_NAMESPACE, "station_sign"));

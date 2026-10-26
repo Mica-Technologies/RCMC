@@ -41,6 +41,9 @@ public class RcmcClientProxy extends RcmcCommonProxy {
         net.minecraftforge.fml.client.registry.ClientRegistry.bindTileEntitySpecialRenderer(
             com.micatechnologies.minecraft.rcmc.block.signal.TileSignalHead.class,
             new com.micatechnologies.minecraft.rcmc.client.render.sign.RenderSignalHead());
+        net.minecraftforge.fml.client.registry.ClientRegistry.bindTileEntitySpecialRenderer(
+            com.micatechnologies.minecraft.rcmc.block.sign.TileTunnelExitSign.class,
+            new com.micatechnologies.minecraft.rcmc.client.render.sign.RenderTunnelExitSign());
         // Without this the client never advances its trains between server corrections, and the
         // ride visibly steps at the correction rate rather than the frame rate.
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new ClientTrainTicker());
@@ -128,6 +131,16 @@ public class RcmcClientProxy extends RcmcCommonProxy {
                     com.micatechnologies.minecraft.rcmc.RcmcConstants.MOD_NAMESPACE + ":signal_head_item",
                     "inventory"));
         }
+        net.minecraft.item.Item exitSign = net.minecraft.item.Item.getItemFromBlock(
+            com.micatechnologies.minecraft.rcmc.block.RcmcBlocks.tunnelExitSign);
+        exitSign.setTileEntityItemStackRenderer(
+            new com.micatechnologies.minecraft.rcmc.client.render.sign.ItemTunnelExitSignRenderer());
+        for (int variant = 0; variant < 3; variant++) {
+            net.minecraftforge.client.model.ModelLoader.setCustomModelResourceLocation(exitSign, variant,
+                new net.minecraft.client.renderer.block.model.ModelResourceLocation(
+                    com.micatechnologies.minecraft.rcmc.RcmcConstants.MOD_NAMESPACE + ":tunnel_exit_sign_item",
+                    "inventory"));
+        }
         // The block's one property only migrates old heads; it never changes the hit-box model.
         net.minecraftforge.client.model.ModelLoader.setCustomStateMapper(
             com.micatechnologies.minecraft.rcmc.block.RcmcBlocks.signalHead,
@@ -189,6 +202,13 @@ public class RcmcClientProxy extends RcmcCommonProxy {
         net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getMinecraft();
         mc.addScheduledTask(() -> mc.displayGuiScreen(
             new com.micatechnologies.minecraft.rcmc.client.gui.GuiSignalHead(pos)));
+    }
+
+    @Override
+    public void openTunnelExitSign(net.minecraft.util.math.BlockPos pos) {
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getMinecraft();
+        mc.addScheduledTask(() -> mc.displayGuiScreen(
+            new com.micatechnologies.minecraft.rcmc.client.gui.GuiTunnelExitSign(pos)));
     }
 
     @Override

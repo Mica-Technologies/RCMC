@@ -75,6 +75,8 @@ public final class RcmcNetwork {
             nextId++, Side.SERVER);
         CHANNEL.registerMessage(PacketSignalHeadEdit.Handler.class, PacketSignalHeadEdit.class,
             nextId++, Side.SERVER);
+        CHANNEL.registerMessage(PacketTunnelExitSign.Handler.class, PacketTunnelExitSign.class,
+            nextId++, Side.SERVER);
     }
 
     public static void sendTo(Object message, EntityPlayerMP player) {

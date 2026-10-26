@@ -56,4 +56,7 @@ public interface RcmcProxy {
 
     /** Opens the screen of the signal head at {@code pos}. Client only; a no-op on a server. */
     void openSignalHead(net.minecraft.util.math.BlockPos pos);
+
+    /** Opens the distance screen of the tunnel exit sign at {@code pos}. Client only; a no-op on a server. */
+    void openTunnelExitSign(net.minecraft.util.math.BlockPos pos);
 }
