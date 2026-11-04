@@ -63,7 +63,7 @@ public class CommandRcmc extends CommandBase {
     @Override
     public String getUsage(ICommandSender sender) {
         return "/rcmc <demo|metrodemo|train|clear|info|build|track|section|paint|style|rate|check|block|transfer|ride|station|line|signal"
-            + "|switch|platform|rmsection|undo|redo>";
+            + "|switch|platform|node|element|clearance|rmsection|undo|redo>";
     }
 
     @Override
@@ -77,7 +77,27 @@ public class CommandRcmc extends CommandBase {
         if (args.length == 1) {
             return getListOfStringsMatchingLastWord(args, "demo", "metrodemo", "train", "clear",
                 "info", "build", "track", "section", "paint", "style", "rate", "check", "trains", "block", "transfer", "ride", "station", "line", "signal", "switch",
-                "platform", "rmsection", "undo", "redo");
+                "platform", "node", "element", "clearance", "rmsection", "undo", "redo");
+        }
+        if (args.length == 3 && "node".equalsIgnoreCase(args[0])) {
+            return getListOfStringsMatchingLastWord(args, "list", "set", "insert", "delete");
+        }
+        if (args.length == 4 && "node".equalsIgnoreCase(args[0]) && "insert".equalsIgnoreCase(args[2])) {
+            return getListOfStringsMatchingLastWord(args, "after");
+        }
+        if (args.length >= 5 && "node".equalsIgnoreCase(args[0]) && "set".equalsIgnoreCase(args[2])) {
+            List<String> keys = new ArrayList<>(java.util.Arrays.asList("pos=", "move=", "bank="));
+            for (com.micatechnologies.minecraft.rcmc.builder.TrackBuildSession.SegmentType type
+                : com.micatechnologies.minecraft.rcmc.builder.TrackBuildSession.SegmentType.values()) {
+                keys.add("type=" + type.name().toLowerCase(java.util.Locale.ROOT));
+            }
+            return getListOfStringsMatchingLastWord(args, keys);
+        }
+        if (args.length == 3 && "element".equalsIgnoreCase(args[0])) {
+            return getListOfStringsMatchingLastWord(args, "list", "set");
+        }
+        if (args.length >= 5 && "element".equalsIgnoreCase(args[0]) && "set".equalsIgnoreCase(args[2])) {
+            return getListOfStringsMatchingLastWord(args, "speed=", "target=", "force=", "dwell=", "passes=");
         }
         if (args.length == 2 && "track".equalsIgnoreCase(args[0])) {
             return getListOfStringsMatchingLastWord(args, "lay", "nodes");
@@ -290,6 +310,15 @@ public class CommandRcmc extends CommandBase {
                 break;
             case "track":
                 TrackCommands.track(sender, world, state, args);
+                break;
+            case "node":
+                EditCommands.node(sender, world, state, args);
+                break;
+            case "element":
+                EditCommands.element(sender, world, state, args);
+                break;
+            case "clearance":
+                EditCommands.clearance(sender, world, state, args);
                 break;
             case "rmsection":
                 removeSection(sender, world, state, args);

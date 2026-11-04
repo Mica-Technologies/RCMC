@@ -57,6 +57,12 @@ public final class RcmcWorldState {
      */
     private EditHistory history;
 
+    /** Depth of {@link #asOneEdit} calls in progress; while above zero, edits are not recorded singly. */
+    private int oneEditDepth;
+
+    /** Whether anything was marked dirty inside the current {@link #asOneEdit}. */
+    private boolean oneEditDirty;
+
     /**
      * Ride hardware. Server-side this is loaded from saved data; client-side it stays empty —
      * elements only ever affect the simulation through the acceleration they produce, and the
@@ -291,8 +297,30 @@ public final class RcmcWorldState {
             // transit — without touching a single call site, and future edit types the day they
             // are written. Skipped while a restore is being applied (its own dirty-mark would else
             // corrupt the stacks).
-            if (history != null && !history.isRestoring()) {
+            if (oneEditDepth > 0) {
+                oneEditDirty = true;
+            }
+            else if (history != null && !history.isRestoring()) {
                 history.record(data.snapshot());
+            }
+        }
+    }
+
+    /**
+     * Runs {@code edits} as one undo step. A command that moves a node and retypes its span makes
+     * two edits, each of which would otherwise be its own step, so one {@code /rcmc undo} would
+     * leave the ride half-changed.
+     */
+    public void asOneEdit(World world, Runnable edits) {
+        oneEditDepth++;
+        try {
+            edits.run();
+        }
+        finally {
+            oneEditDepth--;
+            if (oneEditDepth == 0 && oneEditDirty) {
+                oneEditDirty = false;
+                markTrackDirty(world);
             }
         }
     }

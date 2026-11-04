@@ -35,7 +35,7 @@
 | A train didn't come back after a restart | Its track was deleted while the world was closed | Rebuild the section, then `/rcmc train` |
 | I can't break the track | Track isn't made of blocks | Use `/rcmc rmsection <id>`, or sneak-right-click it with the Track Editor |
 | I deleted something by mistake | | `/rcmc undo` and `/rcmc redo` step back and forth through track edits |
-| I can't join the Alto server with Alto_EXPERIMENTAL | RCMC must be on both the server and your game, and the Alto server doesn't run it yet | Use RCMC in singleplayer for now |
+| I can't join the Alto server | RCMC must be on both the server and your game, at the same version. The Alto server runs RCMC | Launch the Alto pack once so the launcher pulls the current files, then join again |
 
 ## Questions
 

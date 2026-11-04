@@ -330,6 +330,54 @@ the same piece of track.
 
 ---
 
+## Building from commands
+
+A coaster can also be built without the tools, from commands alone: from the server console, a
+command block, or a script that works out the track's geometry for you. It is the same track and
+the same hardware the tools make, and each step can be undone.
+
+**1. Lay the track** with [`/rcmc track lay`](../reference/commands.md#rcmc-track), giving the nodes
+as `x,y,z` or `x,y,z,bank`. A segment type after a node, such as `@lift`, `@brake` or `@station`, lays
+that hardware on the track *arriving* at the node, and carries on until the next `@`. `@plain` ends
+it. Long alignments go in a file under `config/rcmc/polylines/`.
+
+```
+/rcmc track lay coaster circuit file dock-coaster
+```
+
+The reply gives the new section's number and the validator's report. If any block stands where
+the train will pass, a line names the first one, and
+[`/rcmc clearance`](../reference/commands.md#rcmc-clearance) lists them all.
+
+**2. Tune the hardware** with [`/rcmc element`](../reference/commands.md#rcmc-element). `list`
+numbers every lift, launch, brake, drive tyre and station on the ride, with its settings. `set`
+changes them, as the operator panel does:
+
+```
+/rcmc element 7 list
+/rcmc element 7 set 1 speed=7
+/rcmc element 7 set 3 target=2
+/rcmc element 7 set 4 dwell=8
+```
+
+**3. Check the ride** with [`/rcmc check`](../reference/commands.md#rcmc-check), which names the
+nodes where riders feel too much.
+
+**4. Fix one node at a time** with [`/rcmc node`](../reference/commands.md#rcmc-node), numbered as
+the check numbers them. Change a node's bank, move it, or change the span after it, without laying
+the section again and without losing the hardware settings from step 2:
+
+```
+/rcmc node 7 set 14 bank=30
+/rcmc node 7 set 15 move=0,-1,0
+/rcmc node 7 insert after 20
+```
+
+Each edit ends with how many ride check warnings are left, so you can repeat steps 3 and 4 until
+there are none. Then add a train and test it as below.
+
+---
+
 ## Supports and colour
 
 **Supports generate automatically** beneath a committed section, at intervals, down to terrain —

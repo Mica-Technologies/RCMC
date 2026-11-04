@@ -6,7 +6,7 @@ completion covers subcommands and most of their arguments: demo kinds, track sty
 subcommands and sides.
 
 ```
-/rcmc <demo|metrodemo|train|trains|clear|info|build|paint|style|rate|check|block|transfer|ride|station|line|switch|platform|rmsection|undo|redo>
+/rcmc <demo|metrodemo|train|trains|clear|info|build|track|node|element|clearance|section|paint|style|rate|check|block|transfer|ride|station|line|signal|switch|platform|rmsection|undo|redo>
 ```
 
 ---
@@ -147,9 +147,71 @@ and nodes are separated by `;` or by line breaks. In a file, `#` starts a commen
 - A chat line holds 256 characters. Longer alignments go in a file, or through the server console or
   a command block, which have no such limit.
 
-`/rcmc track nodes` prints each node with its distance along the section. With `file <name>` it
-writes them to `config/rcmc/polylines/<name>.txt` in the format `lay` reads, so what you export lays
-back as the same section, coordinate for coordinate.
+`/rcmc track nodes` prints each node with its distance along the section, **numbered from 0**. With
+`file <name>` it writes them to `config/rcmc/polylines/<name>.txt` in the format `lay` reads, so what
+you export lays back as the same section, coordinate for coordinate.
+
+After a lay, the reply ends with a one-line [clearance](#rcmc-clearance) summary when anything stands
+in the train's way.
+
+### `/rcmc node`
+
+Changes one node of a section that is already laid, without laying it again.
+
+```
+/rcmc node <sectionId> list
+/rcmc node <sectionId> set <n> [pos=x,y,z] [move=dx,dy,dz] [bank=<degrees>] [type=<segment>]
+/rcmc node <sectionId> insert after <n> [x,y,z[,bank]]
+/rcmc node <sectionId> delete <n>
+```
+
+**Nodes are numbered from 1**, as [`/rcmc check`](#rcmc-check) and the track editor screen number
+them, so a warning *between nodes 13 and 14* is fixed at node 13 or 14. (`/rcmc track nodes` counts
+from 0.) In place of `<n>`, `x,y,z` picks the node nearest that point, within 8 blocks.
+
+| Key | Sets |
+| --- | --- |
+| `pos=x,y,z` | where the node is, exactly |
+| `move=dx,dy,dz` | where it is, relative to where it was |
+| `bank=<degrees>` | its bank, −180 to 180 |
+| `type=<segment>` | what the span **from this node to the next** is laid as: `plain`, `lift`, `launch`, `launch_backward`, `brake`, `block_brake`, `tyres`, `transfer` or `station` |
+
+- **`list`** prints each node, its distance along the section and what the span leaving it is laid as.
+- **`insert after <n>`** adds a node after node `n`: at the coordinates given, or halfway along the
+  span when none are. The nodes after it are renumbered.
+- **`delete <n>`** removes a node. Open track keeps at least 2 and a circuit at least 3.
+- Ride hardware, stations, block sections, signals and trains move with the track, as they do in the
+  track editor. A span keeps its hardware and its settings unless `type=` changes what it is.
+- Each command is one step of `/rcmc undo`. The reply ends with the number of ride check warnings,
+  if there are any, and a clearance summary.
+
+```
+/rcmc node 3 set 14 bank=25
+/rcmc node 3 set 14 move=0,1.5,0 type=brake
+/rcmc node 3 insert after 9 104.5,82,-31.5,15
+```
+
+### `/rcmc clearance`
+
+```
+/rcmc clearance <sectionId> [max listed]
+```
+
+Sweeps the space a train needs along a section and lists every block standing in it, as
+`x y z block @ distance where`. Track is not made of blocks, so nothing else stops a section being
+laid through a tree or closer to a wall than a car is wide.
+
+- The envelope follows the track's bank and turns over with it. A coaster car's envelope is 0.9
+  blocks either side of the rail and 2.3 blocks up, room for riders' arms and heads. A metro car's
+  is its body, 1.95 blocks either side and up to its roof, 5.95 blocks above the rail.
+- A block is in the way if the train meets its real shape, so a slab, a fence or a stair counts only
+  where it is solid. Blocks with no collision count too, such as torches, signs, wires and banners.
+  Grass, flowers, vines, snow layers and water do not.
+- A station's own platform, platform edge and air gates are not reported. They are placed against
+  the car on purpose, so riders can step aboard.
+- Chunks that are not loaded are never loaded to check them. The blocks in them are counted and
+  reported as not checked.
+- 20 blocks are listed unless you ask for more.
 
 ### `/rcmc style`
 
@@ -253,7 +315,8 @@ Runs the ride's own train round a simulated lap, from its station, and lists whe
 more than is safe, and where a train cannot get past. Each warning says what was measured and
 between which nodes: *6.2 g pressing riders into their seats — between nodes 9 and 10 of #1*.
 Nothing is changed or blocked. The same check is marked on the track while you hold the track
-editor. A section with no station has no ride to run.
+editor. A section with no station has no ride to run. Nodes are numbered as
+[`/rcmc node`](#rcmc-node) numbers them, so the node a warning names is the one to change.
 
 ### `/rcmc rate`
 
@@ -267,6 +330,37 @@ incomplete lap is called out explicitly.
 
 `sectionId` may be left off only while the world has exactly one section; once there are several,
 name the one to rate.
+
+### `/rcmc element`
+
+```
+/rcmc element <sectionId> list
+/rcmc element <sectionId> set <n | at <sectionId> <distance> | near <x> <y> <z>> <key=value>...
+```
+
+The operator panel's hardware settings, for a script or the console. `list` numbers every piece of
+hardware on the ride that `sectionId` is part of, with where it is and its current settings. `set`
+changes one piece, named by that number or by a point on it.
+
+| Key | Hardware | Range |
+| --- | --- | --- |
+| `speed=` | lift, drive tyres: running speed; launch: target speed; brake: speed it brakes to | lift 1 – 15, tyres 1 – 20, launch 5 – 60, brake 0 – 30 blocks/s |
+| `target=` | the same as `speed=` | |
+| `force=` | launch: its push | 1 – 30 blocks/s² |
+| `dwell=` | station: how long a train waits | 0 – 60 s |
+| `passes=` | station: laps a train runs before it stops to unload | 0 – 5 |
+
+A value outside the range is set to the nearest end of it, and the reply says so. A key the
+hardware does not have is refused, and nothing is changed. A lift in two pieces, for example
+across a circuit's seam, is one piece of hardware here, as it is on the panel. Changes are saved,
+and `/rcmc undo` takes back a whole command at once.
+
+```
+/rcmc element 1 list
+/rcmc element 1 set 2 speed=7
+/rcmc element 1 set at 1 212.5 target=2
+/rcmc element 1 set 4 dwell=10 passes=1
+```
 
 ### `/rcmc block`
 

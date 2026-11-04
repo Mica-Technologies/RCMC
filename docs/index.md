@@ -37,8 +37,8 @@ a metro train accelerates, slows for curves, stops at stations and opens its doo
 
 ## New here? Start with these
 
-1. **[Install RCMC](start/installing.md)**: it's in the Alto_EXPERIMENTAL pack, or you can add
-   the jar to any Forge 1.12.2 setup.
+1. **[Install RCMC](start/installing.md)**: it's in the Alto and Alto_EXPERIMENTAL packs, or you
+   can add the jar to any Forge 1.12.2 setup.
 2. **[Try the demos](start/demos.md)**: one command builds a complete, working coaster or metro
    network in front of you. It's the fastest way to see what the mod does.
 3. **Build your own**, following the step-by-step guides to

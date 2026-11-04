@@ -173,6 +173,7 @@ final class TrackCommands {
             reply(sender, TextFormatting.GRAY, "  Station: laid " + platform + ".");
         }
         ItemTrackTool.report(sender, section);
+        EditCommands.clearanceSummary(sender, world, section);
     }
 
     /** {@code /rcmc track nodes <sectionId> [file <name>]}. */
@@ -202,7 +203,8 @@ final class TrackCommands {
         reply(sender, TextFormatting.AQUA, "Section #" + sectionId + " - "
             + (section.isClosed() ? "circuit" : "open") + ", " + section.nodes().size() + " nodes, "
             + String.format(Locale.ROOT, "%.1f", section.totalLength()) + " blocks, style "
-            + TrackStyleIds.label(section.styleId()));
+            + TrackStyleIds.label(section.styleId())
+            + " (numbered from 0 here; /rcmc node and /rcmc check count from 1)");
         for (int i = 0; i < section.nodes().size(); i++) {
             TrackNode node = section.nodes().get(i);
             reply(sender, TextFormatting.GRAY, "  " + i + ": " + Polyline.format(node) + "  @ "

@@ -1,15 +1,14 @@
 # Installing
 
-## The easy way: Alto_EXPERIMENTAL
+## The easy way: the Alto packs
 
-RCMC is included in the **Alto_EXPERIMENTAL** modpack in the Mica Minecraft launcher. Pick that pack,
-launch it once so the launcher downloads the new files, and RCMC is installed. Nothing else to do.
+RCMC is included in the **Alto** and **Alto_EXPERIMENTAL** modpacks in the Mica Minecraft launcher.
+Pick either pack, launch it once so the launcher downloads the new files, and RCMC is installed.
+Nothing else to do.
 
-!!! warning "Singleplayer for now"
-
-    The Alto server runs the main Alto pack, which does not include RCMC yet. RCMC has to be on
-    both the server and your game, so with it in your pack you won't be able to join that server.
-    Try RCMC in a **singleplayer world** — a creative, superflat world is ideal.
+The Alto server runs RCMC too (its Blue Line metro is built with it), so you can ride and build on
+the server as well as in a **singleplayer world**. For trying things out on your own, a creative,
+superflat world is ideal.
 
 ## Installing it yourself
 

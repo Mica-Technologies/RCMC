@@ -271,7 +271,7 @@ public final class TrackEditOperations {
      * The node a press of "insert" adds after {@code index}: halfway along the span to the next
      * node, level with the track there — or, past the end of open track, the same distance on again.
      */
-    static TrackNode nodeAfter(TrackSection section, int index) {
+    public static TrackNode nodeAfter(TrackSection section, int index) {
         int nodes = section.nodes().size();
         TrackNode here = section.nodes().get(index);
         if (index + 1 >= nodes && !section.isClosed()) {
