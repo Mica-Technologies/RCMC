@@ -162,7 +162,7 @@ a line does not go stale when you rebuild the track underneath it.
 ## 4. Put a train into service
 
 ```
-/rcmc train [sectionId] [cars] [startSpeed] metro
+/rcmc train <sectionId> [cars] [startSpeed] metro
 /rcmc line start <lineName> <trainId> [cruiseSpeed]
 /rcmc line stop <trainId>
 ```

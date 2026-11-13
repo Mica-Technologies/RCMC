@@ -268,16 +268,17 @@ Steps back and forward through track edits, server-side.
 ### `/rcmc train`
 
 ```
-/rcmc train [sectionId] [cars] [startSpeed] [type] [distance]
+/rcmc train <sectionId> [cars] [startSpeed] [type] [distance]
 /rcmc train remove <trainId>
 ```
 
-Spawns a train on a section. A train parked in a station dispatches itself. Every argument is
-optional, but they are positional, so to give one you must give all those before it.
+Spawns a train on a section. A train parked in a station dispatches itself. The arguments after
+`sectionId` are optional, but they are positional, so to give one you must give all those before
+it. With no arguments the command prints its usage and the train types, and spawns nothing.
 
 | Argument | Range | Default |
 | --- | --- | --- |
-| `sectionId` | — | The first section in the world |
+| `sectionId` | — | Required; `/rcmc info` lists them |
 | `cars` | 1 – the type's most | The type's default |
 | `startSpeed` | 0 – 60 blocks/s | 0 |
 | `type` | any [train type](train-types.md) | `coaster` |

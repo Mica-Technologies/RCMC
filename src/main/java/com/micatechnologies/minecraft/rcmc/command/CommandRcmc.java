@@ -507,10 +507,20 @@ public class CommandRcmc extends CommandBase {
             reply(sender, TextFormatting.GREEN, "Removed train #" + trainId + ".");
             return;
         }
+        if (args.length < 2) {
+            // Bare, it says how it is used. It used to pick the first section in the world and put
+            // a train on it: somebody reading the usage on a live server got a train on another
+            // builder's running ride.
+            reply(sender, TextFormatting.GOLD, "/rcmc train <sectionId> [cars] [startSpeed] [type] [distance]");
+            reply(sender, TextFormatting.GOLD, "/rcmc train remove <trainId>");
+            reply(sender, TextFormatting.GRAY, "  Nothing was spawned. /rcmc info lists section ids.");
+            trainTypes(sender, new String[] {"trains"});
+            return;
+        }
         if (state.network().isEmpty()) {
             throw new CommandException("No track yet — run /rcmc demo first");
         }
-        int sectionId = args.length > 1 ? parseInt(args[1]) : state.network().sections().iterator().next().id();
+        int sectionId = parseInt(args[1]);
         TrackSection section = state.network().section(sectionId);
         if (section == null) {
             throw new CommandException("No section with id " + sectionId);

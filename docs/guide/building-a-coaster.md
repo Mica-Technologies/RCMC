@@ -412,7 +412,7 @@ Trains are painted by command, since a moving train is not something you point a
 ## Testing the ride
 
 ```
-/rcmc train [sectionId] [cars] [startSpeed]     spawn a train (defaults: first section, 5 cars, at rest)
+/rcmc train <sectionId> [cars] [startSpeed]     spawn a train (defaults: 5 cars, at rest)
 /rcmc rate <sectionId>                          excitement / intensity / nausea
 /rcmc block <sectionId> <auto|count|off>        divide into block sections for multi-train running
 /rcmc info                                      list sections and trains
