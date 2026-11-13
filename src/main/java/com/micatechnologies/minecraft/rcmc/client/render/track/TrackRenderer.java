@@ -218,6 +218,20 @@ public final class TrackRenderer {
     }
 
     private void draw(double camX, double camY, double camZ, boolean useVbo) {
+        // Every piece of state the vertex colours depend on is set here, not inherited. This
+        // runs after the world, among other handlers of the same event, and whatever one of them
+        // leaves on is applied to the track: with fixed-function lighting on, a mesh with no
+        // normals is lit by whichever normal was set last, and with the lightmap unit on, by
+        // whichever light coordinate was. Both came from the last entity drawn, so the track went
+        // dark and light as that changed — on any frame the ridden train was redrawn after the
+        // world, which is why it flickered while riding and not while standing beside it.
+        GlStateManager.disableLighting();
+        GlStateManager.setActiveTexture(OpenGlHelper.lightmapTexUnit);
+        GlStateManager.disableTexture2D();
+        GlStateManager.setActiveTexture(OpenGlHelper.defaultTexUnit);
+        GlStateManager.disableBlend();
+        GlStateManager.depthMask(true);
+        GlStateManager.shadeModel(GL11.GL_FLAT);
         GlStateManager.disableTexture2D();
         // Double-sided: the profiles are wound consistently, but the ballast bed showed that some
         // outward faces were being culled by the ambient world-render cull state. Flat-shaded

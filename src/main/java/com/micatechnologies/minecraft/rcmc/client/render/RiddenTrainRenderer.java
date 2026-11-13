@@ -4,6 +4,8 @@ import com.micatechnologies.minecraft.rcmc.entity.EntityCoasterCar;
 import java.util.HashMap;
 import java.util.Map;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.GlStateManager;
+import net.minecraft.client.renderer.RenderHelper;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraftforge.client.event.RenderWorldLastEvent;
@@ -68,6 +70,7 @@ public class RiddenTrainRenderer {
         Entity vehicle = player == null ? null : player.getRidingEntity();
         if (mc.world != null && vehicle instanceof EntityCoasterCar) {
             int trainId = ((EntityCoasterCar) vehicle).trainId();
+            boolean prepared = false;
             for (Entity entity : mc.world.getLoadedEntityList()) {
                 if (!(entity instanceof EntityCoasterCar)) {
                     continue;
@@ -82,9 +85,27 @@ public class RiddenTrainRenderer {
                     // z-fighting on every face.
                     continue;
                 }
+                if (!prepared) {
+                    // The entity pass draws with item lighting and the lightmap on, and has
+                    // turned both off again by now. Without them a car redrawn here came out in
+                    // different light from the frame before, when the pass had reached it.
+                    RenderHelper.enableStandardItemLighting();
+                    mc.entityRenderer.enableLightmap();
+                    prepared = true;
+                }
                 // renderEntityStatic applies the same interpolation and camera offset the normal
                 // pass uses, so this lands in exactly the place vanilla would have put it.
                 mc.getRenderManager().renderEntityStatic(car, event.getPartialTicks(), false);
+            }
+            if (prepared) {
+                // And off again, as the pass leaves them: the handlers after this one draw
+                // unlit geometry and would otherwise be lit by this.
+                mc.entityRenderer.disableLightmap();
+                RenderHelper.disableStandardItemLighting();
+                GlStateManager.disableLighting();
+                GlStateManager.disableBlend();
+                GlStateManager.depthMask(true);
+                GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
             }
         }
         // Advance last: everything above compares against the frame the entity pass stamped.
