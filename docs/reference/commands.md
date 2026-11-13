@@ -270,11 +270,17 @@ instead — a moving train is not something you point at reliably.
 ### `/rcmc rmsection`
 
 ```
-/rcmc rmsection <sectionId>
+/rcmc rmsection <sectionId> [keepplatform]
 ```
 
 Deletes one section along with its ride elements and trains. Use this rather than `/rcmc clear`
 once a park has more than one thing in it.
+
+A coaster station on the section loses its decking too: the platform, platform edge and air gate
+blocks along it are removed and the reply says how many. Only those three RCMC blocks are taken,
+so anything built on or beside the deck stays; where the deck was laid into the ground a shallow
+trench is left. Add `keepplatform` to leave the deck standing. `/rcmc undo` after a removal lays
+the platform again, and undoing a lay takes its platform up.
 
 ### `/rcmc clear`
 

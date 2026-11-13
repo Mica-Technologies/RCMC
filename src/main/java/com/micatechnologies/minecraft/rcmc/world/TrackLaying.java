@@ -28,7 +28,7 @@ import net.minecraft.world.World;
 public final class TrackLaying {
 
     /** Blocks of platform either side of a station segment, the edge course included. */
-    private static final int STATION_PLATFORM_WIDTH = 3;
+    private static final int STATION_PLATFORM_WIDTH = CoasterStations.DEFAULT_PLATFORM_WIDTH;
 
     private TrackLaying() {
         throw new AssertionError("No instances.");

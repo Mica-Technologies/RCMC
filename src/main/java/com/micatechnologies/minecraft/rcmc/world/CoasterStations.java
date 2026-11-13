@@ -76,6 +76,33 @@ public final class CoasterStations {
             station.sectionId());
     }
 
+    /** The platform width a station is given when its track is laid, in blocks. */
+    public static final int DEFAULT_PLATFORM_WIDTH = 3;
+
+    /**
+     * Takes up the platform and air gates along {@code station}, on {@code section}: the section
+     * the station is on, passed in because the caller may be about to remove it, or already has.
+     */
+    public static PlatformBuilder.Result removePlatform(net.minecraft.world.World world,
+                                                        com.micatechnologies.minecraft.rcmc.track.TrackSection section,
+                                                        StationPlatform station) {
+        double from = Math.max(0.0D, station.startDistance());
+        double to = Math.min(section.totalLength(), station.endDistance());
+        return PlatformBuilder.remove(world, section, from, to, PLATFORM_FLOOR, PLATFORM_OFFSET,
+            DEFAULT_PLATFORM_WIDTH, station.sectionId());
+    }
+
+    /** The coaster stations standing on section {@code sectionId} itself. */
+    public static java.util.List<StationPlatform> stationsOn(RideElementSet elements, int sectionId) {
+        java.util.List<StationPlatform> stations = new java.util.ArrayList<>();
+        for (RideElement element : elements.elements()) {
+            if (element instanceof StationPlatform && element.sectionId() == sectionId) {
+                stations.add((StationPlatform) element);
+            }
+        }
+        return stations;
+    }
+
     /** The station of the ride {@code sectionId} belongs to, or {@code null} if it has none. */
     public static StationPlatform stationOf(RcmcWorldState state, int sectionId) {
         return stationOf(state.rides(), state.elements(), sectionId);

@@ -398,6 +398,30 @@ public final class RcmcWorldState {
 
             // An undo restores the track, not the id counter: ids handed out since stay retired.
             restoredNetwork.reserveSectionIdsFrom(this.network.nextSectionId());
+            // Station decking is blocks in the world, which a snapshot does not hold. A station the
+            // restore takes away has its platform taken up, from the track as it is now; one it
+            // brings back is given its platform again below, once the restored track is in place.
+            java.util.Set<String> stationsAfter = new java.util.HashSet<>();
+            for (com.micatechnologies.minecraft.rcmc.physics.element.RideElement element
+                : restoredElements.elements()) {
+                if (element instanceof com.micatechnologies.minecraft.rcmc.physics.element.StationPlatform) {
+                    stationsAfter.add(stationKey(element));
+                }
+            }
+            java.util.Set<String> stationsBefore = new java.util.HashSet<>();
+            for (com.micatechnologies.minecraft.rcmc.physics.element.RideElement element
+                : this.elements.elements()) {
+                if (!(element instanceof com.micatechnologies.minecraft.rcmc.physics.element.StationPlatform)) {
+                    continue;
+                }
+                stationsBefore.add(stationKey(element));
+                com.micatechnologies.minecraft.rcmc.track.TrackSection on =
+                    this.network.section(element.sectionId());
+                if (on != null && !stationsAfter.contains(stationKey(element))) {
+                    CoasterStations.removePlatform(world, on,
+                        (com.micatechnologies.minecraft.rcmc.physics.element.StationPlatform) element);
+                }
+            }
             this.network = restoredNetwork;
             this.elements = restoredElements;
             this.transit = restoredTransit;
@@ -406,6 +430,15 @@ public final class RcmcWorldState {
             this.rides.setHomes(com.micatechnologies.minecraft.rcmc.track.storage.RideCodec.readHomes(snapshot));
             RcmcTrackData.get(world).install(restoredNetwork, restoredElements, restoredTransit,
                 restoredBlocks);
+            for (com.micatechnologies.minecraft.rcmc.physics.element.RideElement element
+                : restoredElements.elements()) {
+                if (element instanceof com.micatechnologies.minecraft.rcmc.physics.element.StationPlatform
+                    && !stationsBefore.contains(stationKey(element))) {
+                    CoasterStations.layPlatform(world, this,
+                        (com.micatechnologies.minecraft.rcmc.physics.element.StationPlatform) element,
+                        true, true, CoasterStations.DEFAULT_PLATFORM_WIDTH);
+                }
+            }
 
             int dimension = world.provider.getDimension();
             PacketTrackSync.broadcast(restoredNetwork, dimension);
@@ -417,6 +450,12 @@ public final class RcmcWorldState {
             history.endRestore();
         }
         return true;
+    }
+
+    /** Which station an element is, for telling whether a restore kept it: its section and span. */
+    private static String stationKey(com.micatechnologies.minecraft.rcmc.physics.element.RideElement station) {
+        return station.sectionId() + ":" + Math.round(station.startDistance() * 100.0D) + ":"
+            + Math.round(station.endDistance() * 100.0D);
     }
 
     /** Forge event hooks. Registered once from {@code Rcmc.preInit}. */

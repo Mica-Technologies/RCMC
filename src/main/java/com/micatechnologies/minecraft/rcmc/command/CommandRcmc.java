@@ -1932,6 +1932,19 @@ public class CommandRcmc extends CommandBase {
         int sections = state.network().sectionCount();
         int stations = state.transit().stations().size();
         int lines = state.transit().lines().size();
+        // Coaster station decking and gates go with the stations, as rmsection takes them. A metro
+        // platform is laid by its own command and is the builder's to keep.
+        int platformBlocks = 0;
+        for (com.micatechnologies.minecraft.rcmc.physics.element.RideElement element
+            : state.elements().elements()) {
+            TrackSection on = state.network().section(element.sectionId());
+            if (element instanceof StationPlatform && on != null) {
+                com.micatechnologies.minecraft.rcmc.world.PlatformBuilder.Result gone =
+                    com.micatechnologies.minecraft.rcmc.world.CoasterStations.removePlatform(world, on,
+                        (StationPlatform) element);
+                platformBlocks += gone.blocks + gone.gates;
+            }
+        }
         state.elements().clear();
         state.transit().clear();
         state.rides().clear();
@@ -1958,7 +1971,8 @@ public class CommandRcmc extends CommandBase {
             new ArrayList<>()), dimension);
 
         reply(sender, TextFormatting.YELLOW, "Cleared " + sections + " section(s), " + trains
-            + " train(s), " + stations + " station(s) and " + lines + " line(s).");
+            + " train(s), " + stations + " station(s) and " + lines + " line(s)."
+            + (platformBlocks > 0 ? " Removed " + platformBlocks + " coaster platform and gate blocks." : ""));
     }
 
     private void info(ICommandSender sender, RcmcWorldState state) {
@@ -2162,12 +2176,30 @@ public class CommandRcmc extends CommandBase {
     private void removeSection(ICommandSender sender, World world, RcmcWorldState state,
                                String[] args) throws CommandException {
         if (args.length < 2) {
-            throw new CommandException("/rcmc rmsection <sectionId>");
+            throw new CommandException("/rcmc rmsection <sectionId> [keepplatform]");
         }
         int sectionId = parseInt(args[1]);
         TrackSection section = state.network().section(sectionId);
         if (section == null) {
             throw new CommandException("No section #" + sectionId + " — try /rcmc info");
+        }
+        boolean keepPlatform = args.length > 2 && "keepplatform".equalsIgnoreCase(args[2]);
+        if (args.length > 2 && !keepPlatform) {
+            throw new CommandException("/rcmc rmsection <sectionId> [keepplatform]");
+        }
+
+        // The decking a station laid goes with it, while the track that says where it is still
+        // exists. It used to be left standing, floating over wherever the trial station had been.
+        int platformBlocks = 0;
+        int platformGates = 0;
+        if (!keepPlatform) {
+            for (StationPlatform station : com.micatechnologies.minecraft.rcmc.world.CoasterStations
+                .stationsOn(state.elements(), sectionId)) {
+                com.micatechnologies.minecraft.rcmc.world.PlatformBuilder.Result gone =
+                    com.micatechnologies.minecraft.rcmc.world.CoasterStations.removePlatform(world, section, station);
+                platformBlocks += gone.blocks;
+                platformGates += gone.gates;
+            }
         }
 
         // Trains first, and each one told to the clients explicitly. A client that keeps a train
@@ -2207,6 +2239,10 @@ public class CommandRcmc extends CommandBase {
         if (!doomed.isEmpty() || removedElements > 0) {
             reply(sender, TextFormatting.GRAY, "  Also removed " + doomed.size() + " train(s) and "
                 + removedElements + " ride element(s) that were anchored to it.");
+        }
+        if (platformBlocks > 0 || platformGates > 0) {
+            reply(sender, TextFormatting.GRAY, "  Removed " + platformBlocks + " platform blocks and "
+                + platformGates + " air gates from its station.");
         }
     }
 
