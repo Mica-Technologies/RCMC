@@ -34,6 +34,11 @@ they have closed that far again. You do not have to wait for them to stop moving
 **Getting off:** walk out through an open door at a station. You're placed on the platform beside the
 door you used. The doorways are real openings, so walking into the wall between them stops you.
 
+**Mind the gap, or rather don't.** Where the platform's edge stands off from the car, on a curve, a
+diagonal, or a platform built a little too far out, a gap plate slides out from under each open doorway
+to meet it, and you can walk across it both ways. It reaches up to 1.75 blocks. Past that there is no
+platform at that door as far as the train is concerned, and stepping out there drops you to the track.
+
 **Only the platform side opens.** The train announces it as it pulls in (*"Entering Harbor. The doors
 will open on the left."*), with enough warning to cross the car first.
 

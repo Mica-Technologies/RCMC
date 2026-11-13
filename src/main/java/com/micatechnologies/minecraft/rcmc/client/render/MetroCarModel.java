@@ -691,6 +691,35 @@ final class MetroCarModel {
         }
     }
 
+    private static final float[] GAP_PLATE_COLOR = {0.46F, 0.47F, 0.49F};
+
+    /**
+     * The gap plate at one doorway: a tread that slides out from under the threshold to the
+     * platform's edge as the doors open, as the gap fillers on real platform-edge stock do. Where
+     * the car already meets the platform there is none.
+     *
+     * @param side   {@code +1} for the {@code +x} side, {@code -1} for the other
+     * @param door   which doorway, counting from the rear
+     * @param extent how far it reaches out from the body side, in blocks
+     */
+    static void emitGapPlate(BufferBuilder buffer, float bogieSpacing, int side, int door, float extent) {
+        if (extent <= 0.02F) {
+            return;
+        }
+        float half = bogieSpacing / TRUCK_CENTRE_RATIO * 0.5F;
+        float centre = doorCentres(half)[door];
+        float doorHalf = DOOR_WIDTH * 0.5F - 0.04F;
+        float x0 = side * (BODY_HALF_WIDTH - 0.10F);
+        float x1 = side * (BODY_HALF_WIDTH + extent);
+        // A hair above the floor, so where it lies on the platform's edge it does not fight it.
+        box(buffer, Math.min(x0, x1), FLOOR_TOP - 0.05F, centre - doorHalf,
+            Math.max(x0, x1), FLOOR_TOP + 0.012F, centre + doorHalf, GAP_PLATE_COLOR);
+        // Yellow nosing along its outer edge.
+        float n0 = side * (BODY_HALF_WIDTH + extent - 0.10F);
+        box(buffer, Math.min(n0, x1), FLOOR_TOP - 0.05F, centre - doorHalf,
+            Math.max(n0, x1) + (side > 0 ? 0.004F : 0.0F), FLOOR_TOP + 0.016F, centre + doorHalf, GRAB_YELLOW);
+    }
+
     /** A colour dimmed by the saloon's lighting state. */
     private static float[] shaded(float[] colour, float shade) {
         return new float[] {colour[0] * shade, colour[1] * shade, colour[2] * shade};

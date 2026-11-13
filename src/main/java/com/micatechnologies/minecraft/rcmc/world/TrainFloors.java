@@ -147,8 +147,10 @@ public final class TrainFloors {
             com.micatechnologies.minecraft.rcmc.track.TrackRef lead = train.reference();
             com.micatechnologies.minecraft.rcmc.track.TrackRef tail =
                 train.refOfCar(state.network(), spec.carCount() - 1);
+            com.micatechnologies.minecraft.rcmc.physics.transit.DoorSide side = open
+                ? MetroDoors.openSide(world, entry.getKey()) : null;
             Object[] key = {lead, tail, state.network().section(lead.sectionId()),
-                state.network().section(tail.sectionId()), open};
+                state.network().section(tail.sectionId()), open, side};
             TrainBoxes reused = byTrain.get(entry.getKey());
             if (reused != null && java.util.Arrays.equals(reused.key, key)) {
                 if (trains == null) {
@@ -162,6 +164,7 @@ public final class TrainFloors {
                 TrackFrame frame = train.bodyFrameOfCar(state.network(), car);
                 if (open) {
                     addCarFloor(boxes, frame, spec);
+                    addGapPlates(boxes, world, frame, spec, side);
                 }
                 else {
                     TrainStrike.Body body = TrainStrike.bodyOf(spec);
@@ -211,6 +214,53 @@ public final class TrainFloors {
             boxes.add(new AxisAlignedBB(minX, minY, minZ, maxX, maxY, maxZ));
         }
     }
+
+    /**
+     * Carries the floor out across the gap at each doorway on the side the doors opened, as far as
+     * the platform that is there. See {@link DoorwayLandings}: the car's own floor stops at its
+     * side, the platform starts wherever the block grid put its edge, and a passenger walking
+     * between the two went down whatever was left.
+     */
+    private static void addGapPlates(List<AxisAlignedBB> boxes, World world, TrackFrame frame, TrainSpec spec,
+                                     com.micatechnologies.minecraft.rcmc.physics.transit.DoorSide side) {
+        double top = CarSeating.METRO_FLOOR_HEIGHT;
+        double inner = CarSeating.METRO_BODY_HALF_WIDTH - EDGE_INSET - 0.05D;
+        for (int sign = -1; sign <= 1; sign += 2) {
+            if (side != null && (sign > 0 ? !side.opensRight() : !side.opensLeft())) {
+                continue;
+            }
+            for (double centre : CarSeating.doorCentreOffsets(spec)) {
+                DoorwayLandings.Landing landing = DoorwayLandings.find(world, frame, centre, sign);
+                if (landing == null) {
+                    continue;
+                }
+                double outer = CarSeating.METRO_BODY_HALF_WIDTH + landing.gap + DoorwayLandings.OVERLAP;
+                double minX = Double.MAX_VALUE, minZ = Double.MAX_VALUE;
+                double maxX = -Double.MAX_VALUE, maxZ = -Double.MAX_VALUE;
+                double maxY = -Double.MAX_VALUE;
+                for (int sa = -1; sa <= 1; sa += 2) {
+                    for (double across : new double[] {inner, outer}) {
+                        double along = centre + sa * CarSeating.DOOR_HALF_WIDTH;
+                        double x = frame.position.x + frame.forward.x * along + frame.right.x * across * sign
+                            + frame.up.x * top;
+                        double y = frame.position.y + frame.forward.y * along + frame.right.y * across * sign
+                            + frame.up.y * top;
+                        double z = frame.position.z + frame.forward.z * along + frame.right.z * across * sign
+                            + frame.up.z * top;
+                        minX = Math.min(minX, x);
+                        maxX = Math.max(maxX, x);
+                        maxY = Math.max(maxY, y);
+                        minZ = Math.min(minZ, z);
+                        maxZ = Math.max(maxZ, z);
+                    }
+                }
+                boxes.add(new AxisAlignedBB(minX, maxY - GAP_PLATE_THICKNESS, minZ, maxX, maxY, maxZ));
+            }
+        }
+    }
+
+    /** Thinner than the floor slab: a plate, which must not become a kerb to anything under it. */
+    private static final double GAP_PLATE_THICKNESS = 0.2D;
 
     /** Slices one car's floor into axis-aligned boxes along its length. */
     private static void addCarFloor(List<AxisAlignedBB> boxes, TrackFrame frame, TrainSpec spec) {

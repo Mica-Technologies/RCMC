@@ -320,6 +320,39 @@ public class RenderCoasterCar extends Render<EntityCoasterCar> {
             // manager's back.
             GlStateManager.resetColor();
 
+            // Gap plates out to the platform at each doorway of a side whose doors are open.
+            if (rightFraction > 0.0F || leftFraction > 0.0F) {
+                TrackFrame at = entity.frame();
+                if (at != null && (compiled.gapsAtX != at.position.x || compiled.gapsAtY != at.position.y
+                    || compiled.gapsAtZ != at.position.z)) {
+                    // Measured once a stop: the car is standing, and so is the platform.
+                    double[] doors = com.micatechnologies.minecraft.rcmc.physics.CarSeating.doorCentreOffsets(spec);
+                    for (int door = 0; door < 2 && door < doors.length; door++) {
+                        for (int s = 0; s < 2; s++) {
+                            com.micatechnologies.minecraft.rcmc.world.DoorwayLandings.Landing landing =
+                                com.micatechnologies.minecraft.rcmc.world.DoorwayLandings.find(entity.world, at,
+                                    doors[door], s == 0 ? 1 : -1);
+                            compiled.gaps[door * 2 + s] = landing == null ? -1.0F : (float) landing.gap;
+                        }
+                    }
+                    compiled.gapsAtX = at.position.x;
+                    compiled.gapsAtY = at.position.y;
+                    compiled.gapsAtZ = at.position.z;
+                }
+                buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_COLOR);
+                for (int door = 0; door < 2; door++) {
+                    for (int s = 0; s < 2; s++) {
+                        float fraction = s == 0 ? rightFraction : leftFraction;
+                        float gap = compiled.gaps[door * 2 + s];
+                        if (fraction > 0.0F && gap > 0.05F) {
+                            MetroCarModel.emitGapPlate(buffer, length, s == 0 ? 1 : -1, door,
+                                (gap + 0.08F) * Math.min(1.0F, fraction * 1.5F));
+                        }
+                    }
+                }
+                tessellator.draw();
+            }
+
             // Head and tail lamps, full-bright whatever the light around the car: a lamp is a
             // light, and at night is the one part of the train that must not go dark.
             MetroCarModel.Lamp[] lamps = MetroCabs.lamps(entity.world, entity.trainId(), train,

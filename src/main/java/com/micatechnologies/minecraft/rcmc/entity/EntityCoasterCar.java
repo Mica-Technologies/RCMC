@@ -651,8 +651,29 @@ public class EntityCoasterCar extends Entity {
                 // A step further out than the exit threshold, so they land clear of the car rather
                 // than in the doorway, where the boarding check would seat them straight back in.
                 double across = side * (CarSeating.exitHalfWidth(spec) + 0.55D);
-                double x = frame.position.x + frame.forward.x * along + frame.right.x * across;
                 double y = frame.position.y + frame.up.y * CarSeating.METRO_FLOOR_HEIGHT;
+                // Onto the platform itself, wherever its edge is. The fixed step above lands on a
+                // platform that meets the car; where the block grid, a curve or a hand-built edge
+                // leaves a gap it landed in the gap, and the passenger fell to the track.
+                com.micatechnologies.minecraft.rcmc.world.DoorwayLandings.Landing landing =
+                    com.micatechnologies.minecraft.rcmc.world.DoorwayLandings.find(this.world, frame, along,
+                        (int) side);
+                if (landing != null) {
+                    // Their whole width past the platform's edge, so they are standing on it.
+                    double onPlatform = CarSeating.METRO_BODY_HALF_WIDTH + landing.gap + 0.45D;
+                    if (onPlatform > Math.abs(across)) {
+                        double ax = frame.position.x + frame.forward.x * along + frame.right.x * side * onPlatform;
+                        double az = frame.position.z + frame.forward.z * along + frame.right.z * side * onPlatform;
+                        AxisAlignedBB there = passenger.getEntityBoundingBox().offset(
+                            ax - passenger.posX, Math.max(y, landing.top) - passenger.posY, az - passenger.posZ);
+                        // Unless something stands on the platform right there: then the usual spot.
+                        if (this.world.getCollisionBoxes(passenger, there.shrink(0.02D)).isEmpty()) {
+                            across = side * onPlatform;
+                        }
+                    }
+                    y = Math.max(y, landing.top);
+                }
+                double x = frame.position.x + frame.forward.x * along + frame.right.x * across;
                 double z = frame.position.z + frame.forward.z * along + frame.right.z * across;
                 // Dismount first: removePassenger clears their offset and starts the re-board
                 // grace, and setPosition on a passenger is overwritten by the vehicle otherwise.
