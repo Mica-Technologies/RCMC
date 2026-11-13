@@ -39,6 +39,12 @@ public class RenderCoasterCar extends Render<EntityCoasterCar> {
 
     private static final ResourceLocation TEXTURE = null;
 
+    private static final MetroCarModel.Pass[] METRO_PASSES = {
+        MetroCarModel.Pass.EXTERIOR, MetroCarModel.Pass.INTERIOR};
+
+    /** Scratch for the car's basis matrix; render thread only. */
+    private static final java.nio.FloatBuffer BASIS = org.lwjgl.BufferUtils.createFloatBuffer(16);
+
     public RenderCoasterCar(RenderManager manager) {
         super(manager);
     }
@@ -63,14 +69,14 @@ public class RenderCoasterCar extends Render<EntityCoasterCar> {
         GlStateManager.pushMatrix();
         GlStateManager.translate(x, y, z);
 
-        // Column-major 4x4: the frame's axes as the rotation's columns.
-        java.nio.FloatBuffer matrix = org.lwjgl.BufferUtils.createFloatBuffer(16);
-        matrix.put(new float[] {
-            (float) frame.right.x,   (float) frame.right.y,   (float) frame.right.z,   0.0F,
-            (float) frame.up.x,      (float) frame.up.y,      (float) frame.up.z,      0.0F,
-            (float) frame.forward.x, (float) frame.forward.y, (float) frame.forward.z, 0.0F,
-            0.0F,                    0.0F,                    0.0F,                    1.0F,
-        });
+        // Column-major 4x4: the frame's axes as the rotation's columns. One buffer, refilled: a
+        // direct buffer allocated per car per frame is native memory the collector frees late.
+        java.nio.FloatBuffer matrix = BASIS;
+        matrix.clear();
+        matrix.put((float) frame.right.x).put((float) frame.right.y).put((float) frame.right.z).put(0.0F);
+        matrix.put((float) frame.up.x).put((float) frame.up.y).put((float) frame.up.z).put(0.0F);
+        matrix.put((float) frame.forward.x).put((float) frame.forward.y).put((float) frame.forward.z).put(0.0F);
+        matrix.put(0.0F).put(0.0F).put(0.0F).put(1.0F);
         matrix.flip();
         GlStateManager.multMatrix(matrix);
 
@@ -202,7 +208,6 @@ public class RenderCoasterCar extends Render<EntityCoasterCar> {
 
         Tessellator tessellator = Tessellator.getInstance();
         BufferBuilder buffer = tessellator.getBuffer();
-        buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_COLOR);
         if (spec != null && spec.carStyle() == TrainSpec.CarStyle.METRO) {
             // Smoothed client-side: the synced value arrives a few times a second, and drawing it
             // raw makes the leaves jump between a handful of positions per close.
@@ -229,27 +234,77 @@ public class RenderCoasterCar extends Render<EntityCoasterCar> {
             // its windows lit.
             float worldX = net.minecraft.client.renderer.OpenGlHelper.lastBrightnessX;
             float worldY = net.minecraft.client.renderer.OpenGlHelper.lastBrightnessY;
-            for (MetroCarModel.Pass pass : new MetroCarModel.Pass[] {
-                MetroCarModel.Pass.EXTERIOR, MetroCarModel.Pass.INTERIOR}) {
-                if (pass == MetroCarModel.Pass.INTERIOR) {
+            boolean pantograph = entity.carIndex() % 2 == 0;
+            float wire = (float) wireHeightFor(entity);
+            boolean thirdRail = onThirdRail(entity);
+            // A car whose doors are not moving looks the same from one frame to the next, so its
+            // geometry is compiled once and replayed. Building it again every frame was a third of
+            // the frame with a few trains in view. Only while the leaves travel, a second and a
+            // half a stop, is it built per frame as before.
+            boolean doorsStill = (rightFraction == 0.0F || rightFraction == 1.0F)
+                && (leftFraction == 0.0F || leftFraction == 1.0F);
+            CarDisplayLists.Entry compiled = doorsStill ? CarDisplayLists.entryFor(entity.getEntityId()) : null;
+            if (compiled != null && !compiled.isMetro(spec, drawCoupling, pantograph, wire, thirdRail,
+                rightFraction, leftFraction, lightsOn, outerFront, outerRear)) {
+                float[] body = colourOf(spec, TrainSpec.Part.BODY, 3);
+                float[] trim = colourOf(spec, TrainSpec.Part.TRIM, 4);
+                float[] seats = colourOf(spec, TrainSpec.Part.SEATS, 1);
+                compiled.release();
+                for (MetroCarModel.Pass pass : METRO_PASSES) {
+                    int list = CarDisplayLists.begin();
                     buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_COLOR);
-                    if (lightsOn) {
-                        net.minecraft.client.renderer.OpenGlHelper.setLightmapTextureCoords(
-                            net.minecraft.client.renderer.OpenGlHelper.lightmapTexUnit, 240.0F, 240.0F);
+                    MetroCarModel.setPass(pass);
+                    MetroCarModel.emit(buffer, length, drawCoupling, pantograph, wire, thirdRail, rightFraction,
+                        leftFraction, lightsOn, outerFront, outerRear, body, trim, seats);
+                    MetroCarModel.setPass(MetroCarModel.Pass.ALL);
+                    tessellator.draw();
+                    CarDisplayLists.end();
+                    if (pass == MetroCarModel.Pass.EXTERIOR) {
+                        compiled.exterior = list;
+                    } else {
+                        compiled.interior = list;
                     }
                 }
-                MetroCarModel.setPass(pass);
-                MetroCarModel.emit(buffer, length, drawCoupling, entity.carIndex() % 2 == 0,
-                    (float) wireHeightFor(entity), onThirdRail(entity), rightFraction, leftFraction,
-                    lightsOn, outerFront, outerRear,
-                    colourOf(spec, TrainSpec.Part.BODY, 3),
-                    colourOf(spec, TrainSpec.Part.TRIM, 4),
-                    colourOf(spec, TrainSpec.Part.SEATS, 1));
-                MetroCarModel.setPass(MetroCarModel.Pass.ALL);
+                compiled.glass = CarDisplayLists.begin();
+                buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_COLOR);
+                MetroCarModel.emitGlazing(buffer, length, rightFraction, leftFraction, outerFront, outerRear);
                 tessellator.draw();
+                CarDisplayLists.end();
+                compiled.setMetro(spec, drawCoupling, pantograph, wire, thirdRail, rightFraction, leftFraction,
+                    lightsOn, outerFront, outerRear);
+            }
+            if (compiled != null) {
+                GlStateManager.callList(compiled.exterior);
+                if (lightsOn) {
+                    net.minecraft.client.renderer.OpenGlHelper.setLightmapTextureCoords(
+                        net.minecraft.client.renderer.OpenGlHelper.lightmapTexUnit, 240.0F, 240.0F);
+                }
+                GlStateManager.callList(compiled.interior);
+            } else {
+                buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_COLOR);
+                float[] body = colourOf(spec, TrainSpec.Part.BODY, 3);
+                float[] trim = colourOf(spec, TrainSpec.Part.TRIM, 4);
+                float[] seats = colourOf(spec, TrainSpec.Part.SEATS, 1);
+                for (MetroCarModel.Pass pass : METRO_PASSES) {
+                    if (pass == MetroCarModel.Pass.INTERIOR) {
+                        buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_COLOR);
+                        if (lightsOn) {
+                            net.minecraft.client.renderer.OpenGlHelper.setLightmapTextureCoords(
+                                net.minecraft.client.renderer.OpenGlHelper.lightmapTexUnit, 240.0F, 240.0F);
+                        }
+                    }
+                    MetroCarModel.setPass(pass);
+                    MetroCarModel.emit(buffer, length, drawCoupling, pantograph, wire, thirdRail, rightFraction,
+                        leftFraction, lightsOn, outerFront, outerRear, body, trim, seats);
+                    MetroCarModel.setPass(MetroCarModel.Pass.ALL);
+                    tessellator.draw();
+                }
             }
             net.minecraft.client.renderer.OpenGlHelper.setLightmapTextureCoords(
                 net.minecraft.client.renderer.OpenGlHelper.lightmapTexUnit, worldX, worldY);
+            // A display list leaves the colour it last drew as the current one, behind the state
+            // manager's back.
+            GlStateManager.resetColor();
 
             // Head and tail lamps, full-bright whatever the light around the car: a lamp is a
             // light, and at night is the one part of the train that must not go dark.
@@ -274,21 +329,39 @@ public class RenderCoasterCar extends Render<EntityCoasterCar> {
                 GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA,
                 GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ZERO);
             GlStateManager.depthMask(false);
-            buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_COLOR);
-            MetroCarModel.emitGlazing(buffer, length, rightFraction, leftFraction, outerFront, outerRear);
-            tessellator.draw();
+            if (compiled != null) {
+                GlStateManager.callList(compiled.glass);
+                GlStateManager.resetColor();
+            } else {
+                buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_COLOR);
+                MetroCarModel.emitGlazing(buffer, length, rightFraction, leftFraction, outerFront, outerRear);
+                tessellator.draw();
+            }
             GlStateManager.depthMask(true);
             GlStateManager.disableBlend();
             return;
         }
         // Before its train state arrives a car is drawn as a default one rather than not at all,
         // so cars do not pop in.
-        TrainSpec shape = spec != null ? spec : new TrainSpec(1, length, couplingGap, seatRows * 2);
-        CarModel.build(shape, entity.carIndex() == 0, drawCoupling,
-            colourOf(spec, TrainSpec.Part.BODY, 3),
-            colourOf(spec, TrainSpec.Part.TRIM, 4),
-            colourOf(spec, TrainSpec.Part.SEATS, 1)).emit(buffer);
-        tessellator.draw();
+        // A coaster car has no moving parts at all, so it is compiled once and replayed: building
+        // the mesh allocated a few hundred quads per car per frame.
+        boolean lead = entity.carIndex() == 0;
+        CarDisplayLists.Entry compiled = CarDisplayLists.entryFor(entity.getEntityId());
+        if (!compiled.isCoaster(spec, lead, drawCoupling)) {
+            TrainSpec shape = spec != null ? spec : new TrainSpec(1, length, couplingGap, seatRows * 2);
+            compiled.release();
+            compiled.exterior = CarDisplayLists.begin();
+            buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_COLOR);
+            CarModel.build(shape, lead, drawCoupling,
+                colourOf(spec, TrainSpec.Part.BODY, 3),
+                colourOf(spec, TrainSpec.Part.TRIM, 4),
+                colourOf(spec, TrainSpec.Part.SEATS, 1)).emit(buffer);
+            tessellator.draw();
+            CarDisplayLists.end();
+            compiled.setCoaster(spec, lead, drawCoupling);
+        }
+        GlStateManager.callList(compiled.exterior);
+        GlStateManager.resetColor();
     }
 
     /**

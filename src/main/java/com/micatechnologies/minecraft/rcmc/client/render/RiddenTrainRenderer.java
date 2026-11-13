@@ -63,6 +63,15 @@ public class RiddenTrainRenderer {
         DRAWN.put(entityId, frame);
     }
 
+    /** Frees the cars' compiled geometry once the world has been left, when nothing draws. */
+    @SubscribeEvent
+    public void onClientTick(net.minecraftforge.fml.common.gameevent.TickEvent.ClientTickEvent event) {
+        if (event.phase == net.minecraftforge.fml.common.gameevent.TickEvent.Phase.END
+            && Minecraft.getMinecraft().world == null) {
+            CarDisplayLists.releaseAll();
+        }
+    }
+
     @SubscribeEvent
     public void onRenderWorldLast(RenderWorldLastEvent event) {
         Minecraft mc = Minecraft.getMinecraft();
