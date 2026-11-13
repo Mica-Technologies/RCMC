@@ -63,12 +63,20 @@ public class RiddenTrainRenderer {
         DRAWN.put(entityId, frame);
     }
 
-    /** Frees the cars' compiled geometry once the world has been left, when nothing draws. */
+    /** Keeps the door animation's clock, and frees the cars' compiled geometry once the world has been left. */
     @SubscribeEvent
     public void onClientTick(net.minecraftforge.fml.common.gameevent.TickEvent.ClientTickEvent event) {
-        if (event.phase == net.minecraftforge.fml.common.gameevent.TickEvent.Phase.END
-            && Minecraft.getMinecraft().world == null) {
+        if (event.phase != net.minecraftforge.fml.common.gameevent.TickEvent.Phase.END) {
+            return;
+        }
+        Minecraft mc = Minecraft.getMinecraft();
+        if (mc.world == null) {
             CarDisplayLists.releaseAll();
+            MetroDoorAnimation.clear();
+        }
+        else if (!mc.isGamePaused()) {
+            // The door animation's clock: this client's own ticks, which only ever go forward.
+            MetroDoorAnimation.tick();
         }
     }
 

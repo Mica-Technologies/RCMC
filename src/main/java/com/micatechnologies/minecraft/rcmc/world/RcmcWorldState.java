@@ -452,6 +452,9 @@ public final class RcmcWorldState {
         return true;
     }
 
+    /** {@code TransitSystem.doorStateStamp} as last sent to clients; see the tick hook. */
+    private int lastDoorStamp;
+
     /** Which station an element is, for telling whether a restore kept it: its section and span. */
     private static String stationKey(com.micatechnologies.minecraft.rcmc.physics.element.RideElement station) {
         return station.sectionId() + ":" + Math.round(station.startDistance() * 100.0D) + ":"
@@ -779,6 +782,20 @@ public final class RcmcWorldState {
                 // loudly and keep the server alive; the offending train will be visibly stuck,
                 // which is a far better failure mode than a crash loop on world load.
                 Rcmc.LOGGER.error("Train simulation failed this tick; trains may be stuck", e);
+            }
+
+            // A door starting to move, or becoming passable, is told to clients on the tick it
+            // happens. Left to the routine sync below it reached them up to a quarter of a second
+            // late, and for that long a client drew, and collided with, doors the server had
+            // already moved: open doors that would not let a player through, or a shut-looking
+            // train pulling away.
+            if (!event.world.isRemote && !state.transit.isEmpty()) {
+                int doors = state.transit.doorStateStamp();
+                if (doors != state.lastDoorStamp) {
+                    state.lastDoorStamp = doors;
+                    RcmcNetwork.sendToAllIn(new com.micatechnologies.minecraft.rcmc.net
+                        .PacketServiceSync(state.transit.serviceSnapshots()), event.world.provider.getDimension());
+                }
             }
 
             // Both sides simulate; the server periodically corrects.

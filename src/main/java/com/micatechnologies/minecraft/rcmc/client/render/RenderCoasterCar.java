@@ -211,7 +211,7 @@ public class RenderCoasterCar extends Render<EntityCoasterCar> {
         if (spec != null && spec.carStyle() == TrainSpec.CarStyle.METRO) {
             // Smoothed client-side: the synced value arrives a few times a second, and drawing it
             // raw makes the leaves jump between a handful of positions per close.
-            float doorFraction = MetroDoorAnimation.fraction(entity.world, entity.trainId(),
+            float doorFraction = MetroDoorAnimation.fraction(entity.trainId(),
                 MetroDoors.openFraction(entity.world, entity.trainId()),
                 MetroDoors.openRate(entity.world, entity.trainId()), partialTicks);
             boolean lightsOn = SaloonLighting.lit(entity);

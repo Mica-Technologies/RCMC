@@ -289,6 +289,21 @@ public final class TransitSystem {
         return snapshotCache;
     }
 
+    /**
+     * A number that changes whenever any service's doors start to move, stop moving, or become or
+     * stop being passable — what a client has to be told at once rather than at the next routine
+     * sync, since it draws the doors, and collides with them, from what it was last told.
+     */
+    public int doorStateStamp() {
+        int stamp = services.size();
+        for (Map.Entry<Integer, LineService> entry : services.entrySet()) {
+            TransitStopController controller = entry.getValue().controller();
+            stamp = stamp * 31 + entry.getKey();
+            stamp = stamp * 31 + controller.phase().ordinal() * 2 + (controller.doorsOpen() ? 1 : 0);
+        }
+        return stamp;
+    }
+
     /** Wire-format snapshots of every running service, for {@code PacketServiceSync}. */
     public java.util.List<ServiceSnapshot> serviceSnapshots() {
         java.util.List<ServiceSnapshot> snapshots = new java.util.ArrayList<>(services.size());

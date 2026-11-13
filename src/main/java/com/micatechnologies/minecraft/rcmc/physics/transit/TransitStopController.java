@@ -243,9 +243,23 @@ public final class TransitStopController {
         this.departureGate = gate;
     }
 
-    /** True while passengers can pass through the doorway — the {@link Phase#BOARDING} phase. */
+    /**
+     * How far open the leaves must be for a passenger to pass between them. A doorway is 1.8 blocks
+     * wide and a player 0.6, so at this much there is more than a player's width of opening.
+     */
+    public static final double PASSABLE_FRACTION = 0.6D;
+
+    /**
+     * True while passengers can pass through the doorway: berthed, with the leaves at least
+     * {@link #PASSABLE_FRACTION} open, whether they are still opening, standing open, or closing.
+     *
+     * <p>This used to be the {@link Phase#BOARDING} phase alone, so a doorway drawn most of the way
+     * open stayed a wall for the rest of the leaves' travel, and a player walking at it was stopped
+     * by nothing they could see. On a stop with a short dwell that was a large part of the time the
+     * doors were visibly open. What can be walked through now follows what is drawn.</p>
+     */
     public boolean doorsOpen() {
-        return phase == Phase.BOARDING;
+        return phase != Phase.APPROACHING && doorFraction() >= PASSABLE_FRACTION;
     }
 
     /**

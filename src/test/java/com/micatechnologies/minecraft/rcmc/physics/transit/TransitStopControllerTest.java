@@ -91,22 +91,31 @@ class TransitStopControllerTest {
     }
 
     @Test
-    @DisplayName("the doors are fully open exactly while passengers may board")
-    void fullyOpenWhileBoarding() {
+    @DisplayName("passengers may pass exactly while the leaves are drawn wide enough to pass between")
+    void passableWhileDrawnOpen() {
         TrackNetwork flat = flatNetwork(1000.0D);
         TransitStopController controller = controller();
         Train train = new Train(TrainSpec.singleCar(), realistic(), new TrackRef(1, 400.0D), 0.0D);
 
         int guard = 0;
+        int sawOpen = 0;
         while (controller.stopsServed() == 0 && guard++ < 2000) {
             tickWithController(train, flat, controller, 400.0D);
             // The boarding gate and the drawn doors must never disagree: a door drawn shut that
             // admits a rider, or one drawn open that refuses, is the bug this pairing prevents.
+            boolean wideEnough = controller.doorFraction() >= TransitStopController.PASSABLE_FRACTION;
+            assertEquals(wideEnough, controller.doorsOpen(), "leaves at " + controller.doorFraction()
+                + " in " + controller.phase() + ": what can be walked through must be what is drawn open");
             if (controller.doorsOpen()) {
-                assertEquals(1.0D, controller.doorFraction(), 1e-9D,
-                    "boarding is only allowed once the leaves are fully back");
+                sawOpen++;
             }
         }
+        // A doorway is 1.8 wide and a player 0.6: it must admit one for the whole dwell and for the
+        // part of the leaves' travel either side of it in which the opening is wider than they are,
+        // not only once the leaves have stopped.
+        int travel = (int) ((DOOR_OPEN_TICKS + DOOR_CLOSE_TICKS) * (1.0D - TransitStopController.PASSABLE_FRACTION)) - 4;
+        assertTrue(sawOpen >= DWELL_TICKS + travel, "passable for only " + sawOpen + " ticks of a "
+            + DWELL_TICKS + "-tick dwell with " + (DOOR_OPEN_TICKS + DOOR_CLOSE_TICKS) + " ticks of door travel");
     }
 
     @Test

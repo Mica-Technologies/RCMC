@@ -28,7 +28,8 @@ stands. Track with no station on it at all is a sandbox run, and you can board a
 
 A metro train is boarded by **walking in**. While a train is stopped at a platform with its doors open,
 walk through a doorway, exactly as you would in real life. Inside, you can walk around the car while it
-runs.
+runs. A doorway can be walked through as soon as its leaves are far enough apart to fit you, and until
+they have closed that far again. You do not have to wait for them to stop moving.
 
 **Getting off:** walk out through an open door at a station. You're placed on the platform beside the
 door you used. The doorways are real openings, so walking into the wall between them stops you.
