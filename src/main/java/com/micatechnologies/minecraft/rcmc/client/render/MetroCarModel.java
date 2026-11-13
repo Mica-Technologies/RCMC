@@ -5,8 +5,10 @@ import net.minecraft.client.renderer.BufferBuilder;
 
 /**
  * Geometry for a metro car, emitted in the same local frame as {@link CarModel} (+X right,
- * +Y up, +Z travel, origin on the track centreline) and under the same conventions: flat-shaded
- * placeholder boxes, winding unmaintained because the renderer draws with culling off.
+ * +Y up, +Z travel, origin on the track centreline) and under the same conventions: flat colour
+ * shaded by which way a face points, winding unmaintained because the renderer draws with culling
+ * off. Mostly boxes; the round and sloped parts — wheels, air tanks, the roof — come from
+ * {@link CarMesh}.
  *
  * <p>Proportioned from real North American heavy-rail stock at 1 block ≈ 1 metre (see
  * {@code TrainSpec}'s metro presets): the body is <b>3 blocks wide</b> — real bodies run
@@ -44,7 +46,6 @@ final class MetroCarModel {
     // A FULL block rather than the half first tried, because block tops are integers: at 1.5 a
     // platform could only ever land half a block off the car floor, and boarding a train should not
     // involve a step. At 2.0 the platform surface and the saloon floor are exactly level.
-    private static final float SKIRT_HALF_WIDTH = 1.62F;
     private static final float SKIRT_BOTTOM = RAIL_TOP + 0.22F;
     private static final float FLOOR_TOP = 2.00F;
 
@@ -209,6 +210,57 @@ final class MetroCarModel {
      */
     private static final float RAIL_END_GAP = 1.4F;
 
+    // --- Exterior detail: what makes the outside read as rolling stock rather than as a box. ---
+    /** Window gaskets, door tracks and the kick strip: the black rubber and shadow lines. */
+    private static final float[] GASKET_COLOR = {0.09F, 0.09F, 0.10F};
+    private static final float[] EQUIPMENT_COLOR = {0.27F, 0.28F, 0.30F};
+    private static final float[] EQUIPMENT_DARK = {0.17F, 0.17F, 0.19F};
+    private static final float[] TANK_COLOR = {0.34F, 0.35F, 0.36F};
+    private static final float[] WHEEL_COLOR = {0.15F, 0.15F, 0.16F};
+    private static final float[] WHEEL_FACE_COLOR = {0.40F, 0.41F, 0.43F};
+    private static final float[] ROOF_UNIT_COLOR = {0.36F, 0.37F, 0.39F};
+    private static final float[] BELLOWS_COLOR = {0.12F, 0.12F, 0.13F};
+
+    /** How far a painted band or gasket stands off the surface it is on: enough not to z-fight. */
+    private static final float PLATE_PROUD = 0.012F;
+
+    /** The livery band along the body under the windows, in the train's trim colour. */
+    private static final float STRIPE_BOTTOM = FLOOR_TOP + 0.62F;
+    private static final float STRIPE_TOP = FLOOR_TOP + 0.84F;
+
+    /** Wheels: on the railheads, which the transit style puts 1.40 either side of the centreline. */
+    private static final float WHEEL_RADIUS = 0.43F;
+    private static final float WHEEL_X = 1.40F;
+    private static final float WHEEL_HALF_WIDTH = 0.07F;
+    private static final float AXLE_OFFSET = 0.72F;
+
+    /** Roof units stand this far above the roof's crown; under the pantograph's base frame. */
+    private static final float ROOF_UNIT_TOP = ROOF_TOP + 0.15F;
+
+    /** How far a gangway bellows reaches toward the next car: just under half the gap between bodies. */
+    private static final float BELLOWS_DEPTH = GAP_CLEARANCE * 0.5F - 0.02F;
+
+    /** What of a car {@link #emit} and {@link #emitGlazing} draw; see {@link #setParts}. */
+    enum Parts {
+        /** The whole car. */
+        ALL,
+        /** Everything but the door leaves and their glass: the part that never moves. */
+        BODY,
+        /** Only the door leaves and their glass. */
+        DOORS
+    }
+
+    private static Parts parts = Parts.ALL;
+
+    /**
+     * Restricts the next {@link #emit} and {@link #emitGlazing} to the fixed body or to the door
+     * leaves, so the renderer can keep the body compiled while the leaves travel. Render thread
+     * only; set it back to {@link Parts#ALL} after.
+     */
+    static void setParts(Parts value) {
+        parts = value;
+    }
+
     // --- Glazing: thin, cool-tinted, and mostly transparent so riders stay visible. ------------
     private static final float[] GLASS_COLOR = {0.62F, 0.76F, 0.82F};
     private static final float GLASS_ALPHA = 0.28F;
@@ -266,15 +318,22 @@ final class MetroCarModel {
         // Unlit, the interior is not black — it is dim. Everything inside is drawn through this
         // factor so switching the lights off dims the saloon rather than only dulling the fittings.
         float shade = lightsOn ? 1.0F : 0.55F;
-        // Anything that only cares WHETHER doors are moving takes the wider of the two.
-        float doorFraction = Math.max(rightFraction, leftFraction);
         // The saloon stops at a driving cab's partition; seats, fittings and lights stay behind it.
         float saloonFront = outerFront ? half - CAB_DEPTH : half;
         float saloonRear = outerRear ? -half + CAB_DEPTH : -half;
+        float truckAt = bogieSpacing * 0.5F;
 
-        // Underframe skirt between the trucks, and the floor slab the whole interior stands on.
-        box(buffer, -SKIRT_HALF_WIDTH, SKIRT_BOTTOM, -half + 0.3F,
-            SKIRT_HALF_WIDTH, FLOOR_TOP - FLOOR_SLAB, half - 0.3F, UNDERFRAME_COLOR);
+        if (parts == Parts.DOORS) {
+            // The leaves alone: emitSide draws nothing else in this mode.
+            emitSide(buffer, half, BODY_HALF_WIDTH - WALL_THICKNESS, BODY_HALF_WIDTH,
+                bodyColour, trimColour, rightFraction, shade);
+            emitSide(buffer, half, -BODY_HALF_WIDTH, -BODY_HALF_WIDTH + WALL_THICKNESS,
+                bodyColour, trimColour, leftFraction, shade);
+            return;
+        }
+
+        // The underframe's equipment between the trucks, and the floor slab the interior stands on.
+        emitUnderframe(buffer, half, truckAt, outerFront, outerRear);
         box(buffer, -BODY_HALF_WIDTH, FLOOR_TOP - FLOOR_SLAB, -half,
             BODY_HALF_WIDTH, FLOOR_TOP, half, UNDERFRAME_COLOR);
 
@@ -289,8 +348,13 @@ final class MetroCarModel {
         emitEnd(buffer, half - WALL_THICKNESS, half, bodyColour, trimColour, outerFront, shade);
         emitEnd(buffer, -half, -half + WALL_THICKNESS, bodyColour, trimColour, outerRear, shade);
 
-        box(buffer, -BODY_HALF_WIDTH, ROOF_BASE, -half,
-            BODY_HALF_WIDTH, ROOF_TOP, half, ROOF_COLOR);
+        emitRoof(buffer, half, drawPantograph && !thirdRail && wireHeight > 0.0F);
+        if (!outerFront) {
+            emitBellows(buffer, half, 1);
+        }
+        if (!outerRear) {
+            emitBellows(buffer, half, -1);
+        }
 
         emitFloor(buffer, half, shade);
         emitBenches(buffer, half, saloonRear, saloonFront, seatColour, shade);
@@ -303,7 +367,6 @@ final class MetroCarModel {
             emitCab(buffer, half, -1, trimColour, shade);
         }
 
-        float truckAt = bogieSpacing * 0.5F;
         emitTruck(buffer, truckAt);
         emitTruck(buffer, -truckAt);
 
@@ -331,10 +394,21 @@ final class MetroCarModel {
     private static void emitSide(BufferBuilder buffer, float half, float xInner, float xOuter,
                                  float[] bodyColour, float[] trimColour, float doorFraction,
                                  float shade) {
-        boolean doorsOpen = doorFraction > 0.5F;
         float[] doorCentres = doorCentres(half);
         float doorHalf = DOOR_WIDTH * 0.5F;
+        if (parts != Parts.DOORS) {
+            emitSideWall(buffer, half, xInner, xOuter, bodyColour, trimColour, doorCentres, doorHalf, shade);
+        }
+        if (parts != Parts.BODY) {
+            emitLeaves(buffer, xOuter, trimColour, doorCentres, doorHalf, doorFraction, shade);
+        }
+    }
 
+    /** The fixed part of a side: panels, pillars, cant rail, thresholds, and the painted detail. */
+    private static void emitSideWall(BufferBuilder buffer, float half, float xInner, float xOuter,
+                                     float[] bodyColour, float[] trimColour, float[] doorCentres,
+                                     float doorHalf, float shade) {
+        float sign = xOuter > 0.0F ? 1.0F : -1.0F;
         // Band below the windows, broken by the doorways. This is a real opening, not a panel
         // painted on a solid wall: with the doors drawn open a rider must be able to see — and
         // walk — through it, which is the whole point of a door.
@@ -360,13 +434,60 @@ final class MetroCarModel {
             }
             box(buffer, xInner, WINDOW_SILL, at - PILLAR_WIDTH * 0.5F,
                 xOuter, WINDOW_HEAD, at + PILLAR_WIDTH * 0.5F, bodyColour);
+            // Outside, a pillar is black: the window band reads as one dark ribbon down the car,
+            // as it does on stock with bonded glazing, instead of a row of holes in a grey wall.
+            plateX(buffer, sign, BODY_HALF_WIDTH, WINDOW_SILL, at - PILLAR_WIDTH * 0.5F,
+                WINDOW_HEAD, at + PILLAR_WIDTH * 0.5F, GASKET_COLOR);
         }
 
-        // Door leaves: a pair per bay, meeting at the centre when shut and slid back into their
-        // pockets when open. Open leaves are drawn proud of the wall, as real external-pocket
-        // sliding doors sit, so "open" reads at a glance from outside the train.
+        // Painted and fitted detail on the outer skin, each run broken at the doorways like the
+        // panel it is on: the livery band, the gaskets along the sill and head of the window band,
+        // and the kick strip at floor level.
+        // The wall is given low x first, so on the left "xOuter" is its inner face. The skin is
+        // whichever is further out.
+        float skin = Math.max(Math.abs(xInner), Math.abs(xOuter));
+        float wallInner = Math.min(Math.abs(xInner), Math.abs(xOuter));
+        float runFrom = -half;
+        for (int i = 0; i <= doorCentres.length; i++) {
+            float runTo = i < doorCentres.length ? doorCentres[i] - doorHalf : half;
+            if (runTo > runFrom) {
+                plateX(buffer, sign, skin, STRIPE_BOTTOM, runFrom, STRIPE_TOP, runTo, trimColour);
+                plateX(buffer, sign, skin, WINDOW_SILL - 0.05F, runFrom, WINDOW_SILL + 0.03F, runTo, GASKET_COLOR);
+                plateX(buffer, sign, skin, WINDOW_HEAD - 0.03F, runFrom, WINDOW_HEAD + 0.05F, runTo, GASKET_COLOR);
+                plateX(buffer, sign, skin, FLOOR_TOP, runFrom, FLOOR_TOP + 0.10F, runTo, GASKET_COLOR);
+            }
+            if (i < doorCentres.length) {
+                runFrom = doorCentres[i] + doorHalf;
+                // The door track cover over each doorway, and the dark reveal either side of it.
+                box(buffer, sign * skin, WINDOW_HEAD, doorCentres[i] - doorHalf - 0.12F,
+                    sign * (skin + DOOR_PROUD + 0.03F), WINDOW_HEAD + 0.12F, doorCentres[i] + doorHalf + 0.12F,
+                    GASKET_COLOR);
+            }
+        }
+        // Rain gutter under the roof edge, the whole length of the car.
+        box(buffer, sign * skin, ROOF_BASE - 0.08F, -half, sign * (skin + 0.035F), ROOF_BASE - 0.02F, half,
+            ROOF_COLOR);
+
+        // Yellow threshold strip on the floor at each doorway.
+        for (float centre : doorCentres) {
+            box(buffer, sign * (wallInner - 0.45F), FLOOR_TOP,
+                centre - doorHalf, sign * wallInner, FLOOR_TOP + 0.03F,
+                centre + doorHalf, shaded(GRAB_YELLOW, shade));
+        }
+    }
+
+    /**
+     * The door leaves of one side: a pair per bay, meeting at the centre when shut and slid back
+     * over the wall when open. Open leaves are drawn proud of the wall, as real external sliding
+     * doors sit, so "open" reads at a glance from outside the train.
+     */
+    private static void emitLeaves(BufferBuilder buffer, float xOuter, float[] trimColour,
+                                   float[] doorCentres, float doorHalf, float doorFraction, float shade) {
         float sign = xOuter > 0.0F ? 1.0F : -1.0F;
-        float doorOuter = Math.abs(xOuter) + DOOR_PROUD;
+        // Proud of the body skin on both sides. Measured from the wall's second coordinate, the
+        // left side's leaves stood a wall's thickness further in than the right's, and than their
+        // own glass.
+        float doorOuter = BODY_HALF_WIDTH + DOOR_PROUD;
         float leafHalf = doorHalf * 0.5F;
         float xLeafIn = sign * (doorOuter - LEAF_THICKNESS);
         float xLeafOut = sign * doorOuter;
@@ -394,13 +515,6 @@ final class MetroCarModel {
                     leafCentre - side * leafHalf - 0.05F, sign * (doorOuter + 0.01F), WINDOW_HEAD,
                     leafCentre - side * leafHalf + 0.05F, shaded(GRAB_YELLOW, shade));
             }
-        }
-
-        // Yellow threshold strip on the floor at each doorway.
-        for (float centre : doorCentres) {
-            box(buffer, sign * (Math.abs(xInner) - 0.45F), FLOOR_TOP,
-                centre - doorHalf, sign * Math.abs(xInner), FLOOR_TOP + 0.03F,
-                centre + doorHalf, shaded(GRAB_YELLOW, shade));
         }
     }
 
@@ -607,14 +721,19 @@ final class MetroCarModel {
             float outer = side * BODY_HALF_WIDTH;
             float inner = side * (BODY_HALF_WIDTH - GLASS_THICKNESS);
             float from = -half;
-            for (float centre : doorCentres) {
-                if (centre - doorHalf > from) {
-                    pane(buffer, inner, outer, from, centre - doorHalf);
+            if (parts != Parts.DOORS) {
+                for (float centre : doorCentres) {
+                    if (centre - doorHalf > from) {
+                        pane(buffer, inner, outer, from, centre - doorHalf);
+                    }
+                    from = centre + doorHalf;
                 }
-                from = centre + doorHalf;
+                if (half > from) {
+                    pane(buffer, inner, outer, from, half);
+                }
             }
-            if (half > from) {
-                pane(buffer, inner, outer, from, half);
+            if (parts == Parts.BODY) {
+                continue;
             }
             // Glass in the DOORS, travelling with the leaves, rather than a sheet across the bay.
             // The old bay-wide pane sat in the wall plane while the leaves stood proud of it, so a
@@ -635,6 +754,9 @@ final class MetroCarModel {
         }
 
         // Cab windscreens, on whichever ends face out of the consist.
+        if (parts == Parts.DOORS) {
+            return;
+        }
         if (outerFront) {
             endPane(buffer, half - WALL_THICKNESS, half);
         }
@@ -736,6 +858,24 @@ final class MetroCarModel {
                 BODY_HALF_WIDTH, WINDOW_HEAD, zFar, trimColour);
             box(buffer, -BODY_HALF_WIDTH, WINDOW_HEAD - 0.12F, zNear,
                 BODY_HALF_WIDTH, WINDOW_HEAD, zFar, trimColour);
+            // The outside of a cab front: a centre mullion in the windscreen, the livery band
+            // carried round from the sides, a black surround to the glass, and the ribbed
+            // anti-climber at floor level that every metro car wears on its nose.
+            float s = Math.abs(zFar) > Math.abs(zNear) ? Math.signum(zFar) : Math.signum(zNear);
+            float face = s * Math.max(Math.abs(zNear), Math.abs(zFar));
+            box(buffer, -0.045F, WINDOW_SILL, zNear, 0.045F, WINDOW_HEAD, zFar, GASKET_COLOR);
+            plateZ(buffer, s, face, -BODY_HALF_WIDTH, STRIPE_BOTTOM, BODY_HALF_WIDTH, STRIPE_TOP, trimColour);
+            plateZ(buffer, s, face, -END_WINDOW_HALF_WIDTH - 0.06F, WINDOW_SILL - 0.05F,
+                END_WINDOW_HALF_WIDTH + 0.06F, WINDOW_SILL + 0.04F, GASKET_COLOR);
+            plateZ(buffer, s, face, -END_WINDOW_HALF_WIDTH - 0.06F, WINDOW_SILL,
+                -END_WINDOW_HALF_WIDTH, WINDOW_HEAD - 0.12F, GASKET_COLOR);
+            plateZ(buffer, s, face, END_WINDOW_HALF_WIDTH, WINDOW_SILL,
+                END_WINDOW_HALF_WIDTH + 0.06F, WINDOW_HEAD - 0.12F, GASKET_COLOR);
+            for (int rib = 0; rib < 3; rib++) {
+                float y = FLOOR_TOP - 0.32F + rib * 0.11F;
+                box(buffer, -1.25F, y, Math.min(face, face + s * 0.09F), 1.25F, y + 0.06F,
+                    Math.max(face, face + s * 0.09F), UNDERFRAME_COLOR);
+            }
             return;
         }
 
@@ -812,14 +952,246 @@ final class MetroCarModel {
             PANTO_HALF_SPAN, shoeU, 0.10F, UNDERFRAME_COLOR);
     }
 
+    /**
+     * One truck: two wheelsets on the railheads, side frames over the axle boxes, and the bolster
+     * that carries the car across them. The wheels are what was missing — a car resting on two
+     * dark slabs reads as a model on a plinth, and round wheels on the rail read as a train.
+     */
     private static void emitTruck(BufferBuilder buffer, float atZ) {
-        box(buffer, TRUCK_INNER, TRUCK_BOTTOM, atZ - TRUCK_HALF_LENGTH,
+        // Side frames, above the axles and inboard of the wheels.
+        box(buffer, TRUCK_INNER, RAIL_TOP + 0.34F, atZ - TRUCK_HALF_LENGTH,
             TRUCK_OUTER, TRUCK_TOP, atZ + TRUCK_HALF_LENGTH, TRUCK_COLOR);
-        box(buffer, -TRUCK_OUTER, TRUCK_BOTTOM, atZ - TRUCK_HALF_LENGTH,
+        box(buffer, -TRUCK_OUTER, RAIL_TOP + 0.34F, atZ - TRUCK_HALF_LENGTH,
             -TRUCK_INNER, TRUCK_TOP, atZ + TRUCK_HALF_LENGTH, TRUCK_COLOR);
         // Truck bolster spanning under the car between the side frames.
-        box(buffer, -TRUCK_INNER, RAIL_TOP + 0.20F, atZ - 0.25F,
-            TRUCK_INNER, RAIL_TOP + 0.45F, atZ + 0.25F, TRUCK_COLOR);
+        box(buffer, -TRUCK_INNER, RAIL_TOP + 0.30F, atZ - 0.28F,
+            TRUCK_INNER, RAIL_TOP + 0.62F, atZ + 0.28F, TRUCK_COLOR);
+
+        CarMesh round = new CarMesh();
+        float axleY = RAIL_TOP + WHEEL_RADIUS;
+        for (int end = -1; end <= 1; end += 2) {
+            float z = atZ + end * AXLE_OFFSET;
+            // The axle, and a motor case hung on it toward the truck's centre.
+            box(buffer, -WHEEL_X, axleY - 0.07F, z - 0.07F, WHEEL_X, axleY + 0.07F, z + 0.07F, EQUIPMENT_DARK);
+            box(buffer, -0.62F, RAIL_TOP + 0.16F, Math.min(z, z - end * 0.50F),
+                0.62F, RAIL_TOP + 0.66F, Math.max(z, z - end * 0.50F), EQUIPMENT_DARK);
+            for (int side = -1; side <= 1; side += 2) {
+                round.cylinderX(side * WHEEL_X, axleY, z, WHEEL_RADIUS, WHEEL_HALF_WIDTH, 14, WHEEL_COLOR);
+                // The wheel's outer face, a paler disc standing just off it, and the hub.
+                round.cylinderX(side * (WHEEL_X + WHEEL_HALF_WIDTH + 0.004F), axleY, z, WHEEL_RADIUS - 0.07F,
+                    0.004F, 14, WHEEL_FACE_COLOR);
+                // Axle box outboard of the wheel, with the spring seat that carries the frame on it.
+                float inner = side * (WHEEL_X + WHEEL_HALF_WIDTH + 0.01F);
+                float outer = side * (WHEEL_X + WHEEL_HALF_WIDTH + 0.13F);
+                box(buffer, Math.min(inner, outer), axleY - 0.14F, z - 0.15F,
+                    Math.max(inner, outer), axleY + 0.14F, z + 0.15F, TRUCK_COLOR);
+                box(buffer, Math.min(inner, outer), axleY + 0.14F, z - 0.10F,
+                    Math.max(inner, outer), TRUCK_TOP, z + 0.10F, EQUIPMENT_DARK);
+            }
+        }
+        shapes(buffer, round);
+    }
+
+    /**
+     * Everything hung under the floor: the centre sill, the solebar along each side, and between
+     * the trucks the equipment cases and air reservoirs a real car carries there.
+     *
+     * <p>This was one slab the full width and nearly the full length of the car, down almost to the
+     * rail, with the trucks buried inside it. Broken up, there is daylight under the car and round
+     * the trucks, which is most of why stock looks like it is riding on its wheels.</p>
+     */
+    private static void emitUnderframe(BufferBuilder buffer, float half, float truckAt,
+                                       boolean outerFront, boolean outerRear) {
+        float under = FLOOR_TOP - FLOOR_SLAB;
+        // Centre sill, end to end, and a shallow solebar under each body side.
+        box(buffer, -0.50F, RAIL_TOP + 0.90F, -half + 0.3F, 0.50F, under, half - 0.3F, UNDERFRAME_COLOR);
+        for (int side = -1; side <= 1; side += 2) {
+            box(buffer, Math.min(side * 1.66F, side * 1.82F), under - 0.22F, -half + 0.15F,
+                Math.max(side * 1.66F, side * 1.82F), under, half - 0.15F, UNDERFRAME_COLOR);
+        }
+
+        // Between the trucks. The two sides carry the same kit in the opposite order, as real
+        // cars do: one side's inverter case faces the other side's reservoirs.
+        float from = -truckAt + TRUCK_HALF_LENGTH + 0.55F;
+        float to = truckAt - TRUCK_HALF_LENGTH - 0.55F;
+        float span = to - from;
+        if (span > 3.0F) {
+            CarMesh round = new CarMesh();
+            for (int side = -1; side <= 1; side += 2) {
+                float xIn = side * 0.62F;
+                float xOut = side * 1.60F;
+                float x0 = Math.min(xIn, xOut);
+                float x1 = Math.max(xIn, xOut);
+                // Positions along the span, mirrored on the second side.
+                float a0 = at(from, span, side, 0.00F);
+                float a1 = at(from, span, side, 0.30F);
+                float b0 = at(from, span, side, 0.34F);
+                float b1 = at(from, span, side, 0.50F);
+                float c0 = at(from, span, side, 0.55F);
+                float c1 = at(from, span, side, 0.78F);
+                float d0 = at(from, span, side, 0.83F);
+                float d1 = at(from, span, side, 1.00F);
+                // The big traction case, with a row of louvres on its outer face.
+                box(buffer, x0, SKIRT_BOTTOM + 0.12F, Math.min(a0, a1), x1, under, Math.max(a0, a1), EQUIPMENT_COLOR);
+                for (int slat = 0; slat < 4; slat++) {
+                    float y = SKIRT_BOTTOM + 0.34F + slat * 0.20F;
+                    plateX(buffer, side, 1.60F, y, Math.min(a0, a1) + 0.25F, y + 0.09F, Math.max(a0, a1) - 0.25F,
+                        EQUIPMENT_DARK);
+                }
+                // A shallower case beside it.
+                box(buffer, x0, SKIRT_BOTTOM + 0.50F, Math.min(b0, b1), x1, under, Math.max(b0, b1), EQUIPMENT_DARK);
+                // Air reservoirs: two tanks side by side, lying along the car.
+                for (int tank = 0; tank < 2; tank++) {
+                    float cx = side * (0.92F + tank * 0.50F);
+                    round.prismZ(ring(cx, under - 0.34F, 0.21F, 10), Math.min(c0, c1), Math.max(c0, c1),
+                        TANK_COLOR, true, true);
+                }
+                // And a battery box at the far end.
+                box(buffer, x0, SKIRT_BOTTOM + 0.30F, Math.min(d0, d1), x1, under, Math.max(d0, d1), EQUIPMENT_COLOR);
+                plateX(buffer, side, 1.60F, SKIRT_BOTTOM + 0.42F, Math.min(d0, d1) + 0.12F, under - 0.14F,
+                    Math.max(d0, d1) - 0.12F, EQUIPMENT_DARK);
+            }
+            shapes(buffer, round);
+        }
+
+        // Under a cab: the obstacle deflector across the front, and the coupler head.
+        for (int s = -1; s <= 1; s += 2) {
+            if (s > 0 ? !outerFront : !outerRear) {
+                continue;
+            }
+            float z0 = s * (half - 0.75F);
+            float z1 = s * (half - 0.10F);
+            box(buffer, -1.45F, SKIRT_BOTTOM + 0.05F, Math.min(z0, z1), 1.45F, under, Math.max(z0, z1), UNDERFRAME_COLOR);
+            float c0 = s * half;
+            float c1 = s * (half + 0.42F);
+            box(buffer, -0.20F, COUPLER_BOTTOM - 0.04F, Math.min(c0, c1), 0.20F, COUPLER_TOP + 0.04F, Math.max(c0, c1),
+                TRUCK_COLOR);
+        }
+    }
+
+    /** A point {@code fraction} of the way along a span, measured from the other end on the left side. */
+    private static float at(float from, float span, int side, float fraction) {
+        return from + span * (side > 0 ? fraction : 1.0F - fraction);
+    }
+
+    /** A regular polygon in X-Y, for sweeping into a tank along the car. */
+    private static float[][] ring(float cx, float cy, float radius, int sides) {
+        float[][] ring = new float[sides][];
+        for (int i = 0; i < sides; i++) {
+            double a = 2.0D * Math.PI * (i + 0.5D) / sides;
+            ring[i] = new float[] {cx + radius * (float) Math.cos(a), cy + radius * (float) Math.sin(a)};
+        }
+        return ring;
+    }
+
+    /**
+     * The roof: a ceiling slab the saloon sees from below, a shallow arc over it from one cant rail
+     * to the other, and the ventilation units along its crown.
+     *
+     * <p>The arc rises only as far as the flat roof it replaces stood, so the car's envelope — what
+     * clearance checks and tunnels are sized against — is the same. Lit by which way each strip of
+     * it faces, that is enough for the roof to read as curved.</p>
+     */
+    private static void emitRoof(BufferBuilder buffer, float half, boolean pantographAtCentre) {
+        box(buffer, -BODY_HALF_WIDTH, ROOF_BASE, -half, BODY_HALF_WIDTH, ROOF_BASE + 0.03F, half, ROOF_COLOR);
+        float w = BODY_HALF_WIDTH;
+        float rise = ROOF_TOP - ROOF_BASE;
+        float[][] arc = {
+            {-w, ROOF_BASE + 0.03F}, {-w + 0.10F, ROOF_BASE + rise * 0.48F}, {-w + 0.50F, ROOF_BASE + rise * 0.82F},
+            {-w + 1.15F, ROOF_TOP}, {w - 1.15F, ROOF_TOP}, {w - 0.50F, ROOF_BASE + rise * 0.82F},
+            {w - 0.10F, ROOF_BASE + rise * 0.48F}, {w, ROOF_BASE + 0.03F},
+        };
+        CarMesh shell = new CarMesh();
+        shell.prismZ(arc, -half, half, ROOF_COLOR, true, true);
+
+        // Ventilation units over each door bay, low and chamfered, with a dark intake on top. A
+        // car with a pantograph at its centre has them there as well, either side of the frame.
+        float[][] unit = {
+            {-0.78F, ROOF_TOP - 0.01F}, {0.78F, ROOF_TOP - 0.01F},
+            {0.64F, ROOF_UNIT_TOP}, {-0.64F, ROOF_UNIT_TOP},
+        };
+        float unitHalf = Math.min(1.5F, half * 0.16F);
+        for (int end = -1; end <= 1; end += 2) {
+            float centre = end * half * 0.5F;
+            shell.prismZ(unit, centre - unitHalf, centre + unitHalf, ROOF_UNIT_COLOR, true, true);
+        }
+        shapes(buffer, shell);
+        for (int end = -1; end <= 1; end += 2) {
+            float centre = end * half * 0.5F;
+            box(buffer, -0.42F, ROOF_UNIT_TOP, centre - unitHalf * 0.6F,
+                0.42F, ROOF_UNIT_TOP + 0.012F, centre + unitHalf * 0.6F, GASKET_COLOR);
+        }
+        if (!pantographAtCentre) {
+            // No pantograph: a long low duct down the middle of the roof instead of bare panel.
+            box(buffer, -0.30F, ROOF_TOP - 0.01F, -half * 0.5F + unitHalf + 0.4F,
+                0.30F, ROOF_TOP + 0.06F, half * 0.5F - unitHalf - 0.4F, ROOF_UNIT_COLOR);
+        }
+    }
+
+    /**
+     * The gangway bellows on an end that faces the next car: a black frame round the end door,
+     * reaching just under half way across the gap, so two coupled cars' bellows meet and the train
+     * reads as one connected thing rather than as boxes on a string.
+     */
+    private static void emitBellows(BufferBuilder buffer, float half, int s) {
+        float z0 = s * half;
+        float z1 = s * (half + BELLOWS_DEPTH);
+        float zMin = Math.min(z0, z1);
+        float zMax = Math.max(z0, z1);
+        float outer = END_DOOR_WIDTH * 0.5F + 0.26F;
+        float inner = END_DOOR_WIDTH * 0.5F + 0.08F;
+        float top = END_DOOR_TOP + 0.24F;
+        float bottom = FLOOR_TOP - 0.16F;
+        box(buffer, -outer, bottom, zMin, -inner, top, zMax, BELLOWS_COLOR);
+        box(buffer, inner, bottom, zMin, outer, top, zMax, BELLOWS_COLOR);
+        box(buffer, -inner, top - 0.18F, zMin, inner, top, zMax, BELLOWS_COLOR);
+        box(buffer, -inner, bottom, zMin, inner, FLOOR_TOP, zMax, BELLOWS_COLOR);
+        // The folds: paler ribs round the frame, which is what makes a bellows read as one.
+        for (int fold = 1; fold <= 2; fold++) {
+            float z = s * (half + BELLOWS_DEPTH * fold / 3.0F);
+            box(buffer, -outer - 0.02F, bottom, z - 0.015F, -outer, top + 0.02F, z + 0.015F, EQUIPMENT_COLOR);
+            box(buffer, outer, bottom, z - 0.015F, outer + 0.02F, top + 0.02F, z + 0.015F, EQUIPMENT_COLOR);
+            box(buffer, -outer, top, z - 0.015F, outer, top + 0.02F, z + 0.015F, EQUIPMENT_COLOR);
+        }
+    }
+
+    /** Emits shaped geometry built with {@link CarMesh}. It is all outside the car. */
+    private static void shapes(BufferBuilder buffer, CarMesh mesh) {
+        if (pass == Pass.INTERIOR) {
+            return;
+        }
+        for (CarMesh.Quad q : mesh.quads()) {
+            for (int c = 0; c < 4; c++) {
+                float lift = heightShade(q.y(c));
+                buffer.pos(q.x(c), q.y(c), q.z(c)).color(q.r * lift, q.g * lift, q.b * lift, 1.0F).endVertex();
+            }
+        }
+    }
+
+    /**
+     * A flat panel on the outside of a side wall, facing out: paint, a gasket, a louvre. One quad
+     * rather than a box, because a box's back face would lie in the wall's own skin and fight it.
+     *
+     * @param side  {@code +1} for the {@code +x} wall, {@code -1} for the other
+     * @param skin  how far out the surface it lies on is, as a positive distance
+     */
+    private static void plateX(BufferBuilder buffer, float side, float skin, float y1, float z1,
+                               float y2, float z2, float[] colour) {
+        if (pass == Pass.INTERIOR) {
+            return;
+        }
+        float x = side * (skin + PLATE_PROUD);
+        quad(buffer, x, y1, z1, x, y2, z1, x, y2, z2, x, y1, z2, colour[0], colour[1], colour[2], 0.72F, 1.0F);
+    }
+
+    /** As {@link #plateX}, on a car end at {@code z = face}, facing {@code s} along the car. */
+    private static void plateZ(BufferBuilder buffer, float s, float face, float x1, float y1,
+                               float x2, float y2, float[] colour) {
+        if (pass == Pass.INTERIOR) {
+            return;
+        }
+        float z = face + s * PLATE_PROUD;
+        quad(buffer, x1, y1, z, x1, y2, z, x2, y2, z, x2, y1, z, colour[0], colour[1], colour[2], 0.84F, 1.0F);
     }
 
     // Collector shoes, sized against TrackMeshBuilder's third rail: its centre is 2.10 out with a
@@ -953,9 +1325,43 @@ final class MetroCarModel {
         float sr = r * shade;
         float sg = g * shade;
         float sb = b * shade;
-        buffer.pos(x1, y1, z1).color(sr, sg, sb, alpha).endVertex();
-        buffer.pos(x2, y2, z2).color(sr, sg, sb, alpha).endVertex();
-        buffer.pos(x3, y3, z3).color(sr, sg, sb, alpha).endVertex();
-        buffer.pos(x4, y4, z4).color(sr, sg, sb, alpha).endVertex();
+        float l1 = heightShade(y1);
+        float l2 = heightShade(y2);
+        float l3 = heightShade(y3);
+        float l4 = heightShade(y4);
+        buffer.pos(x1, y1, z1).color(sr * l1, sg * l1, sb * l1, alpha).endVertex();
+        buffer.pos(x2, y2, z2).color(sr * l2, sg * l2, sb * l2, alpha).endVertex();
+        buffer.pos(x3, y3, z3).color(sr * l3, sg * l3, sb * l3, alpha).endVertex();
+        buffer.pos(x4, y4, z4).color(sr * l4, sg * l4, sb * l4, alpha).endVertex();
+    }
+
+    /** Height at and below which a vertex is at its darkest, and at and above which it is not darkened. */
+    private static final float SHADE_LOW = RAIL_TOP;
+    private static final float SHADE_HIGH = WINDOW_SILL;
+
+    /** How dark the lowest parts go: the running gear, in the shadow of the car above it. */
+    private static final float SHADE_FLOOR = 0.80F;
+
+    /**
+     * Darkens a vertex by how low on the car it is: full brightness from the window sill up,
+     * falling away smoothly to the rail.
+     *
+     * <p>Flat colour shaded only by facing gives every side panel one tone from roof to rail, which
+     * is what made the car look like a cut-out. The sky lights the top of anything more than its
+     * foot, and the underframe sits in the body's own shadow; a gradient on the vertices says so
+     * for nothing — no texture, no extra geometry, and it is baked into the compiled lists. It is
+     * a function of height alone, so panels stacked on one another shade as one surface.</p>
+     */
+    static float heightShade(float y) {
+        float t = (y - SHADE_LOW) / (SHADE_HIGH - SHADE_LOW);
+        if (t >= 1.0F) {
+            return 1.0F;
+        }
+        if (t <= 0.0F) {
+            return SHADE_FLOOR;
+        }
+        // Smoothstep: no visible line where the gradient starts or stops.
+        float eased = t * t * (3.0F - 2.0F * t);
+        return SHADE_FLOOR + (1.0F - SHADE_FLOOR) * eased;
     }
 }

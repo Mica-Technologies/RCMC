@@ -46,7 +46,20 @@ final class CarDisplayLists {
         int exterior = -1;
         int interior = -1;
         int glass = -1;
+        /** A metro car's door leaves, compiled apart from its body: they are what moves. */
+        int doorsExterior = -1;
+        int doorsInterior = -1;
+        int doorsGlass = -1;
         long lastUsed;
+
+        /**
+         * How wide the gap to the platform is at each doorway, {@code [door * 2 + (right ? 0 : 1)]},
+         * negative where there is no platform; and the place the car stood when they were measured.
+         */
+        final float[] gaps = {-1.0F, -1.0F, -1.0F, -1.0F};
+        double gapsAtX = Double.NaN;
+        double gapsAtY;
+        double gapsAtZ;
 
         private boolean built;
         private boolean metro;
@@ -56,6 +69,7 @@ final class CarDisplayLists {
         private boolean pantograph;
         private float wire;
         private boolean thirdRail;
+        private boolean doorsBuilt;
         private float right;
         private float left;
         private boolean lights;
@@ -67,15 +81,33 @@ final class CarDisplayLists {
          * train's spec is immutable, and repainting or resizing a train gives it a new one.
          */
         boolean isMetro(TrainSpec spec, boolean coupling, boolean pantograph, float wire, boolean thirdRail,
-                        float right, float left, boolean lights, boolean outerFront, boolean outerRear) {
+                        boolean lights, boolean outerFront, boolean outerRear) {
             return built && metro && this.spec == spec && this.coupling == coupling
                 && this.pantograph == pantograph && this.wire == wire && this.thirdRail == thirdRail
-                && this.right == right && this.left == left && this.lights == lights
-                && this.outerFront == outerFront && this.outerRear == outerRear;
+                && this.lights == lights && this.outerFront == outerFront && this.outerRear == outerRear;
+        }
+
+        /** Whether the door lists are the leaves at these positions, for the body the lists hold. */
+        boolean hasDoors(float right, float left) {
+            return doorsBuilt && this.right == right && this.left == left;
+        }
+
+        void setDoors(float right, float left) {
+            this.doorsBuilt = true;
+            this.right = right;
+            this.left = left;
+        }
+
+        /** Frees the door lists alone. */
+        void releaseDoors() {
+            doorsExterior = free(doorsExterior);
+            doorsInterior = free(doorsInterior);
+            doorsGlass = free(doorsGlass);
+            doorsBuilt = false;
         }
 
         void setMetro(TrainSpec spec, boolean coupling, boolean pantograph, float wire, boolean thirdRail,
-                      float right, float left, boolean lights, boolean outerFront, boolean outerRear) {
+                      boolean lights, boolean outerFront, boolean outerRear) {
             this.built = true;
             this.metro = true;
             this.spec = spec;
@@ -83,8 +115,6 @@ final class CarDisplayLists {
             this.pantograph = pantograph;
             this.wire = wire;
             this.thirdRail = thirdRail;
-            this.right = right;
-            this.left = left;
             this.lights = lights;
             this.outerFront = outerFront;
             this.outerRear = outerRear;
@@ -108,6 +138,7 @@ final class CarDisplayLists {
             exterior = free(exterior);
             interior = free(interior);
             glass = free(glass);
+            releaseDoors();
             built = false;
             spec = null;
         }
