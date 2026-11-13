@@ -6,7 +6,7 @@ completion covers subcommands and most of their arguments: demo kinds, track sty
 subcommands and sides.
 
 ```
-/rcmc <demo|metrodemo|train|trains|clear|info|build|track|node|element|clearance|section|paint|style|rate|check|block|transfer|ride|station|line|signal|switch|platform|rmsection|undo|redo>
+/rcmc <demo|metrodemo|train|trains|clear|info|build|track|node|element|clearance|section|paint|style|rate|check|block|transfer|ride|station|line|signal|switch|platform|supports|rmsection|undo|redo>
 ```
 
 ---
@@ -212,6 +212,35 @@ laid through a tree or closer to a wall than a car is wide.
 - Chunks that are not loaded are never loaded to check them. The blocks in them are counted and
   reported as not checked.
 - 20 blocks are listed unless you ask for more.
+
+### `/rcmc supports`
+
+```
+/rcmc supports <sectionId> list
+/rcmc supports <sectionId> exclude <x0> <z0> <x1> <z1>
+/rcmc supports <sectionId> include <number>
+/rcmc supports <sectionId> clear
+```
+
+Says where a section's automatic support columns may not stand. Columns go in every 9 blocks of
+track, down to the first solid block beneath: through water to the bed, and through grass, snow
+layers and other plants to the ground. Track that crosses a walkway would otherwise put columns in
+it.
+
+- `exclude` adds a box of ground between two corners, in block coordinates, both corners
+  included. No column of this section stands with its foot in the box, at any height. The reply
+  gives the number of columns before and after. A section keeps up to 64 boxes.
+- `list` numbers the section's boxes. `include <number>` removes one, and `clear` removes them all.
+- A column under banked or inverted track stands 1.2 blocks to the side of the rails, so the box
+  has to cover where the column's foot is, not only the ground under the track.
+- The boxes belong to the section. They are saved with it, follow it through splits and merges,
+  and `/rcmc undo` steps back through them like any other edit.
+- Nothing is put in a column's place. Carry the span with
+  [track support](items-and-blocks.md) blocks at the edges of the walkway.
+
+```
+/rcmc supports 25 exclude 790 168 810 181
+```
 
 ### `/rcmc style`
 

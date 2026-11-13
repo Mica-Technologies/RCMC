@@ -63,7 +63,7 @@ public class CommandRcmc extends CommandBase {
     @Override
     public String getUsage(ICommandSender sender) {
         return "/rcmc <demo|metrodemo|train|clear|info|build|track|section|paint|style|rate|check|block|transfer|ride|station|line|signal"
-            + "|switch|platform|node|element|clearance|rmsection|undo|redo>";
+            + "|switch|platform|node|element|clearance|supports|rmsection|undo|redo>";
     }
 
     @Override
@@ -77,7 +77,13 @@ public class CommandRcmc extends CommandBase {
         if (args.length == 1) {
             return getListOfStringsMatchingLastWord(args, "demo", "metrodemo", "train", "clear",
                 "info", "build", "track", "section", "paint", "style", "rate", "check", "trains", "block", "transfer", "ride", "station", "line", "signal", "switch",
-                "platform", "node", "element", "clearance", "rmsection", "undo", "redo");
+                "platform", "node", "element", "clearance", "supports", "rmsection", "undo", "redo");
+        }
+        if (args.length == 3 && "supports".equalsIgnoreCase(args[0])) {
+            return getListOfStringsMatchingLastWord(args, "list", "exclude", "include", "clear");
+        }
+        if (args.length == 3 && "rmsection".equalsIgnoreCase(args[0])) {
+            return getListOfStringsMatchingLastWord(args, "keepplatform");
         }
         if (args.length == 3 && "node".equalsIgnoreCase(args[0])) {
             return getListOfStringsMatchingLastWord(args, "list", "set", "insert", "delete");
@@ -319,6 +325,9 @@ public class CommandRcmc extends CommandBase {
                 break;
             case "clearance":
                 EditCommands.clearance(sender, world, state, args);
+                break;
+            case "supports":
+                EditCommands.supports(sender, world, state, args);
                 break;
             case "rmsection":
                 removeSection(sender, world, state, args);

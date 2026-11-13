@@ -63,6 +63,7 @@ public final class TrackCodec {
     private static final String KEY_LEAD_IN = "LeadIn";
     private static final String KEY_LEAD_OUT = "LeadOut";
     private static final String KEY_START_UP = "StartUp";
+    private static final String KEY_SUPPORT_EXCLUSIONS = "SupportExclusions";
 
     private static final String KEY_X = "X";
     private static final String KEY_Y = "Y";
@@ -357,6 +358,19 @@ public final class TrackCodec {
         writeVec(tag, KEY_LEAD_IN, section.leadIn());
         writeVec(tag, KEY_LEAD_OUT, section.leadOut());
         writeVec(tag, KEY_START_UP, section.startUp());
+        // Four ints a box. Only written when there are any, like the palette.
+        List<com.micatechnologies.minecraft.rcmc.track.SupportExclusion> exclusions = section.supportExclusions();
+        if (!exclusions.isEmpty()) {
+            int[] boxes = new int[exclusions.size() * 4];
+            for (int i = 0; i < exclusions.size(); i++) {
+                com.micatechnologies.minecraft.rcmc.track.SupportExclusion box = exclusions.get(i);
+                boxes[i * 4] = box.minX;
+                boxes[i * 4 + 1] = box.minZ;
+                boxes[i * 4 + 2] = box.maxX;
+                boxes[i * 4 + 3] = box.maxZ;
+            }
+            tag.setIntArray(KEY_SUPPORT_EXCLUSIONS, boxes);
+        }
         return tag;
     }
 
@@ -398,6 +412,12 @@ public final class TrackCodec {
                         stored.getString(part.name()), palette.of(part)));
             }
         }
+        List<com.micatechnologies.minecraft.rcmc.track.SupportExclusion> exclusions = new ArrayList<>();
+        int[] boxes = tag.getIntArray(KEY_SUPPORT_EXCLUSIONS);
+        for (int i = 0; i + 3 < boxes.length; i += 4) {
+            exclusions.add(new com.micatechnologies.minecraft.rcmc.track.SupportExclusion(
+                boxes[i], boxes[i + 1], boxes[i + 2], boxes[i + 3]));
+        }
         return new TrackSection(
             tag.getInteger(KEY_ID),
             nodes,
@@ -406,7 +426,7 @@ public final class TrackCodec {
             palette,
             readVec(tag, KEY_LEAD_IN),
             readVec(tag, KEY_LEAD_OUT),
-            readVec(tag, KEY_START_UP));
+            readVec(tag, KEY_START_UP)).withSupportExclusions(exclusions);
     }
 
     public static NBTTagCompound writeNode(TrackNode node) {

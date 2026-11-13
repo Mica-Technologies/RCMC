@@ -294,6 +294,30 @@ public final class TrackSupports {
     }
 
     /**
+     * The height a column at {@code (x, z)} stands on: the top of the first block down from the
+     * surface that could bear it.
+     *
+     * <p>The chunk heightmap alone is not that. It counts anything that dims light, water
+     * included, so over a harbour every column ended at the surface and stood on the water while
+     * the dock piles beside it went down to the bed. From the heightmap this goes on down through
+     * whatever a column would pass through — liquid, plants, snow layers and the like, the same
+     * things a clearance check lets a train pass through — to the seabed or the ground under the
+     * grass.</p>
+     */
+    static double footingY(World world, int x, int z) {
+        BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(x, world.getHeight(x, z), z);
+        while (pos.getY() > 0) {
+            pos.setY(pos.getY() - 1);
+            net.minecraft.block.state.IBlockState below = world.getBlockState(pos);
+            if (below.getMaterial() != net.minecraft.block.material.Material.AIR
+                && !ClearanceChecks.passable(world, pos, below)) {
+                return pos.getY() + 1;
+            }
+        }
+        return 0.0D;
+    }
+
+    /**
      * Places a column at each sample point that can take one.
      *
      * <p><b>Inversions are why this is not simply "drop a line from the track to the ground".</b> On
@@ -332,6 +356,10 @@ public final class TrackSupports {
                 z += outward.z / lean * OUTBOARD;
             }
 
+            if (section.excludesSupportAt(x, z)) {
+                // The builder has said this ground is kept clear: a walkway the track spans.
+                continue;
+            }
             BlockPos probe = new BlockPos(x, 0, z);
             if (!world.isBlockLoaded(probe)) {
                 // No terrain to stand on yet. Skipping beats guessing a height and leaving a column
@@ -339,7 +367,7 @@ public final class TrackSupports {
                 pass.incomplete = true;
                 continue;
             }
-            double groundY = world.getHeight(probe.getX(), probe.getZ());
+            double groundY = footingY(world, probe.getX(), probe.getZ());
             double topY = attach.y;
             if (topY - groundY < MIN_HEIGHT) {
                 continue;

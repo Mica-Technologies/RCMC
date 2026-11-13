@@ -383,7 +383,12 @@ there are none. Then add a train and test it as below.
 **Supports generate automatically** beneath a committed section, at intervals, down to terrain —
 including on banked and inverted track, where a column stands outboard of the track and an arm
 reaches in. Columns that would pass through the track are abandoned rather than drawn through it.
-Generated supports are solid: you can stand on them.
+Generated supports are solid: you can stand on them. Over water a column goes down to the bed, not
+to the surface.
+
+Where the track crosses a path, keep the columns out of it with
+[`/rcmc supports <sectionId> exclude <x0> <z0> <x1> <z1>`](../reference/commands.md#rcmc-supports),
+and carry the span with support blocks at the path's edges.
 
 !!! info "A loop's crown is unsupported, on purpose"
 

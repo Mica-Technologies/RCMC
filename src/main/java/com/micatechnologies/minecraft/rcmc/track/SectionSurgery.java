@@ -211,7 +211,8 @@ public final class SectionSurgery {
             TrackSection open = new TrackSection(id, rotated, false, section.styleId(), section.palette(),
                 section.nodes().get(Math.floorMod(node - 1, n)).position(),
                 section.nodes().get((node + 1) % n).position(),
-                section.unbankedFrameAtDistance(section.nodeDistance(node)).up);
+                section.unbankedFrameAtDistance(section.nodeDistance(node)).up)
+                .withSupportExclusions(section.supportExclusions());
             for (int j = 0; j < n; j++) {
                 int k = Math.floorMod(j - node, n);
                 moves.add(new SpanMove(id, start(section, j), end(section, j), id, start(open, k), end(open, k)));
@@ -227,10 +228,12 @@ public final class SectionSurgery {
         // they were, so the join has no bend and no twist.
         TrackSection first = new TrackSection(id, new ArrayList<>(section.nodes().subList(0, node + 1)), false,
             section.styleId(), section.palette(), section.leadIn(),
-            section.nodes().get(node + 1).position(), section.startUp());
+            section.nodes().get(node + 1).position(), section.startUp())
+            .withSupportExclusions(section.supportExclusions());
         TrackSection second = new TrackSection(newId, new ArrayList<>(section.nodes().subList(node, n)), false,
             section.styleId(), section.palette(), section.nodes().get(node - 1).position(),
-            section.leadOut(), section.unbankedFrameAtDistance(section.nodeDistance(node)).up);
+            section.leadOut(), section.unbankedFrameAtDistance(section.nodeDistance(node)).up)
+            .withSupportExclusions(section.supportExclusions());
         for (int j = 0; j < n - 1; j++) {
             if (j < node) {
                 moves.add(new SpanMove(id, start(section, j), end(section, j), id, start(first, j), end(first, j)));
@@ -284,7 +287,8 @@ public final class SectionSurgery {
         nodes.addAll(second.nodes().subList(1, second.nodes().size()));
         // The outer ends keep their handles; the ends that met are inside the section now.
         TrackSection merged = new TrackSection(a.id(), nodes, false, a.styleId(), a.palette(),
-            first.leadIn(), second.leadOut(), first.startUp());
+            first.leadIn(), second.leadOut(), first.startUp())
+            .withSupportExclusions(bothExclusions(a, b));
 
         List<SpanMove> moves = new ArrayList<>();
         int firstSpans = first.nodes().size() - 1;
@@ -314,7 +318,8 @@ public final class SectionSurgery {
         List<TrackNode> nodes = new ArrayList<>(n - 1);
         nodes.add(junction(section.nodes().get(n - 1), section.nodes().get(0)));
         nodes.addAll(section.nodes().subList(1, n - 1));
-        TrackSection closed = new TrackSection(section.id(), nodes, true, section.styleId(), section.palette());
+        TrackSection closed = new TrackSection(section.id(), nodes, true, section.styleId(), section.palette())
+            .withSupportExclusions(section.supportExclusions());
         List<SpanMove> moves = new ArrayList<>();
         addMoves(moves, section, false, closed, 0, n - 1);
         return new Result(listOf(closed), new LinkedHashSet<>(), moves, new HashMap<>(), new ArrayList<>());
@@ -372,6 +377,13 @@ public final class SectionSurgery {
     /** {@code section} with its nodes in reverse order, banks negated since right becomes left. */
     private static TrackSection reversedNodes(TrackSection section) {
         return section.reversed();
+    }
+
+    /** The exclusions of two sections becoming one: each box once, {@code a}'s first. */
+    private static List<SupportExclusion> bothExclusions(TrackSection a, TrackSection b) {
+        Set<SupportExclusion> both = new LinkedHashSet<>(a.supportExclusions());
+        both.addAll(b.supportExclusions());
+        return new ArrayList<>(both);
     }
 
     private static TrackNode junction(TrackNode a, TrackNode b) {

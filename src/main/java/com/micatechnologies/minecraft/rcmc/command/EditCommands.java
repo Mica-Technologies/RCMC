@@ -9,6 +9,7 @@ import com.micatechnologies.minecraft.rcmc.physics.element.RideElement;
 import com.micatechnologies.minecraft.rcmc.physics.ride.RideTuning;
 import com.micatechnologies.minecraft.rcmc.track.Polyline;
 import com.micatechnologies.minecraft.rcmc.track.SectionRemap;
+import com.micatechnologies.minecraft.rcmc.track.SupportExclusion;
 import com.micatechnologies.minecraft.rcmc.track.TrackNode;
 import com.micatechnologies.minecraft.rcmc.track.TrackRef;
 import com.micatechnologies.minecraft.rcmc.track.TrackSection;
@@ -19,6 +20,8 @@ import com.micatechnologies.minecraft.rcmc.world.RcmcWorldState;
 import com.micatechnologies.minecraft.rcmc.world.RideChecks;
 import com.micatechnologies.minecraft.rcmc.world.TrackEditOperations;
 import com.micatechnologies.minecraft.rcmc.world.TrackEdits;
+import com.micatechnologies.minecraft.rcmc.world.TrackSupports;
+import com.micatechnologies.minecraft.rcmc.net.PacketTrackSync;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -494,6 +497,101 @@ final class EditCommands {
             return "backward launch";
         }
         return type == null ? "hardware" : type.replace('_', ' ');
+    }
+
+    // ---- /rcmc supports ----
+
+    private static final String SUPPORTS_USAGE = "/rcmc supports <sectionId> <list | clear"
+        + " | exclude <x0> <z0> <x1> <z1> | include <number>>";
+
+    /**
+     * {@code /rcmc supports <sectionId> ...} — where the section's automatic support columns may
+     * not stand.
+     *
+     * <p>Columns go in every nine blocks of track whatever is underneath, which put them in the
+     * middle of a boardwalk the track crossed, with no way to say otherwise. An exclusion is a box
+     * of ground no column of this section stands in; hand-placed {@code rcmc:track_support} bents
+     * at its edges then carry the span, as on a real ride.</p>
+     */
+    static void supports(ICommandSender sender, World world, RcmcWorldState state, String[] args)
+        throws CommandException {
+        if (args.length < 3) {
+            throw new CommandException(SUPPORTS_USAGE);
+        }
+        TrackSection section = section(state, args[1]);
+        List<SupportExclusion> boxes = new ArrayList<>(section.supportExclusions());
+        int columnsBefore = TrackSupports.columnsFor(section, world).size();
+        switch (args[2].toLowerCase(Locale.ROOT)) {
+            case "list":
+                if (boxes.isEmpty()) {
+                    reply(sender, TextFormatting.GRAY, "Section #" + section.id() + " has no support"
+                        + " exclusions: " + columnsBefore + " columns, wherever the spacing puts them.");
+                    return;
+                }
+                reply(sender, TextFormatting.GOLD, "Support exclusions on #" + section.id() + " (x z to x z), "
+                    + columnsBefore + " columns standing:");
+                for (int i = 0; i < boxes.size(); i++) {
+                    SupportExclusion box = boxes.get(i);
+                    reply(sender, TextFormatting.WHITE, "  " + (i + 1) + ". " + box.minX + " " + box.minZ
+                        + " to " + box.maxX + " " + box.maxZ);
+                }
+                return;
+            case "clear":
+                if (boxes.isEmpty()) {
+                    reply(sender, TextFormatting.GRAY, "Section #" + section.id() + " has no support exclusions.");
+                    return;
+                }
+                boxes.clear();
+                break;
+            case "exclude": {
+                if (args.length < 7) {
+                    throw new CommandException("/rcmc supports <sectionId> exclude <x0> <z0> <x1> <z1>");
+                }
+                SupportExclusion box = new SupportExclusion(blockCoordinate(args[3]), blockCoordinate(args[4]),
+                    blockCoordinate(args[5]), blockCoordinate(args[6]));
+                if (boxes.contains(box)) {
+                    throw new CommandException("Section #" + section.id() + " already excludes " + box);
+                }
+                if (boxes.size() >= MAX_SUPPORT_EXCLUSIONS) {
+                    throw new CommandException("A section holds at most " + MAX_SUPPORT_EXCLUSIONS
+                        + " support exclusions; remove one first");
+                }
+                boxes.add(box);
+                break;
+            }
+            case "include": {
+                if (args.length < 4) {
+                    throw new CommandException("/rcmc supports <sectionId> include <number> — see list");
+                }
+                if (boxes.isEmpty()) {
+                    throw new CommandException("Section #" + section.id() + " has no support exclusions");
+                }
+                boxes.remove(CommandBase.parseInt(args[3], 1, boxes.size()) - 1);
+                break;
+            }
+            default:
+                throw new CommandException(SUPPORTS_USAGE);
+        }
+        TrackSection edited = section.withSupportExclusions(boxes);
+        state.network().replaceSection(edited);
+        state.markTrackDirty(world);
+        PacketTrackSync.broadcast(state.network(), world.provider.getDimension());
+        int columnsAfter = TrackSupports.columnsFor(edited, world).size();
+        reply(sender, TextFormatting.GREEN, "Section #" + section.id() + " now has " + boxes.size()
+            + " support exclusion" + (boxes.size() == 1 ? "" : "s") + ": " + columnsBefore + " columns before, "
+            + columnsAfter + " now.");
+        if (columnsAfter == columnsBefore && "exclude".equalsIgnoreCase(args[2])) {
+            reply(sender, TextFormatting.GRAY, "  No column stood in that box. Columns are placed by where"
+                + " their foot is; on banked track that is beside the rails, not under them.");
+        }
+    }
+
+    /** Most exclusion boxes one section keeps: each is tested for every column of the section. */
+    private static final int MAX_SUPPORT_EXCLUSIONS = 64;
+
+    /** A block coordinate as typed, whole or with a fraction: the block that point is in. */
+    private static int blockCoordinate(String arg) throws CommandException {
+        return (int) Math.floor(CommandBase.parseDouble(arg, -3.0E7D, 3.0E7D));
     }
 
     // ---- /rcmc clearance ----

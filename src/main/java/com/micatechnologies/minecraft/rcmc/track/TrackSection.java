@@ -75,6 +75,9 @@ public final class TrackSection {
     /** Box around the node positions, for broadphase rejects. See {@link Extent}. */
     private final Extent extent;
 
+    /** Ground this section's support columns keep off; see {@link SupportExclusion}. Never null. */
+    private final List<SupportExclusion> supportExclusions;
+
     public TrackSection(int id, List<TrackNode> nodes, boolean closed, String styleId) {
         this(id, nodes, closed, styleId, TrackPalette.DEFAULT);
     }
@@ -137,6 +140,57 @@ public final class TrackSection {
         }
 
         this.rollResidual = closed ? computeRollResidual(frames) : 0.0D;
+        this.supportExclusions = Collections.emptyList();
+    }
+
+    /** The same track, sharing every computed table, with a different list of exclusions. */
+    private TrackSection(TrackSection base, List<SupportExclusion> exclusions) {
+        this.id = base.id;
+        this.nodes = base.nodes;
+        this.closed = base.closed;
+        this.styleId = base.styleId;
+        this.palette = base.palette;
+        this.arcLength = base.arcLength;
+        this.frames = base.frames;
+        this.nodeDistances = base.nodeDistances;
+        this.bankSlopes = base.bankSlopes;
+        this.styleFromNode = base.styleFromNode;
+        this.rollResidual = base.rollResidual;
+        this.leadIn = base.leadIn;
+        this.leadOut = base.leadOut;
+        this.startUp = base.startUp;
+        this.extent = base.extent;
+        this.supportExclusions = exclusions == null || exclusions.isEmpty()
+            ? Collections.<SupportExclusion>emptyList()
+            : Collections.unmodifiableList(new ArrayList<>(exclusions));
+    }
+
+    /** Ground this section's support columns keep off. Unmodifiable, possibly empty. */
+    public List<SupportExclusion> supportExclusions() {
+        return supportExclusions;
+    }
+
+    /**
+     * A copy whose support columns keep off {@code exclusions} instead. Every edit that makes a new
+     * section from this one carries the list across: the boxes are places in the world, and stay
+     * where they are whatever is done to the track above them.
+     */
+    public TrackSection withSupportExclusions(List<SupportExclusion> exclusions) {
+        boolean none = exclusions == null || exclusions.isEmpty();
+        if (none ? supportExclusions.isEmpty() : exclusions.equals(supportExclusions)) {
+            return this;
+        }
+        return new TrackSection(this, exclusions);
+    }
+
+    /** Whether a support column may not stand at {@code (x, z)}. */
+    public boolean excludesSupportAt(double x, double z) {
+        for (int i = 0; i < supportExclusions.size(); i++) {
+            if (supportExclusions.get(i).contains(x, z)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -420,7 +474,8 @@ public final class TrackSection {
     /** A copy painted differently. Geometry is rebuilt, which is wasteful but keeps sections
      *  genuinely immutable; recolouring is rare next to anything that reads them. */
     public TrackSection withPalette(TrackPalette newPalette) {
-        return new TrackSection(id, nodes, closed, styleId, newPalette, leadIn, leadOut, startUp);
+        return new TrackSection(id, nodes, closed, styleId, newPalette, leadIn, leadOut, startUp)
+            .withSupportExclusions(supportExclusions);
     }
 
     public double totalLength() {
@@ -470,7 +525,8 @@ public final class TrackSection {
     public TrackSection withNode(int index, TrackNode replacement) {
         List<TrackNode> edited = new ArrayList<>(nodes);
         edited.set(index, replacement);
-        return new TrackSection(id, edited, closed, styleId, palette, leadIn, leadOut, startUp);
+        return new TrackSection(id, edited, closed, styleId, palette, leadIn, leadOut, startUp)
+            .withSupportExclusions(supportExclusions);
     }
 
     public TrackSection withNodeInserted(int index, TrackNode inserted) {
@@ -479,7 +535,7 @@ public final class TrackSection {
         boolean newFirst = index == 0;
         boolean newLast = index == nodes.size();
         return new TrackSection(id, edited, closed, styleId, palette, newFirst ? null : leadIn,
-            newLast ? null : leadOut, newFirst ? null : startUp);
+            newLast ? null : leadOut, newFirst ? null : startUp).withSupportExclusions(supportExclusions);
     }
 
     public TrackSection withNodeRemoved(int index) {
@@ -488,21 +544,24 @@ public final class TrackSection {
         boolean first = index == 0;
         boolean last = index == nodes.size() - 1;
         return new TrackSection(id, edited, closed, styleId, palette, first ? null : leadIn,
-            last ? null : leadOut, first ? null : startUp);
+            last ? null : leadOut, first ? null : startUp).withSupportExclusions(supportExclusions);
     }
 
     public TrackSection withNodeAppended(TrackNode appended) {
         List<TrackNode> edited = new ArrayList<>(nodes);
         edited.add(appended);
-        return new TrackSection(id, edited, closed, styleId, palette, leadIn, null, startUp);
+        return new TrackSection(id, edited, closed, styleId, palette, leadIn, null, startUp)
+            .withSupportExclusions(supportExclusions);
     }
 
     public TrackSection withClosed(boolean nowClosed) {
-        return nowClosed == closed ? this : new TrackSection(id, nodes, nowClosed, styleId, palette);
+        return nowClosed == closed ? this
+            : new TrackSection(id, nodes, nowClosed, styleId, palette).withSupportExclusions(supportExclusions);
     }
 
     public TrackSection withStyle(String newStyleId) {
-        return new TrackSection(id, nodes, closed, newStyleId, palette, leadIn, leadOut, startUp);
+        return new TrackSection(id, nodes, closed, newStyleId, palette, leadIn, leadOut, startUp)
+            .withSupportExclusions(supportExclusions);
     }
 
     /** Reverses the direction of travel. Bank angles negate, since right becomes left. */
@@ -513,12 +572,12 @@ public final class TrackSection {
             flipped.add(node.withBank(-node.bankDegrees()));
         }
         if (closed) {
-            return new TrackSection(id, flipped, true, styleId, palette);
+            return new TrackSection(id, flipped, true, styleId, palette).withSupportExclusions(supportExclusions);
         }
         // The same curve run the other way: the handles swap ends, and the frames start from the
         // one this section's had reached at its far end, so a car's roll is unchanged anywhere.
         return new TrackSection(id, flipped, false, styleId, palette, leadOut, leadIn,
-            unbankedFrameAtDistance(totalLength()).up);
+            unbankedFrameAtDistance(totalLength()).up).withSupportExclusions(supportExclusions);
     }
 
     @Override

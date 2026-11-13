@@ -121,7 +121,7 @@ public final class ClearanceChecks {
     }
 
     /** Things a car brushes through without hitting anything. */
-    private static boolean passable(World world, BlockPos pos, IBlockState state) {
+    static boolean passable(World world, BlockPos pos, IBlockState state) {
         Material material = state.getMaterial();
         return material.isLiquid() || material == Material.PLANTS || material == Material.VINE
             || material == Material.WEB || material == Material.FIRE || material == Material.PORTAL

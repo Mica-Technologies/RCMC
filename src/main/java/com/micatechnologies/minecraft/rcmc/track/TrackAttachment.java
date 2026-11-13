@@ -184,7 +184,7 @@ public final class TrackAttachment {
         boolean atEnd = end == TrackNetwork.End.END;
         return new TrackSection(section.id(), combined, closed, section.styleId(), section.palette(),
             atEnd ? section.leadIn() : null, atEnd ? null : section.leadOut(),
-            atEnd ? section.startUp() : null);
+            atEnd ? section.startUp() : null).withSupportExclusions(section.supportExclusions());
     }
 
     /**
