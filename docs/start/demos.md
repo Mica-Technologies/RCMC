@@ -234,17 +234,18 @@ lists every train in service: its line, direction, where it's heading, and its s
 
 ## Cleaning up
 
-To take away everything RCMC has built in the world (all track, trains, stations and lines):
+To take away everything RCMC has built in the world (all track, trains, stations and lines). Without
+`confirm` the command only lists what it would remove:
 
 ```
-/rcmc clear
+/rcmc clear confirm
 ```
 
 !!! warning "It removes all of it"
 
     `/rcmc clear` deletes **every** RCMC section, train, station and line in the world, not just the
-    demo. Blocks such as tunnels, platforms, supports and signs are ordinary blocks and are left
-    where they are. To remove just one piece of track, use [`/rcmc rmsection <id>`](../reference/commands.md#rcmc-rmsection)
+    demo. A coaster station's platform and air gates go with it. Other blocks, such as tunnels, metro
+    platforms, supports and signs, are ordinary blocks and are left where they are. To remove just one piece of track, use [`/rcmc rmsection <id>`](../reference/commands.md#rcmc-rmsection)
     or sneak-right-click it with the Track Editor. Most edits can be taken back with `/rcmc undo`.
 
 ## Next

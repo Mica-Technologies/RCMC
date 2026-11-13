@@ -13,7 +13,7 @@ been shut a moment.
 
 **Getting off:** once the train is back in the station, **sneak** (++shift++) and you step out beside
 your seat onto the platform. Anywhere else, the restraints hold you in: sneaking puts you straight back
-in your seat.
+in your seat, and a line above your hotbar says why.
 
 When you can't board, the ride says why:
 
@@ -55,7 +55,8 @@ the car, and the walls and seats keep you inside it. A few things follow from th
 
 - You board where you walked in, not in an assigned seat.
 - **You can't step off a moving train.** With the doors shut and the train moving, trying to get off
-  just puts you back aboard. With the doors open, you leave by walking out through one.
+  just puts you back aboard, and a line above your hotbar says so. With the doors open, you leave by
+  walking out through one.
 - In multiplayer, other players inside a moving car appear standing where they boarded. Their own game
   shows them correctly; this is a known limitation.
 

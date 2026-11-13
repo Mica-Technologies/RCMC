@@ -62,7 +62,7 @@ public class CommandRcmc extends CommandBase {
 
     @Override
     public String getUsage(ICommandSender sender) {
-        return "/rcmc <demo|metrodemo|train|clear|info|build|track|section|paint|style|rate|check|block|transfer|ride|station|line|signal"
+        return "/rcmc <demo|metrodemo|train|trains|clear|info|build|track|section|paint|style|rate|check|block|transfer|ride|station|line|signal"
             + "|switch|platform|node|element|clearance|supports|rmsection|undo|redo>";
     }
 
@@ -84,6 +84,9 @@ public class CommandRcmc extends CommandBase {
         }
         if (args.length == 3 && "rmsection".equalsIgnoreCase(args[0])) {
             return getListOfStringsMatchingLastWord(args, "keepplatform");
+        }
+        if (args.length == 2 && "clear".equalsIgnoreCase(args[0])) {
+            return getListOfStringsMatchingLastWord(args, "confirm");
         }
         if (args.length == 3 && "node".equalsIgnoreCase(args[0])) {
             return getListOfStringsMatchingLastWord(args, "list", "set", "insert", "delete");
@@ -264,7 +267,7 @@ public class CommandRcmc extends CommandBase {
                 spawnTrain(sender, world, state, args);
                 break;
             case "clear":
-                clear(sender, world, state);
+                clear(sender, world, state, args);
                 break;
             case "info":
                 info(sender, state);
@@ -532,7 +535,7 @@ public class CommandRcmc extends CommandBase {
         int sectionId = parseInt(args[1]);
         TrackSection section = state.network().section(sectionId);
         if (section == null) {
-            throw new CommandException("No section with id " + sectionId);
+            throw new CommandException("No section #" + sectionId + " — try /rcmc info");
         }
         String style = args.length > 4 ? args[4].toLowerCase(java.util.Locale.ROOT)
             : com.micatechnologies.minecraft.rcmc.physics.TrainTypes.DEFAULT_COASTER;
@@ -734,7 +737,7 @@ public class CommandRcmc extends CommandBase {
         int sectionId = parseInt(args[1]);
         TrackSection section = state.network().section(sectionId);
         if (section == null) {
-            throw new CommandException("No section with id " + sectionId);
+            throw new CommandException("No section #" + sectionId + " — try /rcmc info");
         }
         String styleId;
         try {
@@ -1927,11 +1930,25 @@ public class CommandRcmc extends CommandBase {
         RcmcNetwork.sendToAllIn(new PacketElementSync(state.elements()), dimension);
     }
 
-    private void clear(ICommandSender sender, World world, RcmcWorldState state) {
+    private void clear(ICommandSender sender, World world, RcmcWorldState state, String[] args) {
         int trains = state.trains().count();
         int sections = state.network().sectionCount();
         int stations = state.transit().stations().size();
         int lines = state.transit().lines().size();
+        if (trains + sections + stations + lines == 0) {
+            reply(sender, TextFormatting.GRAY, "Nothing to clear: this world has no RCMC track, trains,"
+                + " stations or lines.");
+            return;
+        }
+        if (args.length < 2 || !"confirm".equalsIgnoreCase(args[1])) {
+            // It takes every ride and every line in the world with it, whoever built them, and the
+            // trains do not come back with an undo. One word typed by mistake should not do that.
+            reply(sender, TextFormatting.YELLOW, "This removes everything RCMC has in this world: " + sections
+                + " section(s), " + trains + " train(s), " + stations + " station(s) and " + lines + " line(s).");
+            reply(sender, TextFormatting.YELLOW, "  Run /rcmc clear confirm to do it. To remove one ride, use"
+                + " /rcmc rmsection <sectionId>.");
+            return;
+        }
         // Coaster station decking and gates go with the stations, as rmsection takes them. A metro
         // platform is laid by its own command and is the builder's to keep.
         int platformBlocks = 0;

@@ -660,7 +660,7 @@ final class EditCommands {
         int id = CommandBase.parseInt(arg);
         TrackSection section = state.network().section(id);
         if (section == null) {
-            throw new CommandException("No section #" + id + " - try /rcmc info");
+            throw new CommandException("No section #" + id + " — try /rcmc info");
         }
         return section;
     }

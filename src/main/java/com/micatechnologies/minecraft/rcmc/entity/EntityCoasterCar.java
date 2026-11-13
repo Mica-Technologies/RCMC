@@ -372,6 +372,10 @@ public class EntityCoasterCar extends Entity {
                 // grace is deliberately ignored here, because honouring it is what would let them
                 // fall out.
                 player.startRiding(this);
+                // And say why, above the hotbar. Being put back with no word reads as the dismount
+                // key not working.
+                player.sendStatusMessage(new net.minecraft.util.text.TextComponentString(
+                    "The doors are closed. You can get off at the next stop."), true);
                 continue;
             }
             Long left = RECENT_DISMOUNTS.get(player.getUniqueID());
@@ -417,6 +421,8 @@ public class EntityCoasterCar extends Entity {
                 && player.getDistanceSq(this) < 16.0D && canFitPassenger(player)) {
                 it.remove();
                 player.startRiding(this);
+                player.sendStatusMessage(new net.minecraft.util.text.TextComponentString(
+                    "The restraints are locked. You can get off in the station."), true);
             }
         }
     }

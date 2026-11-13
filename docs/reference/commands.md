@@ -284,7 +284,13 @@ the platform again, and undoing a lay takes its platform up.
 
 ### `/rcmc clear`
 
-Wipes **everything** RCMC has built in the world: all track, ride hardware, trains, ride
+```
+/rcmc clear
+/rcmc clear confirm
+```
+
+On its own, `/rcmc clear` lists what it would remove and changes nothing. `/rcmc clear confirm`
+wipes **everything** RCMC has built in the world: all track, ride hardware, trains, ride
 settings, block sections, and every metro station, line and signal. Blunt, and rarely what you
 want. `/rcmc undo` brings back the track, ride hardware, block sections and transit, but not the
 trains or the operator-panel ride settings.

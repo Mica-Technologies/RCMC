@@ -106,7 +106,7 @@ final class TrackCommands {
             int sectionId = CommandBase.parseInt(args[at + 1]);
             appendTo = state.network().section(sectionId);
             if (appendTo == null) {
-                throw new CommandException("No section with id " + sectionId);
+                throw new CommandException("No section #" + sectionId + " — try /rcmc info");
             }
             if (appendTo.isClosed()) {
                 throw new CommandException("Section #" + sectionId + " is a closed circuit; it has no end to"
@@ -185,7 +185,7 @@ final class TrackCommands {
         int sectionId = CommandBase.parseInt(args[2]);
         TrackSection section = state.network().section(sectionId);
         if (section == null) {
-            throw new CommandException("No section with id " + sectionId);
+            throw new CommandException("No section #" + sectionId + " — try /rcmc info");
         }
         if (args.length >= 5 && "file".equalsIgnoreCase(args[3])) {
             File file = polylineFile(args[4]);
@@ -386,7 +386,7 @@ final class TrackCommands {
         throws CommandException {
         TrackSection section = state.network().section(sectionId);
         if (section == null) {
-            throw new CommandException("No section with id " + sectionId);
+            throw new CommandException("No section #" + sectionId + " — try /rcmc info");
         }
         if (!"near".equalsIgnoreCase(args[from])) {
             return CommandBase.parseDouble(args[from]);
@@ -472,7 +472,7 @@ final class TrackCommands {
         int sectionId = CommandBase.parseInt(sectionArg);
         TrackSection section = state.network().section(sectionId);
         if (section == null) {
-            throw new CommandException("No section with id " + sectionId);
+            throw new CommandException("No section #" + sectionId + " — try /rcmc info");
         }
         double distance = CommandBase.parseDouble(distanceArg);
         if (distance < 0.0D || distance > section.totalLength()) {
