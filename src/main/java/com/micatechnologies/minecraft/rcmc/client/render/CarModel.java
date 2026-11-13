@@ -60,6 +60,14 @@ final class CarModel {
     private static final float[] HUB = {0.55F, 0.56F, 0.58F};
     private static final float[] METAL = {0.62F, 0.63F, 0.66F};
     private static final float[] LAMP = {1.0F, 0.94F, 0.72F};
+    private static final float[] REFLECTOR = {0.78F, 0.08F, 0.06F};
+    private static final float[] RUBBER = {0.07F, 0.07F, 0.08F};
+
+    /** The height shading a car is drawn with; see {@code CarMesh.emit}. Full brightness from the
+     *  seat cushions' level up, darkest at the railheads. */
+    static final float SHADE_LOW = RAIL_TOP;
+    static final float SHADE_HIGH = 0.46F;
+    static final float SHADE_FLOOR = 0.74F;
 
     private CarModel() {
         throw new AssertionError("No instances.");
@@ -81,6 +89,16 @@ final class CarModel {
         mesh.box(-TUB_HALF_WIDTH, FLOOR_BOTTOM, -half, TUB_HALF_WIDTH, FLOOR_TOP, half, CHASSIS);
         runningGear(mesh, half * 0.62F);
         runningGear(mesh, -half * 0.62F);
+        // A cross-member under the floor, end to end between the wheel assemblies, with a rib at
+        // each: the frame the tub is bolted to, seen from below and from the side under the sill.
+        for (float z : new float[] {half * 0.62F, -half * 0.62F}) {
+            mesh.box(-(YOKE_OUTER - YOKE_PLATE), FLOOR_BOTTOM - 0.06F, z - 0.07F,
+                YOKE_OUTER - YOKE_PLATE, FLOOR_BOTTOM, z + 0.07F, YOKE);
+        }
+        mesh.box(-CHASSIS_HALF_WIDTH - 0.05F, FLOOR_BOTTOM - 0.03F, -half * 0.62F,
+            -CHASSIS_HALF_WIDTH, FLOOR_BOTTOM, half * 0.62F, YOKE);
+        mesh.box(CHASSIS_HALF_WIDTH, FLOOR_BOTTOM - 0.03F, -half * 0.62F,
+            CHASSIS_HALF_WIDTH + 0.05F, FLOOR_BOTTOM, half * 0.62F, YOKE);
 
         if (model == TrainSpec.CoasterModel.WOODEN) {
             woodenBody(mesh, half, lead, body, trim);
@@ -107,6 +125,12 @@ final class CarModel {
         float gap = (float) spec.couplingGap();
         if (drawCoupling && gap > 0.0F) {
             mesh.box(-0.07F, CHASSIS_BOTTOM + 0.02F, -half - gap, 0.07F, FLOOR_BOTTOM - 0.02F, -half, CHASSIS);
+            // The knuckle the bar turns in, and its rubber boot: a bar that just meets a flat end
+            // looks glued on.
+            float boot = Math.min(0.14F, gap * 0.4F);
+            mesh.box(-0.11F, CHASSIS_BOTTOM, -half - boot, 0.11F, FLOOR_BOTTOM, -half, RUBBER);
+            mesh.box(-0.10F, CHASSIS_BOTTOM + 0.01F, -half - gap, 0.10F, FLOOR_BOTTOM - 0.01F, -half - gap + boot * 0.6F,
+                METAL);
         }
         return mesh;
     }
@@ -125,6 +149,13 @@ final class CarModel {
                 mesh.cylinderX(s * (RAIL_CENTRE + 0.037F), RAIL_TOP + ROAD_WHEEL_RADIUS, z + along,
                     0.03F, 0.004F, 6, HUB);
             }
+            // On the yoke's outer plate: the two axle ends with their nuts, and a stiffening rib.
+            for (float along : new float[] {-0.12F, 0.12F}) {
+                mesh.cylinderX(s * (YOKE_OUTER + 0.012F), RAIL_TOP + ROAD_WHEEL_RADIUS, z + along,
+                    0.034F, 0.012F, 8, HUB);
+            }
+            box(mesh, s, YOKE_OUTER, YOKE_OUTER + 0.015F, RAIL_TOP - 0.08F, FLOOR_TOP - 0.01F, z - 0.02F, z + 0.02F,
+                CHASSIS);
             // Guide wheel against the rail's outer face.
             mesh.cylinderY(s * (RAIL_OUTER + GUIDE_WHEEL_RADIUS + 0.005F), 0.0F, z,
                 GUIDE_WHEEL_RADIUS, 0.03F, 8, WHEEL);
@@ -169,6 +200,43 @@ final class CarModel {
                 {s * (tubOuter(y1) + 0.012F), y1}, {s * tubOuter(y1), y1},
             };
             mesh.prismZ(stripe, -half, front, trim, true, true);
+            // A polished rail along the top edge of the side, where a rider's hand goes.
+            float railX = tubOuter(TUB_TOP) - TUB_WALL * 0.5F - 0.02F;
+            float[][] rail = {
+                {s * (railX - 0.022F), TUB_TOP}, {s * (railX + 0.022F), TUB_TOP},
+                {s * (railX + 0.022F), TUB_TOP + 0.022F}, {s * (railX - 0.022F), TUB_TOP + 0.022F},
+            };
+            mesh.prismZ(rail, -half + 0.05F, front - 0.03F, METAL, true, true);
+            // A bright sill along the foot of the side.
+            float[][] sill = {
+                {s * tubOuter(FLOOR_BOTTOM), FLOOR_BOTTOM}, {s * (tubOuter(FLOOR_BOTTOM) + 0.018F), FLOOR_BOTTOM},
+                {s * (tubOuter(FLOOR_BOTTOM + 0.035F) + 0.018F), FLOOR_BOTTOM + 0.035F},
+                {s * tubOuter(FLOOR_BOTTOM + 0.035F), FLOOR_BOTTOM + 0.035F},
+            };
+            mesh.prismZ(sill, -half, front, METAL, true, true);
+            // Panel seams: the tub is moulded in sections, and the joins show as dark lines.
+            float[] seam = {body[0] * 0.5F, body[1] * 0.5F, body[2] * 0.5F};
+            float seamBottom = FLOOR_BOTTOM + 0.05F;
+            float seamTop = TUB_TOP - 0.06F;
+            float[][] seamSection = {
+                {s * tubOuter(seamBottom), seamBottom}, {s * (tubOuter(seamBottom) + 0.006F), seamBottom},
+                {s * (tubOuter(seamTop) + 0.006F), seamTop}, {s * tubOuter(seamTop), seamTop},
+            };
+            for (float z : new float[] {-half * 0.30F, half * 0.28F}) {
+                if (z < front - 0.05F) {
+                    mesh.prismZ(seamSection, z - 0.008F, z + 0.008F, seam, true, true);
+                }
+            }
+            // A fender over each wheel assembly, in the body colour with a trim lip.
+            for (float z : new float[] {half * 0.62F, -half * 0.62F}) {
+                box(mesh, s, TUB_HALF_WIDTH, YOKE_OUTER + 0.025F, FLOOR_TOP, FLOOR_TOP + 0.03F, z - 0.29F, z + 0.29F,
+                    body);
+                box(mesh, s, YOKE_OUTER + 0.025F, YOKE_OUTER + 0.04F, FLOOR_TOP - 0.02F, FLOOR_TOP + 0.03F,
+                    z - 0.29F, z + 0.29F, trim);
+            }
+            // A red reflector on each corner of the rear.
+            box(mesh, s, TUB_HALF_WIDTH - 0.20F, TUB_HALF_WIDTH - 0.08F, 0.34F, 0.40F, -half - 0.012F, -half,
+                REFLECTOR);
         }
         // Rear bulkhead with a bumper under it.
         mesh.box(-TUB_HALF_WIDTH, FLOOR_TOP, -half, TUB_HALF_WIDTH, TUB_TOP - 0.06F, -half + 0.07F, body);
@@ -188,6 +256,10 @@ final class CarModel {
             mesh.loftZ(band, half + 0.052F, bandTip, half + 0.402F, trim, true, true);
             mesh.box(-0.20F, 0.20F, half + 0.39F, -0.12F, 0.25F, half + 0.42F, LAMP);
             mesh.box(0.12F, 0.20F, half + 0.39F, 0.20F, 0.25F, half + 0.42F, LAMP);
+            // Bright bezels behind the lamps, and a dark intake between and below them.
+            mesh.box(-0.215F, 0.185F, half + 0.385F, -0.105F, 0.265F, half + 0.405F, METAL);
+            mesh.box(0.105F, 0.185F, half + 0.385F, 0.215F, 0.265F, half + 0.405F, METAL);
+            mesh.box(-0.09F, FLOOR_BOTTOM + 0.06F, half + 0.39F, 0.09F, 0.25F, half + 0.408F, RUBBER);
         }
         else {
             // A short sloped cowl in front of the first row.
@@ -206,6 +278,28 @@ final class CarModel {
             for (float y : new float[] {0.28F, 0.42F, 0.56F}) {
                 box(mesh, s, TUB_HALF_WIDTH + 0.02F, TUB_HALF_WIDTH + 0.03F, y, y + 0.02F, -half, front, plank);
             }
+            // Iron straps round the side at each end and the middle, bolted through.
+            for (float z : new float[] {-half + 0.10F, (front - half) * 0.5F, front - 0.10F}) {
+                box(mesh, s, TUB_HALF_WIDTH + 0.02F, TUB_HALF_WIDTH + 0.034F, FLOOR_BOTTOM, top, z - 0.03F, z + 0.03F,
+                    CHASSIS);
+                for (float y : new float[] {0.22F, 0.36F, 0.50F, 0.64F}) {
+                    box(mesh, s, TUB_HALF_WIDTH + 0.034F, TUB_HALF_WIDTH + 0.044F, y - 0.012F, y + 0.012F,
+                        z - 0.012F, z + 0.012F, METAL);
+                }
+            }
+            // A running board between the wheel assemblies, on two iron brackets.
+            float boardFrom = -half * 0.62F + 0.30F;
+            float boardTo = half * 0.62F - 0.30F;
+            if (boardTo - boardFrom > 0.3F) {
+                box(mesh, s, TUB_HALF_WIDTH + 0.02F, TUB_HALF_WIDTH + 0.15F, FLOOR_BOTTOM + 0.01F, FLOOR_BOTTOM + 0.04F,
+                    boardFrom, boardTo, plank);
+                for (float z : new float[] {boardFrom + 0.08F, boardTo - 0.08F}) {
+                    box(mesh, s, TUB_HALF_WIDTH + 0.02F, TUB_HALF_WIDTH + 0.13F, FLOOR_BOTTOM - 0.02F, FLOOR_BOTTOM + 0.01F,
+                        z - 0.02F, z + 0.02F, CHASSIS);
+                }
+            }
+            box(mesh, s, TUB_HALF_WIDTH - 0.22F, TUB_HALF_WIDTH - 0.10F, 0.40F, 0.46F, -half - 0.012F, -half,
+                REFLECTOR);
             // A capping rail along the top, wider than the side.
             box(mesh, s, TUB_HALF_WIDTH - TUB_WALL - 0.02F, TUB_HALF_WIDTH + 0.05F, top, top + 0.05F,
                 -half - 0.02F, front + 0.02F, trim);

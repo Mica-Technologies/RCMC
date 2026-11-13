@@ -63,6 +63,27 @@ final class CarMesh {
         }
     }
 
+    /**
+     * As {@link #emit(BufferBuilder)}, with each vertex darkened by how low it is: untouched at
+     * {@code high} and above, falling away smoothly to {@code floor} of its brightness at
+     * {@code low} and below.
+     *
+     * <p>Shading by facing alone gives a car's side one tone from its top edge to the rail. The sky
+     * lights the top of a thing more than its foot, and the running gear sits in the shadow of the
+     * body over it; a gradient on the vertices says so with no texture and no extra geometry. It
+     * depends on height alone, so parts stacked on one another shade as one surface.</p>
+     */
+    void emit(BufferBuilder buffer, float low, float high, float floor) {
+        for (Quad q : quads) {
+            for (int c = 0; c < 4; c++) {
+                float t = (q.y(c) - low) / (high - low);
+                float lift = t >= 1.0F ? 1.0F
+                    : t <= 0.0F ? floor : floor + (1.0F - floor) * t * t * (3.0F - 2.0F * t);
+                buffer.pos(q.x(c), q.y(c), q.z(c)).color(q.r * lift, q.g * lift, q.b * lift, 1.0F).endVertex();
+            }
+        }
+    }
+
     // --- Primitives. -----------------------------------------------------------------------------
 
     /** An axis-aligned box between two corners. */

@@ -405,7 +405,8 @@ public class RenderCoasterCar extends Render<EntityCoasterCar> {
             CarModel.build(shape, lead, drawCoupling,
                 colourOf(spec, TrainSpec.Part.BODY, 3),
                 colourOf(spec, TrainSpec.Part.TRIM, 4),
-                colourOf(spec, TrainSpec.Part.SEATS, 1)).emit(buffer);
+                colourOf(spec, TrainSpec.Part.SEATS, 1))
+                .emit(buffer, CarModel.SHADE_LOW, CarModel.SHADE_HIGH, CarModel.SHADE_FLOOR);
             tessellator.draw();
             CarDisplayLists.end();
             compiled.setCoaster(spec, lead, drawCoupling);
